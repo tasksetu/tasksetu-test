@@ -1,0 +1,82 @@
+/* Custom styles for AttachmentUploader when used in TaskAttachments */
+.attachment-uploader-white-bg .border-2,
+.attachment-uploader-white-bg div[class*="border-2"],
+.attachment-uploader-white-bg div[class*="border-dashed"] {
+  background-color: white !important;
+  border-color: #d1d5db !important;
+}
+
+.attachment-uploader-white-bg .border-2:hover,
+.attachment-uploader-white-bg div[class*="border-2"]:hover,
+.attachment-uploader-white-bg div[class*="border-dashed"]:hover {
+  background-color: #f9fafb !important;
+  border-color: #6b7280 !important;
+}
+
+.attachment-uploader-white-bg .border-2.border-blue-500,
+.attachment-uploader-white-bg div[class*="border-blue-500"] {
+  background-color: #eff6ff !important;
+  border-color: #3b82f6 !important;
+}
+
+/* Override dark mode styles specifically - more comprehensive */
+.attachment-uploader-white-bg [class*="dark:bg"],
+.attachment-uploader-white-bg .dark\:bg-blue-950,
+.attachment-uploader-white-bg .dark\:hover\:bg-gray-800,
+.attachment-uploader-white-bg *[class*="bg-gray-800"],
+.attachment-uploader-white-bg *[class*="bg-gray-900"],
+.attachment-uploader-white-bg *[class*="bg-slate"] {
+  background-color: white !important;
+}
+
+.attachment-uploader-white-bg [class*="dark:bg"]:hover,
+.attachment-uploader-white-bg .dark\:bg-blue-950:hover,
+.attachment-uploader-white-bg .dark\:hover\:bg-gray-800:hover,
+.attachment-uploader-white-bg *[class*="bg-gray-800"]:hover,
+.attachment-uploader-white-bg *[class*="bg-gray-900"]:hover {
+  background-color: #f9fafb !important;
+}
+
+/* Force white background for all child elements */
+.attachment-uploader-white-bg * {
+  background-color: inherit !important;
+}/* Custom styles for AttachmentUploader when used in TaskAttachments */
+.attachment-uploader-white-bg .border-2,
+.attachment-uploader-white-bg div[class*="border-2"],
+.attachment-uploader-white-bg div[class*="border-dashed"] {
+  background-color: white;
+  border-color: #d1d5db;
+}
+
+.attachment-uploader-white-bg .border-2:hover,
+.attachment-uploader-white-bg div[class*="border-2"]:hover,
+.attachment-uploader-white-bg div[class*="border-dashed"]:hover {
+  background-color: #f9fafb;
+  border-color: #6b7280;
+}
+
+.attachment-uploader-white-bg .border-2.border-blue-500,
+.attachment-uploader-white-bg div[class*="border-blue-500"] {
+  background-color: #eff6ff;
+  border-color: #3b82f6;
+}
+
+/* Override dark mode styles specifically - more specific selectors */
+.attachment-uploader-white-bg .dark\\:bg-blue-950,
+.attachment-uploader-white-bg .dark\\:hover\\:bg-gray-800,
+.attachment-uploader-white-bg .bg-gray-800,
+.attachment-uploader-white-bg .bg-gray-900 {
+  background-color: white;
+}
+
+.attachment-uploader-white-bg .dark\\:bg-blue-950:hover,
+.attachment-uploader-white-bg .dark\\:hover\\:bg-gray-800:hover,
+.attachment-uploader-white-bg .bg-gray-800:hover,
+.attachment-uploader-white-bg .bg-gray-900:hover {
+  background-color: #f9fafb;
+}
+
+/* Improved specificity without universal selector */
+.attachment-uploader-white-bg .attachment-uploader-content {
+  background-color: white;
+}

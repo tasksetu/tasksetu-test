@@ -1,0 +1,4 @@
+{"timestamp":"2026-04-26T08:48:00.932Z","eventType":"task_update","step":"USING_ENHANCED_HELPER","status":"START","data":{"taskId":"69edd0c0beee511120b481a2","updateKeys":["priority","updatedAt"]},"processId":22316}
+{"timestamp":"2026-04-26T08:48:00.934Z","eventType":"task_update","step":"NOTIFICATION_START","status":"START","data":{"taskId":"69edd0c0beee511120b481a2","taskTitle":"nature","updatedBy":"6990367dcaef08ae051fba1e","changedFields":["priority"]},"processId":22316}
+{"timestamp":"2026-04-26T08:48:00.935Z","eventType":"task_update","step":"NOTIFICATION_COMPLETE","status":"SUCCESS","data":{"taskId":"69edd0c0beee511120b481a2","usersNotified":0},"processId":22316}
+{"timestamp":"2026-04-26T08:48:00.935Z","eventType":"task_update","step":"ENHANCED_NOTIFICATIONS_SENT","status":"SUCCESS","data":{"taskId":"69edd0c0beee511120b481a2","usersNotified":0},"processId":22316}

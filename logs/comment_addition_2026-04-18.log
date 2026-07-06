@@ -1,0 +1,4 @@
+{"timestamp":"2026-04-18T05:02:16.583Z","eventType":"comment_addition","step":"NOTIFICATION_START","status":"START","data":{"taskId":"69e30fa43f76ad6827df4134","commentedBy":"69e1ed3ab3467af7b7f575f2","plainTextPreview":"50 percent work done"},"processId":21004}
+{"timestamp":"2026-04-18T05:02:16.585Z","eventType":"comment_addition","step":"NOTIFICATION_START","status":"START","data":{"taskId":"69e30fa43f76ad6827df4134","commentId":"1776488536296","commentedBy":"69e1ed3ab3467af7b7f575f2"},"processId":21004}
+{"timestamp":"2026-04-18T05:02:16.585Z","eventType":"comment_addition","step":"NOTIFICATION_COMPLETE","status":"SUCCESS","data":{"taskId":"69e30fa43f76ad6827df4134","usersNotified":0},"processId":21004}
+{"timestamp":"2026-04-18T05:02:16.593Z","eventType":"comment_addition","step":"NOTIFICATION_SUCCESS","status":"SUCCESS","data":{"taskId":"69e30fa43f76ad6827df4134","commentId":"1776488536296"},"processId":21004}

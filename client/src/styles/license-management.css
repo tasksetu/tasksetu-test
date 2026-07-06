@@ -1,0 +1,164 @@
+/* License Management Additional Styles */
+
+/* Progress bar color variants */
+.progress-green .progress-indicator {
+  background-color: #10b981;
+}
+
+.progress-yellow .progress-indicator {
+  background-color: #f59e0b;
+}
+
+.progress-red .progress-indicator {
+  background-color: #ef4444;
+}
+
+/* Plan card animations */
+.plan-card {
+  transition: all 0.2s ease-in-out;
+}
+
+.plan-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Recommended plan highlight */
+.plan-recommended {
+  position: relative;
+  border: 2px solid #3b82f6;
+}
+
+.plan-recommended::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, #3b82f6, #8b5cf6);
+  border-radius: inherit;
+  z-index: -1;
+}
+
+/* Usage meter styling */
+.usage-meter {
+  transition: all 0.3s ease;
+}
+
+.usage-meter.warning {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Expiry warning banner */
+.expiry-banner {
+  background: linear-gradient(90deg, #fef3c7, #fde68a);
+  border-left: 4px solid #f59e0b;
+}
+
+.expiry-banner.expired {
+  background: linear-gradient(90deg, #fee2e2, #fecaca);
+  border-left: 4px solid #ef4444;
+}
+
+/* Billing toggle switch */
+.billing-toggle {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+.billing-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.billing-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 34px;
+}
+
+.billing-slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .billing-slider {
+  background-color: #3b82f6;
+}
+
+input:checked + .billing-slider:before {
+  transform: translateX(26px);
+}
+
+/* Loading states */
+.loading-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .plan-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .usage-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .settings-sidebar {
+    display: none;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .plan-card {
+    background-color: #1f2937;
+    border-color: #374151;
+  }
+  
+  .expiry-banner {
+    background: linear-gradient(90deg, #451a03, #78350f);
+  }
+  
+  .expiry-banner.expired {
+    background: linear-gradient(90deg, #7f1d1d, #991b1b);
+  }
+}

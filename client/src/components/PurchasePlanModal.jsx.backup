@@ -1,0 +1,762 @@
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ShoppingCart, Plus, Minus, Check, AlertCircle, Zap } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+
+export function PurchasePlanModal({ isOpen, onClose }) {
+  const [billingCycle, setBillingCycle] = useState('monthly');
+  const [planSeats, setPlanSeats] = useState({}); // { PLAN: 2, EXECUTE: 3, ... }
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch available plans
+  const { data: plansResponse } = useQuery({
+    queryKey: ['/api/license/plans'],
+    queryFn: async () => {
+      const response = await fetch('/api/license/plans', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch plans');
+      return response.json();
+    },
+    enabled: isOpen,
+  });
+
+  // Fetch current organization subscriptions
+  const { data: subscriptionsResponse } = useQuery({
+    queryKey: ['/api/organization/multi-subscriptions'],
+    queryFn: async () => {
+      const response = await fetch('/api/organization/multi-subscriptions', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch subscriptions');
+      return response.json();
+    },
+    enabled: isOpen,
+  });
+
+  const plans = plansResponse?.data || [];
+  const currentSubscriptions = subscriptionsResponse?.data || [];
+
+  // Purchase multiple plans mutation
+  const purchasePlansMutation = useMutation({
+    mutationFn: async (purchases) => {
+      const results = [];
+      for (const purchase of purchases) {
+        const response = await fetch('/api/organization/purchase-plan', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify(purchase)
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to purchase plan');
+        }
+        const result = await response.json();
+        results.push(result);
+      }
+      return results;
+    },
+    onSuccess: (data) => {
+      const totalSeats = Object.values(planSeats).reduce((sum, seats) => sum + seats, 0);
+      toast({
+        title: 'Plans Purchased Successfully!',
+        description: `${data.length} plan${data.length > 1 ? 's' : ''} with ${totalSeats} total seats added to your organization.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/organization/multi-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/organization/license-pool'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/organization/license'] });
+      onClose();
+      resetForm();
+    },
+    onError: (error) => {
+      toast({
+        title: 'Purchase Failed',
+        description: error.message,
+        variant: 'destructive'
+      });
+    }
+  });
+
+  const resetForm = () => {
+    setPlanSeats({});
+    setBillingCycle('monthly');
+  };
+
+  const updateSeats = (planCode, delta) => {
+    setPlanSeats(prev => {
+      const currentSeats = prev[planCode] || 0;
+      const newSeats = Math.max(0, currentSeats + delta);
+      if (newSeats === 0) {
+        const { [planCode]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [planCode]: newSeats };
+    });
+  };
+
+  const setSeats = (planCode, value) => {
+    const seats = Math.max(0, parseInt(value) || 0);
+    setPlanSeats(prev => {
+      if (seats === 0) {
+        const { [planCode]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [planCode]: seats };
+    });
+  };
+
+  const handlePurchaseAll = () => {
+    const selectedPlans = Object.entries(planSeats).filter(([_, seats]) => seats > 0);
+    
+    if (selectedPlans.length === 0) {
+      toast({
+        title: 'No Plans Selected',
+        description: 'Please select at least one plan with seats to purchase.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const purchases = selectedPlans.map(([license_code, seats]) => ({
+      license_code,
+      seats,
+      billing_cycle: billingCycle.toUpperCase()
+    }));
+
+    purchasePlansMutation.mutate(purchases);
+  };
+
+  // Calculate totals
+  const calculateTotal = () => {
+    let total = 0;
+    let totalSeats = 0;
+    Object.entries(planSeats).forEach(([code, seats]) => {
+      const plan = plans.find(p => p.license_code === code);
+      if (plan && seats > 0) {
+        const price = billingCycle === 'monthly' ? plan.price_monthly : plan.price_yearly;
+        total += price * seats;
+        totalSeats += seats;
+      }
+    });
+    return { total, totalSeats };
+  };
+
+  const { total: totalPrice, totalSeats } = calculateTotal();
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center space-x-2 text-xl font-semibold">
+            <ShoppingCart className="h-5 w-5 text-blue-600" />
+            <span>Purchase Licenses - All Plans</span>
+          </DialogTitle>
+          <DialogDescription>
+            Select seats for each plan you want to purchase. You can buy multiple plans at once.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 mt-4">
+          {/* Current Subscriptions Summary */}
+          {currentSubscriptions.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-sm p-4">
+              <h3 className="font-medium text-sm text-blue-900 mb-2">Current Licenses</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {currentSubscriptions.map((sub, idx) => (
+                  <div key={idx} className="flex justify-between text-sm text-blue-700">
+                    <span className="font-medium">{sub.license_name}:</span>
+                    <span>{sub.seats_used}/{sub.seats_purchased} seats used</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Billing Cycle Selection */}
+          <div>
+            <Label className="text-sm font-medium text-gray-700 mb-2 block">
+              Billing Cycle
+            </Label>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setBillingCycle('monthly')}
+                className={cn(
+                  "flex-1 py-3 px-4 rounded-sm text-sm font-medium transition-colors border",
+                  billingCycle === 'monthly'
+                    ? "bg-blue-600 text-white border-blue-600 shadow-md"
+                    : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                )}
+              >
+                Monthly Billing
+              </button>
+              <button
+                onClick={() => setBillingCycle('yearly')}
+                className={cn(
+                  "flex-1 py-3 px-4 rounded-sm text-sm font-medium transition-colors border relative",
+                  billingCycle === 'yearly'
+                    ? "bg-blue-600 text-white border-blue-600 shadow-md"
+                    : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                )}
+              >
+                <span className="flex items-center justify-center gap-1">
+                  Yearly Billing
+                  <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full ml-1">
+                    Save up to 20%
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* All Plans with Seat Selectors */}
+          <div>
+            <Label className="text-sm font-medium text-gray-700 mb-3 block">
+              Select Plans and Seats
+            </Label>
+            <div className="grid gap-3">
+              {plans.map((plan) => {
+                const seats = planSeats[plan.license_code] || 0;
+                const price = billingCycle === 'monthly' ? plan.price_monthly : plan.price_yearly;
+                const lineTotal = price * seats;
+                const isSelected = seats > 0;
+
+                return (
+                  <div
+                    key={plan.license_code}
+                    className={cn(
+                      "border-2 rounded-sm p-4 transition-all",
+                      isSelected
+                        ? "border-blue-500 bg-blue-50 shadow-md"
+                        : "border-gray-200 bg-white hover:border-gray-300"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      {/* Plan Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-base text-gray-900">
+                            {plan.license_name}
+                          </h3>
+                          {plan.license_code === 'EXPLORE' && (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                              Free
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600 mb-2">
+                          ₹{price.toLocaleString()}/{billingCycle === 'monthly' ? 'month' : 'year'} per seat
+                        </p>
+                        
+                        {/* Key Features */}
+                        {plan.features_summary && plan.features_summary.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {plan.features_summary.slice(0, 3).map((feature, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
+                              >
+                                <Check className="h-3 w-3 mr-1 text-green-500" />
+                                {feature}
+                              </span>
+                            ))}
+                            {plan.features_summary.length > 3 && (
+                              <span className="inline-flex items-center text-xs text-gray-500 px-2 py-1">
+                                +{plan.features_summary.length - 3} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Seat Selector */}
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="flex items-center space-x-2 bg-white rounded-sm border-2 border-gray-200 p-1">
+                          <button
+                            onClick={() => updateSeats(plan.license_code, -1)}
+                            className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                            disabled={seats === 0}
+                          >
+                            <Minus className="h-4 w-4 text-gray-600" />
+                          </button>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={seats}
+                            onChange={(e) => setSeats(plan.license_code, e.target.value)}
+                            className="text-center w-16 h-8 border-0 focus:ring-0 font-semibold"
+                            placeholder="0"
+                          />
+                          <button
+                            onClick={() => updateSeats(plan.license_code, 1)}
+                            className="p-1.5 rounded hover:bg-gray-100"
+                          >
+                            <Plus className="h-4 w-4 text-gray-600" />
+                          </button>
+                        </div>
+                        
+                        {/* Line Total */}
+                        {isSelected && (
+                          <div className="text-right">
+                            <div className="text-xs text-gray-500">Subtotal</div>
+                            <div className="text-lg font-bold text-blue-600">
+                              ₹{lineTotal.toLocaleString()}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Order Summary */}
+          {totalSeats > 0 && (
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-sm p-5">
+              <h3 className="font-semibold text-base text-gray-900 mb-4 flex items-center gap-2">
+                <Zap className="h-5 w-5 text-blue-600" />
+                Order Summary
+              </h3>
+              
+              <div className="space-y-3">
+                {Object.entries(planSeats)
+                  .filter(([_, seats]) => seats > 0)
+                  .map(([code, seats]) => {
+                    const plan = plans.find(p => p.license_code === code);
+                    if (!plan) return null;
+                    const price = billingCycle === 'monthly' ? plan.price_monthly : plan.price_yearly;
+                    const lineTotal = price * seats;
+                    
+                    return (
+                      <div key={code} className="flex justify-between items-center text-sm bg-white/60 rounded px-3 py-2">
+                        <div>
+                          <span className="font-medium text-gray-900">{plan.license_name}</span>
+                          <span className="text-gray-500 ml-2">× {seats} seat{seats > 1 ? 's' : ''}</span>
+                        </div>
+                        <span className="font-semibold text-gray-900">₹{lineTotal.toLocaleString()}</span>
+                      </div>
+                    );
+                  })}
+                
+                <div className="border-t-2 border-blue-300 pt-3 mt-3">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="text-sm text-gray-600">Total ({totalSeats} seat{totalSeats > 1 ? 's' : ''})</div>
+                      <div className="text-xs text-gray-500">Billed {billingCycle}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-blue-600">
+                        ₹{totalPrice.toLocaleString()}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        /{billingCycle === 'monthly' ? 'month' : 'year'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Important Notice */}
+          <div className="bg-yellow-50 border border-yellow-200 rounded-sm p-3 flex items-start space-x-2">
+            <AlertCircle className="h-4 w-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-yellow-800">
+              <p className="font-medium mb-1">Important:</p>
+              <p>All selected licenses will be purchased in a single transaction and added to your organization. You can assign them to specific users from the User Management page.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-between items-center mt-6 pt-4 border-t">
+          <div className="text-sm text-gray-600">
+            {totalSeats > 0 ? (
+              <span className="font-medium text-blue-600">
+                {Object.keys(planSeats).filter(k => planSeats[k] > 0).length} plan{Object.keys(planSeats).filter(k => planSeats[k] > 0).length > 1 ? 's' : ''} selected
+              </span>
+            ) : (
+              <span>No plans selected</span>
+            )}
+          </div>
+          <div className="flex space-x-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={purchasePlansMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handlePurchaseAll}
+              disabled={totalSeats === 0 || purchasePlansMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700 min-w-[140px]"
+            >
+              {purchasePlansMutation.isPending ? (
+                'Processing...'
+              ) : (
+                `Purchase ${totalSeats > 0 ? `(₹${totalPrice.toLocaleString()})` : ''}`
+              )}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+  // Fetch available plans
+  const { data: plansResponse } = useQuery({
+    queryKey: ['/api/license/plans'],
+    queryFn: async () => {
+      const response = await fetch('/api/license/plans', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch plans');
+      return response.json();
+    },
+    enabled: isOpen,
+  });
+
+  // Fetch current organization subscriptions
+  const { data: subscriptionsResponse } = useQuery({
+    queryKey: ['/api/organization/multi-subscriptions'],
+    queryFn: async () => {
+      const response = await fetch('/api/organization/multi-subscriptions', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch subscriptions');
+      return response.json();
+    },
+    enabled: isOpen,
+  });
+
+  const plans = plansResponse?.data || [];
+  const currentSubscriptions = subscriptionsResponse?.data || [];
+
+  // Purchase plan mutation
+  const purchasePlanMutation = useMutation({
+    mutationFn: async (purchaseData) => {
+      console.log('Sending purchase request:', purchaseData);
+      const response = await fetch('/api/organization/purchase-plan', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(purchaseData)
+      });
+      
+      console.log('Purchase response status:', response.status);
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Purchase error:', error);
+        throw new Error(error.message || 'Failed to purchase plan');
+      }
+      const result = await response.json();
+      console.log('Purchase success:', result);
+      return result;
+    },
+    onSuccess: (data) => {
+      console.log('Purchase mutation success:', data);
+      toast({
+        title: 'Plan Purchased Successfully!',
+        description: `${seats} seat${seats > 1 ? 's' : ''} have been added to your organization.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/organization/multi-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/organization/license'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/organization/subscription'] });
+      onClose();
+      resetForm();
+    },
+    onError: (error) => {
+      console.error('Purchase mutation error:', error);
+      toast({
+        title: 'Purchase Failed',
+        description: error.message,
+        variant: 'destructive'
+      });
+    }
+  });
+
+  const resetForm = () => {
+    setSelectedPlan('');
+    setSeats(1);
+    setBillingCycle('monthly');
+  };
+
+  const handlePurchase = () => {
+    if (!selectedPlan) {
+      toast({
+        title: 'Select a Plan',
+        description: 'Please select a plan before purchasing.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (seats < 1) {
+      toast({
+        title: 'Invalid Seats',
+        description: 'Please enter at least 1 seat.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    console.log('Purchasing plan with data:', {
+      license_code: selectedPlan,
+      seats: seats,
+      billing_cycle: billingCycle.toUpperCase()
+    });
+
+    purchasePlanMutation.mutate({
+      license_code: selectedPlan,
+      seats: seats,
+      billing_cycle: billingCycle.toUpperCase()
+    });
+  };
+
+  const selectedPlanData = plans.find(p => p.license_code === selectedPlan);
+  const pricePerSeat = billingCycle === 'monthly' 
+    ? selectedPlanData?.price_monthly 
+    : selectedPlanData?.price_yearly;
+  const totalPrice = (pricePerSeat || 0) * seats;
+  const savings = billingCycle === 'yearly' && selectedPlanData
+    ? (selectedPlanData.price_monthly * 12 * seats) - totalPrice
+    : 0;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center space-x-2 text-xl font-semibold">
+            <ShoppingCart className="h-5 w-5 text-blue-600" />
+            <span>Purchase Additional Licenses</span>
+          </DialogTitle>
+          <DialogDescription>
+            Add more licenses to your organization. You can purchase multiple plans with different features.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 mt-4">
+          {/* Current Subscriptions Summary */}
+          {currentSubscriptions.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-sm p-4">
+              <h3 className="font-medium text-sm text-blue-900 mb-2">Current Licenses</h3>
+              <div className="space-y-1">
+                {currentSubscriptions.map((sub, idx) => (
+                  <div key={idx} className="flex justify-between text-sm text-blue-700">
+                    <span>{sub.license_name}</span>
+                    <span>{sub.seats_used}/{sub.seats_purchased} seats used</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Plan Selection */}
+          <div>
+            <Label className="text-sm font-medium text-gray-700 mb-2 block">
+              Select Plan
+            </Label>
+            <Select value={selectedPlan} onValueChange={setSelectedPlan}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a license plan" />
+              </SelectTrigger>
+              <SelectContent>
+                {plans.map(plan => (
+                  <SelectItem key={plan.license_code} value={plan.license_code}>
+                    <div className="flex items-center justify-between w-full">
+                      <span>{plan.license_name}</span>
+                      <span className="text-xs text-gray-500 ml-4">
+                        ₹{plan.price_monthly}/mo
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Billing Cycle */}
+          <div>
+            <Label className="text-sm font-medium text-gray-700 mb-2 block">
+              Billing Cycle
+            </Label>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setBillingCycle('monthly')}
+                className={cn(
+                  "flex-1 py-2 px-4 rounded-sm text-sm font-medium transition-colors border",
+                  billingCycle === 'monthly'
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                )}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setBillingCycle('yearly')}
+                className={cn(
+                  "flex-1 py-2 px-4 rounded-sm text-sm font-medium transition-colors border",
+                  billingCycle === 'yearly'
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                )}
+              >
+                Yearly
+                {selectedPlanData && (
+                  <span className="ml-1 text-xs">
+                    (Save {Math.round(((selectedPlanData.price_monthly * 12 - selectedPlanData.price_yearly) / (selectedPlanData.price_monthly * 12)) * 100)}%)
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Number of Seats */}
+          <div>
+            <Label className="text-sm font-medium text-gray-700 mb-2 block">
+              Number of Seats
+            </Label>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setSeats(Math.max(1, seats - 1))}
+                className="p-2 rounded-sm border border-gray-300 hover:bg-gray-50"
+                disabled={seats <= 1}
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <Input
+                type="number"
+                min="1"
+                value={seats}
+                onChange={(e) => setSeats(Math.max(1, parseInt(e.target.value) || 1))}
+                className="text-center w-24"
+              />
+              <button
+                onClick={() => setSeats(seats + 1)}
+                className="p-2 rounded-sm border border-gray-300 hover:bg-gray-50"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Price Summary */}
+          {selectedPlanData && (
+            <div className="bg-gray-50 border border-gray-200 rounded-sm p-4">
+              <h3 className="font-medium text-sm text-gray-900 mb-3">Order Summary</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Plan</span>
+                  <span className="font-medium">{selectedPlanData.license_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Seats</span>
+                  <span className="font-medium">{seats}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Price per seat</span>
+                  <span className="font-medium">₹{pricePerSeat}/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
+                </div>
+                {savings > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Yearly savings</span>
+                    <span className="font-medium">₹{savings}</span>
+                  </div>
+                )}
+                <div className="border-t border-gray-300 pt-2 mt-2">
+                  <div className="flex justify-between text-base font-semibold">
+                    <span>Total</span>
+                    <span className="text-blue-600">₹{totalPrice}/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Plan Features Preview */}
+              {selectedPlanData.features_summary && selectedPlanData.features_summary.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-300">
+                  <h4 className="text-xs font-medium text-gray-700 mb-2">Included Features:</h4>
+                  <ul className="space-y-1">
+                    {selectedPlanData.features_summary.slice(0, 4).map((feature, idx) => (
+                      <li key={idx} className="flex items-start text-xs text-gray-600">
+                        <Check className="h-3 w-3 text-green-500 mr-1 flex-shrink-0 mt-0.5" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                    {selectedPlanData.features_summary.length > 4 && (
+                      <li className="text-xs text-gray-500">
+                        +{selectedPlanData.features_summary.length - 4} more features
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Important Notice */}
+          <div className="bg-yellow-50 border border-yellow-200 rounded-sm p-3 flex items-start space-x-2">
+            <AlertCircle className="h-4 w-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-yellow-800">
+              <p className="font-medium mb-1">Important:</p>
+              <p>These licenses will be added to your organization. You can assign them to specific users from the User Management page.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-end space-x-3 mt-6">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={purchasePlanMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handlePurchase}
+            disabled={!selectedPlan || purchasePlanMutation.isPending}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {purchasePlanMutation.isPending ? (
+              'Processing...'
+            ) : (
+              `Purchase ${seats} Seat${seats > 1 ? 's' : ''}`
+            )}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

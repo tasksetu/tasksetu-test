@@ -1,0 +1,37 @@
+[data-radix-menu-content] {
+  background-color: white !important;
+}
+
+.dark [data-radix-menu-content] {
+  background-color: #ffffff !important;
+  color: #000;
+}
+
+[data-radix-menu-content],
+[data-radix-dropdown-menu-content] {
+  background-color: white !important;
+}
+
+.css-1dimb5e-singleValue {
+  margin-left: 4px !important;
+}
+
+.css-19bb58m {
+  margin: 0px !important;
+}
+
+button:focus,
+.btn:focus,
+.btn-secondary:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.btn,
+.btn-secondary {
+  @apply focus:outline-none focus:ring-0;
+}
+
+.react-select__value-container .react-select__placeholder {
+  white-space: nowrap !important;
+}

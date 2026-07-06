@@ -1,0 +1,4 @@
+{"timestamp":"2026-06-05T10:26:05.693Z","eventType":"task_update","step":"USING_ENHANCED_HELPER","status":"START","data":{"taskId":"6a22a1e95358fd07a7445a2b","updateKeys":["dueDate","updatedAt"]},"processId":22092}
+{"timestamp":"2026-06-05T10:26:05.698Z","eventType":"task_update","step":"NOTIFICATION_START","status":"START","data":{"taskId":"6a22a1e95358fd07a7445a2b","taskTitle":"regular task by email","updatedBy":"6a2290e257e15e46726454dc","changedFields":["dueDate"]},"processId":22092}
+{"timestamp":"2026-06-05T10:26:05.699Z","eventType":"task_update","step":"NOTIFICATION_COMPLETE","status":"SUCCESS","data":{"taskId":"6a22a1e95358fd07a7445a2b","usersNotified":0},"processId":22092}
+{"timestamp":"2026-06-05T10:26:05.700Z","eventType":"task_update","step":"ENHANCED_NOTIFICATIONS_SENT","status":"SUCCESS","data":{"taskId":"6a22a1e95358fd07a7445a2b","usersNotified":0},"processId":22092}

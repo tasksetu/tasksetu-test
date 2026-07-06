@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification System Test Dashboard</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .button.secondary {
+            background: #6c757d;
+        }
+        .button.success {
+            background: #28a745;
+        }
+        .button.warning {
+            background: #ffc107;
+            color: #333;
+        }
+        .button.danger {
+            background: #dc3545;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        select, input, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .result {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success-result {
+            background: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        .error-result {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            color: #6c757d;
+            font-style: italic;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #dee2e6;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            background: #f8f9fa;
+            border: none;
+            border-bottom: 3px solid transparent;
+        }
+        .tab.active {
+            background: white;
+            border-bottom-color: #007bff;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .notification-preview {
+            border-left: 4px solid #007bff;
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .priority-urgent {
+            border-left-color: #dc3545;
+        }
+        .priority-normal {
+            border-left-color: #28a745;
+        }
+        .channels {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .channel {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            background: #e9ecef;
+            color: #495057;
+        }
+        .channel.in_app { background: #cce5ff; color: #004085; }
+        .channel.email { background: #fff3cd; color: #856404; }
+        .channel.push { background: #d4edda; color: #155724; }
+        .channel.sms { background: #f8d7da; color: #721c24; }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-online { background: #28a745; }
+        .status-offline { background: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📧 Notification System Test Dashboard</h1>
+            <p>Test and validate the notification system components</p>
+            <div>
+                <span id="server-status" class="status-indicator status-offline"></span>
+                <span id="server-text">Checking server connection...</span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('quick-tests')">Quick Tests</button>
+            <button class="tab" onclick="showTab('scenarios')">Scenarios</button>
+            <button class="tab" onclick="showTab('templates')">Templates</button>
+            <button class="tab" onclick="showTab('preferences')">Preferences</button>
+            <button class="tab" onclick="showTab('events')">Events</button>
+        </div>
+
+        <!-- Quick Tests Tab -->
+        <div id="quick-tests" class="tab-content active">
+            <div class="grid">
+                <div class="section">
+                    <h3>🚀 Quick Actions</h3>
+                    <button class="button" onclick="testConnection()">Test Server Connection</button>
+                    <button class="button secondary" onclick="loadUsers()">Load Test Users</button>
+                    <button class="button secondary" onclick="loadTasks()">Load Test Tasks</button>
+                    <button class="button success" onclick="loadTriggerEvents()">Load All Events</button>
+                </div>
+                
+                <div class="section">
+                    <h3>📱 Channel Tests</h3>
+                    <button class="button" onclick="testInAppNotification()">Test In-App</button>
+                    <button class="button warning" onclick="testEmailNotification()">Test Email</button>
+                    <button class="button danger" onclick="testPushNotification()">Test Push</button>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>📊 Results</h3>
+                <div id="quick-results" class="result"></div>
+            </div>
+        </div>
+
+        <!-- Scenarios Tab -->
+        <div id="scenarios" class="tab-content">
+            <div class="section">
+                <h3>🎭 Test Scenarios</h3>
+                <p>Test common notification scenarios with realistic data</p>
+                
+                <div class="grid">
+                    <div>
+                        <h4>Task Management</h4>
+                        <button class="button" onclick="testScenario('task-created')">Task Created</button>
+                        <button class="button warning" onclick="testScenario('task-overdue')">Task Overdue</button>
+                        <button class="button success" onclick="testScenario('task-completed')">Task Completed</button>
+                    </div>
+                    
+                    <div>
+                        <h4>Approvals</h4>
+                        <button class="button" onclick="testScenario('approval-requested')">Approval Requested</button>
+                        <button class="button success" onclick="testScenario('approval-approved')">Approval Approved</button>
+                        <button class="button danger" onclick="testScenario('approval-denied')">Approval Denied</button>
+                    </div>
+                    
+                    <div>
+                        <h4>Escalations</h4>
+                        <button class="button warning" onclick="testScenario('overdue-escalation')">Overdue Escalation</button>
+                        <button class="button danger" onclick="testScenario('critical-escalation')">Critical Escalation</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div id="scenario-results" class="result"></div>
+            </div>
+        </div>
+
+        <!-- Templates Tab -->
+        <div id="templates" class="tab-content">
+            <div class="section">
+                <h3>📝 Template Testing</h3>
+                <div class="grid">
+                    <div>
+                        <div class="form-group">
+                            <label>Trigger Event:</label>
+                            <select id="template-event">
+                                <option value="task_created">Task Created</option>
+                                <option value="task_updated">Task Updated</option>
+                                <option value="task_overdue">Task Overdue</option>
+                                <option value="approval_requested">Approval Requested</option>
+                                <option value="user_mentioned">User Mentioned</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Template Data (JSON):</label>
+                            <textarea id="template-data" rows="10">{
+  "task_title": "Implement User Authentication",
+  "creator_name": "Alice Smith",
+  "assignee_name": "Bob Johnson",
+  "manager_name": "Carol Davis",
+  "task_priority": "high",
+  "due_date": "2025-10-20",
+  "hours_overdue": 24,
+  "requester_name": "John Doe",
+  "approver_name": "Jane Manager"
+}</textarea>
+                        </div>
+                        
+                        <button class="button" onclick="testTemplate()">Test Template</button>
+                    </div>
+                    
+                    <div>
+                        <h4>Template Preview</h4>
+                        <div id="template-preview"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preferences Tab -->
+        <div id="preferences" class="tab-content">
+            <div class="section">
+                <h3>⚙️ Role-Based Preferences</h3>
+                <div>
+                    <label>Select Role:</label>
+                    <select id="role-select" onchange="loadRolePreferences()">
+                        <option value="admin">Admin</option>
+                        <option value="manager">Manager</option>
+                        <option value="assignee">Assignee</option>
+                        <option value="creator">Creator</option>
+                        <option value="collaborator">Collaborator</option>
+                        <option value="approver">Approver</option>
+                    </select>
+                </div>
+                
+                <div id="preferences-results" class="result"></div>
+            </div>
+        </div>
+
+        <!-- Events Tab -->
+        <div id="events" class="tab-content">
+            <div class="section">
+                <h3>📋 All Trigger Events</h3>
+                <button class="button" onclick="loadAllEvents()">Load All Events</button>
+                <div id="events-results" class="result"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api/test';
+        
+        // Tab management
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // Utility functions
+        async function apiCall(endpoint, options = {}) {
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    },
+                    ...options
+                });
+                return await response.json();
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+
+        function showResult(elementId, data, isSuccess = true) {
+            const element = document.getElementById(elementId);
+            element.className = `result ${isSuccess ? 'success-result' : 'error-result'}`;
+            element.textContent = JSON.stringify(data, null, 2);
+        }
+
+        function showLoading(elementId) {
+            const element = document.getElementById(elementId);
+            element.className = 'result loading';
+            element.textContent = 'Loading...';
+        }
+
+        // Connection test
+        async function testConnection() {
+            showLoading('quick-results');
+            const result = await apiCall('/trigger-events');
+            showResult('quick-results', result, result.success);
+            
+            const statusEl = document.getElementById('server-status');
+            const textEl = document.getElementById('server-text');
+            
+            if (result.success) {
+                statusEl.className = 'status-indicator status-online';
+                textEl.textContent = 'Server connected';
+            } else {
+                statusEl.className = 'status-indicator status-offline';
+                textEl.textContent = 'Server disconnected';
+            }
+        }
+
+        // Load functions
+        async function loadUsers() {
+            showLoading('quick-results');
+            const result = await apiCall('/users');
+            showResult('quick-results', result, result.success);
+        }
+
+        async function loadTasks() {
+            showLoading('quick-results');
+            const result = await apiCall('/tasks');
+            showResult('quick-results', result, result.success);
+        }
+
+        async function loadTriggerEvents() {
+            showLoading('quick-results');
+            const result = await apiCall('/trigger-events');
+            showResult('quick-results', result, result.success);
+        }
+
+        // Channel tests
+        async function testInAppNotification() {
+            showLoading('quick-results');
+            const result = await apiCall('/notifications/task_created', {
+                method: 'POST',
+                body: JSON.stringify({
+                    userId: '507f1f77bcf86cd799439011',
+                    taskId: '507f1f77bcf86cd799439021'
+                })
+            });
+            showResult('quick-results', result, result.success);
+        }
+
+        async function testEmailNotification() {
+            showLoading('quick-results');
+            const result = await apiCall('/notifications/approval_requested', {
+                method: 'POST',
+                body: JSON.stringify({
+                    userId: '507f1f77bcf86cd799439012',
+                    taskId: '507f1f77bcf86cd799439021'
+                })
+            });
+            showResult('quick-results', result, result.success);
+        }
+
+        async function testPushNotification() {
+            showLoading('quick-results');
+            const result = await apiCall('/notifications/task_overdue', {
+                method: 'POST',
+                body: JSON.stringify({
+                    userId: '507f1f77bcf86cd799439011',
+                    taskId: '507f1f77bcf86cd799439022'
+                })
+            });
+            showResult('quick-results', result, result.success);
+        }
+
+        // Scenario tests
+        async function testScenario(scenario) {
+            showLoading('scenario-results');
+            const result = await apiCall(`/scenarios/${scenario}`, { method: 'POST' });
+            
+            if (result.success && result.notification) {
+                const preview = createNotificationPreview(result.notification, result.description);
+                document.getElementById('scenario-results').innerHTML = preview;
+            } else {
+                showResult('scenario-results', result, result.success);
+            }
+        }
+
+        function createNotificationPreview(notification, description) {
+            const priorityClass = notification.priority === 'urgent' ? 'priority-urgent' : 'priority-normal';
+            const channels = notification.channels.map(ch => 
+                `<span class="channel ${ch}">${ch.replace('_', ' ')}</span>`
+            ).join('');
+            
+            return `
+                <div class="notification-preview ${priorityClass}">
+                    <h4>${description}</h4>
+                    <p><strong>To:</strong> ${notification.user.name} (${notification.user.email})</p>
+                    <p><strong>Role:</strong> ${notification.user.role}</p>
+                    <p><strong>Event:</strong> ${notification.trigger_event}</p>
+                    <div class="channels">${channels}</div>
+                    <h5>Title:</h5>
+                    <p>${notification.title}</p>
+                    <h5>Message:</h5>
+                    <p>${notification.message}</p>
+                    <p><strong>Priority:</strong> ${notification.priority.toUpperCase()}</p>
+                    <p><strong>Escalation:</strong> ${notification.escalation ? 'Yes' : 'No'}</p>
+                </div>
+            `;
+        }
+
+        // Template testing
+        async function testTemplate() {
+            const event = document.getElementById('template-event').value;
+            const dataText = document.getElementById('template-data').value;
+            
+            try {
+                const templateData = JSON.parse(dataText);
+                showLoading('template-preview');
+                
+                const result = await apiCall(`/template/${event}`, {
+                    method: 'POST',
+                    body: JSON.stringify(templateData)
+                });
+                
+                if (result.success) {
+                    const preview = `
+                        <div class="notification-preview">
+                            <h4>Template: ${event.replace('_', ' ').toUpperCase()}</h4>
+                            <h5>Rendered Title:</h5>
+                            <p>${result.rendered.title}</p>
+                            <h5>Rendered Message:</h5>
+                            <p>${result.rendered.message}</p>
+                            <h5>Configuration:</h5>
+                            <p><strong>Priority:</strong> ${result.config.priority}</p>
+                            <p><strong>Channels:</strong> ${result.config.channels.join(', ')}</p>
+                            <p><strong>Recipients:</strong> ${result.config.recipients.join(', ')}</p>
+                            <p><strong>Escalation:</strong> ${result.config.escalation.enabled ? 'Yes' : 'No'}</p>
+                        </div>
+                    `;
+                    document.getElementById('template-preview').innerHTML = preview;
+                } else {
+                    showResult('template-preview', result, false);
+                }
+            } catch (error) {
+                showResult('template-preview', { error: 'Invalid JSON in template data' }, false);
+            }
+        }
+
+        // Load role preferences
+        async function loadRolePreferences() {
+            const role = document.getElementById('role-select').value;
+            showLoading('preferences-results');
+            const result = await apiCall(`/preferences/${role}`);
+            showResult('preferences-results', result, result.success);
+        }
+
+        // Load all events
+        async function loadAllEvents() {
+            showLoading('events-results');
+            const result = await apiCall('/trigger-events');
+            showResult('events-results', result, result.success);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            testConnection();
+            loadRolePreferences();
+        });
+    </script>
+</body>
+</html>
