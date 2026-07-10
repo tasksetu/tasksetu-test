@@ -386,3 +386,43 @@ export const createSyncErrorNotification = async (req, res) => {
     });
   }
 };
+
+/**
+ * POST /api/notifications/test-whatsapp
+ * Test sending a WhatsApp notification directly using raw parameters.
+ */
+export const testWhatsAppNotification = async (req, res) => {
+  try {
+    const { phone, template, language, components, message, type } = req.body;
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        error: "Phone number is required"
+      });
+    }
+
+    const { sendWhatsApp, sendWhatsAppText } = await import('../services/whatsappService.js');
+    
+    let result;
+    if (type === "text" || message) {
+      // Sends a raw text message (Note: user must have messaged the bot in the last 24 hours)
+      result = await sendWhatsAppText(phone, message);
+    } else {
+      // Sends a pre-approved template message
+      result = await sendWhatsApp(phone, template, language, components);
+    }
+
+    res.json({
+      success: true,
+      message: "WhatsApp test message sent successfully",
+      data: result
+    });
+  } catch (error) {
+    console.error('Test WhatsApp notification error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+

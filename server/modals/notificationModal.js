@@ -58,7 +58,8 @@ export const ChannelType = {
   IN_APP: 'in_app',
   EMAIL: 'email',
   PUSH: 'push',
-  SMS: 'sms'
+  SMS: 'sms',
+  WHATSAPP: 'whatsapp'
 };
 
 export const ChannelStatus = {

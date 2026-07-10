@@ -941,6 +941,8 @@ export const authController = {
           lastName: user.lastName,
           name: `${user.firstName} ${user.lastName}`,
           email: user.email,
+          phone: user.phone || "",
+          phoneVerified: user.phoneVerified || false,
           role: user.role,
           organizationId: user.organizationId,
           isPrimaryAdmin: user.isPrimaryAdmin || false,

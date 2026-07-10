@@ -413,6 +413,7 @@ export async function registerRoutes(app) {
         activeProcesses,
         lastLoginAt: user.lastLoginAt || null,
         phone: user.phone || null,
+        phoneVerified: user.phoneVerified || false,
         // Include license information
         assigned_license: user.assigned_license || null,
         seat_assigned: user.seat_assigned || false,
@@ -526,6 +527,7 @@ export async function registerRoutes(app) {
           firstName: updatedUser.firstName,
           lastName: updatedUser.lastName,
           phone: updatedUser.phone,
+          phoneVerified: updatedUser.phoneVerified || false,
           profileImageUrl: updatedUser.profileImageUrl,
           role: updatedUser.role,
           organizationId: updatedUser.organizationId,
@@ -575,6 +577,7 @@ export async function registerRoutes(app) {
         firstName: user.firstName || "",
         lastName: user.lastName || "",
         phone: user.phone || "",
+        phoneVerified: user.phoneVerified || false,
         profileImageUrl: user.profileImageUrl || null,
         role: user.role,
         organizationId: user.organizationId || user.organization,

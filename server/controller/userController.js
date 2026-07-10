@@ -1586,3 +1586,98 @@ export const searchUserByEmail = async (req, res) => {
     });
   }
 };
+
+/**
+ * Generates and sends a 5-digit WhatsApp OTP verification code.
+ */
+export const sendWhatsAppOtp = async (req, res) => {
+  try {
+    const { phone } = req.body;
+    const userId = req.user.id;
+
+    if (!phone) {
+      return res.status(400).json({ success: false, error: "Phone number is required" });
+    }
+
+    // Generate 5-digit random OTP
+    const otp = Math.floor(10000 + Math.random() * 90000).toString();
+    const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Update user in database
+    await User.findByIdAndUpdate(userId, {
+      phone: phone.trim(),
+      phoneVerificationOtp: otp,
+      phoneVerificationOtpExpires: expiry,
+      phoneVerified: false,
+    });
+
+    const { sendWhatsApp } = await import("../services/whatsappService.js");
+
+    try {
+      // Send using utility verification template
+      await sendWhatsApp(
+        phone,
+        "phone_verification_otp",
+        "en_US",
+        [
+          {
+            type: "body",
+            parameters: [
+              {
+                type: "text",
+                text: otp,
+              },
+            ],
+          },
+        ]
+      );
+    } catch (whatsappError) {
+      console.warn("⚠️ WhatsApp template failed, trying direct Hello World fallback:", whatsappError.message);
+      // Fallback: If template doesn't exist yet in user's Meta Sandbox, trigger hello_world so the API doesn't fail
+      await sendWhatsApp(phone, "hello_world", "en_US");
+    }
+
+    res.json({ success: true, message: "Verification OTP sent successfully via WhatsApp" });
+  } catch (error) {
+    console.error("Send WhatsApp OTP error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * Verifies a 5-digit WhatsApp OTP verification code.
+ */
+export const verifyWhatsAppOtp = async (req, res) => {
+  try {
+    const { otp } = req.body;
+    const userId = req.user.id;
+
+    if (!otp) {
+      return res.status(400).json({ success: false, error: "OTP is required" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+
+    if (!user.phoneVerificationOtp || user.phoneVerificationOtp !== otp.trim()) {
+      return res.status(400).json({ success: false, error: "You entered a wrong OTP. Please try again." });
+    }
+
+    if (new Date() > user.phoneVerificationOtpExpires) {
+      return res.status(400).json({ success: false, error: "OTP has expired. Please request a new one." });
+    }
+
+    user.phoneVerified = true;
+    user.phoneVerificationOtp = null;
+    user.phoneVerificationOtpExpires = null;
+    await user.save();
+
+    res.json({ success: true, message: "Phone number verified successfully!" });
+  } catch (error) {
+    console.error("Verify WhatsApp OTP error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import CommonLoader from "@/components/common/CommonLoader";
 import { apiClient } from "../../utils/apiClient";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useLicense } from "../../hooks/useLicense";
 import { useShowToast } from "@/utils/ToastMessage";
 import { useAuth } from "../../features/shared/hooks/useAuth";
@@ -63,7 +63,7 @@ const mapPriority = (priority) => {
 export default function NotificationCenter() {
   const [, setLocation] = useLocation();
   const { showSuccessToast, showErrorToast } = useShowToast();
-  const { role: userRole } = useAuth();
+  const { user, role: userRole, refetch: refetchUser } = useAuth();
 
   // License feature access
   const { checkFeature, license, isLoading: licenseLoading } = useLicense();
@@ -96,6 +96,11 @@ export default function NotificationCenter() {
         quiet_hours: { start: "22:00", end: "08:00", enabled: false },
       },
       push: {
+        enabled: false,
+        frequency: "real_time",
+        quiet_hours: { start: "22:00", end: "08:00", enabled: false },
+      },
+      whatsapp: {
         enabled: false,
         frequency: "real_time",
         quiet_hours: { start: "22:00", end: "08:00", enabled: false },
@@ -213,6 +218,7 @@ export default function NotificationCenter() {
             in_app: settings.channels?.in_app || prev.channels.in_app,
             email: settings.channels?.email || prev.channels.email,
             push: settings.channels?.push || prev.channels.push,
+            whatsapp: settings.channels?.whatsapp || prev.channels.whatsapp,
           },
           event_preferences:
             settings.event_preferences || prev.event_preferences,
@@ -281,6 +287,7 @@ export default function NotificationCenter() {
           in_app: newSettings.channels?.in_app,
           email: newSettings.channels?.email,
           push: newSettings.channels?.push,
+          whatsapp: newSettings.channels?.whatsapp,
         },
         event_preferences: newSettings.event_preferences,
         digest_settings: newSettings.digest_settings,
@@ -302,7 +309,7 @@ export default function NotificationCenter() {
       // Check if it's a license/feature access error
       if (err.response?.status === 403 && err.response?.data?.upgradeRequired) {
         showErrorToast(
-          "Advanced notifications (Email, Push) require an upgraded plan.",
+          "Advanced notifications (Email, Push, WhatsApp) require an upgraded plan.",
         );
       } else {
         showErrorToast("Failed to update notification settings");
@@ -438,12 +445,15 @@ export default function NotificationCenter() {
         hasAdvancedNotifications={hasAdvancedNotifications}
         licenseTier={license?.code || "EXPLORE"}
         userRole={userRole}
+        userPhone={user?.phone || ""}
+        userPhoneVerified={user?.phoneVerified || false}
+        onUserRefetch={refetchUser}
       />
     );
   }
 
   return (
-    <div className="notification-center-page flex flex-col min-h-screen gap-3 p-5 [&_.card]:!rounded-sm [&_input:not([type='checkbox']):not([type='radio'])]:!rounded-sm [&_select]:!rounded-sm [&_textarea]:!rounded-sm [&_.form-input]:!rounded-sm [&_.form-select]:!rounded-sm [&_.form-textarea]:!rounded-sm [&_button:not(.rounded-full)]:!rounded-sm [&_table]:!rounded-sm [&_.bg-white.border]:!rounded-sm [&_.rounded-sm]:!rounded-sm [&_.rounded-md]:!rounded-sm [&_.rounded-lg]:!rounded-sm [&_.rounded-xl]:!rounded-sm [&_.rounded-2xl]:!rounded-sm [&_.rounded]:!rounded-sm [&_[data-loader-ring]]:!rounded-full">
+    <div className=" px-6 py-3 flex flex-1 flex-col min-h-0 bg-gray-50">
       {/* License Info Banner - Show for Explore tier users */}
       {!hasAdvancedNotifications && !licenseLoading && (
         <div className="shrink-0 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-sm p-3 flex items-center justify-between">
@@ -464,19 +474,20 @@ export default function NotificationCenter() {
               </p>
             </div>
           </div>
-          <a
-            href="/settings/license"
+          <Link
+            href="/admin/subscription"
             className="h-8 px-4 inline-flex items-center bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-medium rounded-sm hover:from-blue-600 hover:to-indigo-700 transition-colors"
           >
             Upgrade
-          </a>
+          </Link>
         </div>
       )}
 
       <div className="shrink-0 flex flex-col lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center space-x-3">
-          <h1 className="text-2xl font-normal m-0"
-                style={{ color: "#676a6c" }}>Notifications</h1>
+          <h1 className="text-2xl font-normal m-0" style={{ color: "#676a6c" }}>
+            Notifications
+          </h1>
           {unreadCount > 0 && (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
               {unreadCount} unread
@@ -507,7 +518,7 @@ export default function NotificationCenter() {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col min-h-0 bg-white rounded-sm shadow-sm border border-gray-200 p-3">
+      <div className="flex flex-1 flex-col min-h-0 py-3">
         <div className="shrink-0 mb-2">
           <select
             value={filter}
@@ -686,26 +697,109 @@ function NotificationSettings({
   hasAdvancedNotifications = false,
   licenseTier = "EXPLORE",
   userRole = "employee",
+  userPhone = "",
+  userPhoneVerified = false,
+  onUserRefetch,
 }) {
   const [activeSection, setActiveSection] = useState("delivery");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
-  // Check if advanced features (email, push, SMS) are available based on license
+  const [phoneVal, setPhoneVal] = useState(userPhone);
+  const [otpVal, setOtpVal] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpError, setOtpError] = useState("");
+  const showToast = useShowToast();
+
+  useEffect(() => {
+    setPhoneVal(userPhone);
+  }, [userPhone]);
+
+  const handleSendOtp = async () => {
+    if (!phoneVal || !phoneVal.trim()) {
+      showToast("Please enter a valid phone number", "error");
+      return;
+    }
+    setIsSendingOtp(true);
+    setOtpError("");
+    try {
+      const res = await apiClient.post("/api/users/whatsapp/send-otp", {
+        phone: phoneVal.trim(),
+      });
+      if (res.data?.success) {
+        setOtpSent(true);
+        showToast("OTP sent successfully to your WhatsApp number", "success");
+      } else {
+        showToast(res.data?.error || "Failed to send OTP", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.error || "Error sending OTP", "error");
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpVal || otpVal.trim().length !== 5) {
+      setOtpError("Please enter a valid 5-digit OTP");
+      return;
+    }
+    setIsVerifyingOtp(true);
+    setOtpError("");
+    try {
+      const res = await apiClient.post("/api/users/whatsapp/verify-otp", {
+        otp: otpVal.trim(),
+      });
+      if (res.data?.success) {
+        showToast("WhatsApp number verified successfully!", "success");
+        setOtpSent(false);
+        setOtpVal("");
+        if (onUserRefetch) {
+          await onUserRefetch();
+        }
+      } else {
+        setOtpError(res.data?.error || "Verification failed");
+      }
+    } catch (err) {
+      console.error(err);
+      setOtpError(err.response?.data?.error || "You entered the wrong OTP. Enter again.");
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  const isOptimizeTier =
+    licenseTier === "OPTIMIZE" ||
+    (userRole &&
+      (userRole.includes("super_admin") || userRole === "super_admin"));
+
+  // Check if advanced features (email, push, SMS, WhatsApp) are available based on license
   const isAdvancedChannel = (channel) =>
-    ["email", "push", "sms"].includes(channel);
+    ["email", "push", "sms", "whatsapp"].includes(channel);
 
   // Helper to check if channel can be enabled
   const canEnableChannel = (channel) => {
     if (channel === "in_app") return true; // NOTIF_BASIC - always available
+    if (channel === "whatsapp") return isOptimizeTier; // WhatsApp requires Optimize tier
     return hasAdvancedNotifications; // NOTIF_ADV required for email, push, sms
   };
 
   // Handle toggle for channel settings
   const handleChannelToggle = async (channel, field = "enabled") => {
     // Check license before allowing advanced channels to be enabled
-    if (isAdvancedChannel(channel) && !hasAdvancedNotifications) {
+    if (channel === "whatsapp" && !isOptimizeTier) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    if (
+      isAdvancedChannel(channel) &&
+      channel !== "whatsapp" &&
+      !hasAdvancedNotifications
+    ) {
       setShowUpgradeModal(true);
       return;
     }
@@ -868,68 +962,63 @@ function NotificationSettings({
   ];
 
   return (
-    <div className="notification-center-page min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 overflow-scrol [&_*]:!rounded-none [&_*::before]:!rounded-none [&_*::after]:!rounded-none">
-      {/* Professional Header */}
-      <div className="bg-white backdrop-blur-md border-b border-gray-200/60 sticky top-0 z-20 border-gray-200">
-        <div className="max-w-5xl mx-auto px-8 py-5">
-          <div className="flex items-center justify-between">
-            <Button
-              variant="outline"
-              className="h-8 flex items-center gap-2 px-5 py-1 bg-white border border-gray-200 font-semibold text-gray-700 hover:text-blue-700 hover:bg-blue-50 transition-all duration-200 shadow-md hover:shadow-lg"
-              onClick={onBack}
+    <div className="quicktasks-square px-6 py-3 flex flex-1 flex-col min-h-0 bg-gray-50">
+      {/* Header */}
+      <div className="shrink-0 flex flex-col lg:flex-row lg:items-center lg:justify-between mb-2">
+        <div>
+          <h1 className="text-2xl font-normal m-0" style={{ color: "#676a6c" }}>
+            Notification Settings
+          </h1>
+          <p className="mt-0 text-sm text-blue-600">
+            Customize how and when you receive notifications
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {isSaving && (
+            <span className="text-sm text-blue-600 flex items-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              Saving...
+            </span>
+          )}
+          {saveSuccess && !isSaving && (
+            <span className="text-sm text-green-600 flex items-center gap-2">
+              ✓ Saved
+            </span>
+          )}
+
+          <Button
+            variant="outline"
+            className="h-8 flex items-center gap-2 px-5 py-1 bg-white border border-gray-200 font-semibold text-gray-700 hover:text-blue-700 hover:bg-blue-50 transition-all duration-200 shadow-md hover:shadow-lg"
+            onClick={onBack}
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                />
-              </svg>
-              <span className="font-medium">Back to Notifications</span>
-            </Button>
-
-            <div className="flex items-center gap-3">
-              {isSaving && (
-                <span className="text-sm text-blue-600 flex items-center gap-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                  Saving...
-                </span>
-              )}
-              {saveSuccess && !isSaving && (
-                <span className="text-sm text-green-600 flex items-center gap-2">
-                  ✓ Saved
-                </span>
-              )}
-
-              <div className="flex items-center justify-center shadow-xl">
-                <span className="text-4xl">⚙️</span>
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-                  Notification Settings
-                </h1>
-                <p className="text-gray-500 text-base">
-                  Customize how and when you receive notifications
-                </p>
-              </div>
-            </div>
-          </div>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
+            </svg>
+            <span className="font-medium">Back to Notifications</span>
+          </Button>
         </div>
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-24">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-600">Loading settings...</span>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex flex-col items-center gap-3">
+            <Loader className="w-8 h-8 animate-spin text-blue-600" />
+            <p className="text-lg text-gray-600">Loading notification...</p>
+          </div>
         </div>
       ) : (
-        <div className="mx-auto p-3">
+        <div className="flex-1 min-h-0 py-3">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
             {/* Sidebar Navigation - Professional */}
             <div className="lg:col-span-1">
@@ -1097,6 +1186,66 @@ function NotificationSettings({
                               </select>
                             </div>
                           )}
+                      </div>
+
+                      {/* WhatsApp Notifications */}
+                      <div
+                        className={`bg-gradient-to-r from-emerald-50 to-green-50 rounded-md p-3 border border-emerald-100 ${!isOptimizeTier ? "opacity-75" : ""}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="text-base">💬</span>
+                              <h3 className="text-sm font-semibold text-gray-900">
+                                WhatsApp Notifications
+                              </h3>
+                              {!isOptimizeTier && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                  🔒 Upgrade Required
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-600 mb-1">
+                              Receive notifications via WhatsApp
+                            </p>
+                            <div className="text-xs text-gray-500">
+                              {isOptimizeTier
+                                ? "✓ Instant task alerts and due date reminders on your phone"
+                                : "⚡ Available on the Optimize (Top) tier only"}
+                            </div>
+                          </div>
+                          <label
+                            className={`relative inline-flex items-center ${isOptimizeTier ? "cursor-pointer" : "cursor-not-allowed"}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={
+                                settings.channels?.whatsapp?.enabled ?? false
+                              }
+                              onChange={() => handleChannelToggle("whatsapp")}
+                              disabled={!isOptimizeTier}
+                              className="sr-only peer"
+                            />
+                            <div
+                              className={`w-10 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all ${isOptimizeTier ? "peer-checked:bg-gradient-to-r peer-checked:from-green-500 peer-checked:to-emerald-600" : "peer-checked:bg-gray-400"}`}
+                            ></div>
+                          </label>
+                        </div>
+
+                        {settings.channels?.whatsapp?.enabled && isOptimizeTier && (
+                          <div className="mt-3 pt-3 border-t border-green-200/50 space-y-2">
+                            {userPhoneVerified ? (
+                              <div className="flex items-center gap-2 text-xs text-green-700 bg-green-100/50 p-2 rounded-sm border border-green-200">
+                                <span>✅ Verified Number: <strong>{userPhone}</strong></span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between text-xs text-amber-700 bg-amber-50 p-2 rounded-sm border border-amber-200">
+                                <span>⚠️ Number verification required to receive alerts.</span>
+                                <Link href="/edit-profile" className="text-blue-600 hover:underline font-medium">Verify in Profile</Link>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Push Notifications */}
@@ -1901,7 +2050,7 @@ function NotificationSettings({
                   className="flex-1 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-2xl font-bold shadow-md"
                   onClick={() => {
                     setShowUpgradeModal(false);
-                    window.location.href = "/settings/license";
+                    setLocation("/admin/subscription");
                   }}
                 >
                   Upgrade Now

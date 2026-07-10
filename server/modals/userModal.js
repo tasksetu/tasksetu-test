@@ -27,6 +27,18 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    phoneVerified: {
+      type: Boolean,
+      default: false,
+    },
+    phoneVerificationOtp: {
+      type: String,
+      default: null,
+    },
+    phoneVerificationOtpExpires: {
+      type: Date,
+      default: null,
+    },
     address: {
       type: String,
       trim: true,

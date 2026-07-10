@@ -29,7 +29,7 @@ const checkAdvancedNotificationAccess = async (req, res, next) => {
     }
 
     // Check if trying to enable advanced channels
-    const advancedChannels = ['email', 'push', 'sms'];
+    const advancedChannels = ['email', 'push', 'sms', 'whatsapp'];
     let needsAdvancedCheck = false;
 
     // Check from route params (for /channels/:channelType)
@@ -46,6 +46,30 @@ const checkAdvancedNotificationAccess = async (req, res, next) => {
           needsAdvancedCheck = true;
           break;
         }
+      }
+    }
+
+    // Check if trying to enable WhatsApp specifically
+    let needsWhatsAppCheck = false;
+    if (channelType === 'whatsapp' && updateData.enabled === true) {
+      needsWhatsAppCheck = true;
+    }
+    if (updateData.channels?.whatsapp?.enabled === true) {
+      needsWhatsAppCheck = true;
+    }
+
+    if (needsWhatsAppCheck) {
+      console.log('🔐 [WHATSAPP LICENSE CHECK] Checking Optimize license for user:', userId);
+      const licenseInfo = await licenseService.getUserLicenseInfo(userId);
+      if (!licenseInfo || licenseInfo.license_code !== 'OPTIMIZE') {
+        return res.status(403).json({
+          success: false,
+          message: 'WhatsApp notifications require the Optimize (top-tier) plan',
+          error: 'FEATURE_NOT_AVAILABLE',
+          feature: 'WHATSAPP_NOTIF',
+          upgradeRequired: true,
+          showUpgradeModal: true,
+        });
       }
     }
 

@@ -10,7 +10,8 @@ import {
   createNotification,
   retryNotification,
   getNotificationEnums,
-  createSyncErrorNotification
+  createSyncErrorNotification,
+  testWhatsAppNotification
 } from '../controller/notificationController.js';
 
 const router = express.Router();
@@ -47,5 +48,8 @@ router.post('/:id/retry', retryNotification);
 
 // POST /api/notifications/sync-error - Create sync error notification
 router.post('/sync-error', createSyncErrorNotification);
+
+// POST /api/notifications/test-whatsapp - Test WhatsApp notification
+router.post('/test-whatsapp', testWhatsAppNotification);
 
 export { router as notificationRoutes };

@@ -11,6 +11,7 @@ import { User } from '../modals/userModal.js';
 import Task from '../modals/taskModal.js';
 import { emailService } from './emailService.js';
 import * as licenseService from './licenseService.js';
+import * as whatsappService from './whatsappService.js';
 
 /**
  * Notification Service for managing all notification operations
@@ -136,19 +137,37 @@ export class NotificationService {
       // 🔐 LICENSE CHECK: Filter channels based on user's license
       // NOTIF_BASIC: in_app notifications (available to all tiers)
       // NOTIF_ADV: email, push, sms notifications (requires Plan tier or above)
+      // WHATSAPP: requires Optimize tier (top license code) or super admin bypass
       let hasAdvancedNotifications = false;
+      let isOptimizeTier = false;
       try {
         const advancedAccessCheck = await licenseService.checkFeatureAccess(user_id, 'NOTIF_ADV');
         hasAdvancedNotifications = advancedAccessCheck?.hasAccess === true;
         console.log(`[NotificationService] 🔐 License check NOTIF_ADV for user ${user_id}: ${hasAdvancedNotifications}`);
+
+        // Check if user is super admin to bypass Optimize tier check
+        const userObj = await User.findById(user_id).select('role');
+        const isSuperAdmin = userObj?.role && (userObj.role.includes('super_admin') || userObj.role === 'super_admin');
+
+        const licenseInfo = await licenseService.getUserLicenseInfo(user_id);
+        isOptimizeTier = isSuperAdmin || (licenseInfo?.license_code === 'OPTIMIZE');
+        console.log(`[NotificationService] 🔐 Optimize tier check for user ${user_id}: ${isOptimizeTier}`);
       } catch (licenseError) {
         console.error(`[NotificationService] ⚠️ License check failed, defaulting to basic notifications only:`, licenseError.message);
         hasAdvancedNotifications = false;
+        isOptimizeTier = false;
       }
 
-      // Filter out advanced channels if user doesn't have NOTIF_ADV feature
+      // Filter out advanced channels if user doesn't have license
       const advancedChannels = [ChannelType.EMAIL, ChannelType.PUSH, ChannelType.SMS];
       const licenseFilteredChannels = channels.filter(channelType => {
+        if (channelType === ChannelType.WHATSAPP) {
+          if (!isOptimizeTier) {
+            console.log(`[NotificationService] 🔐 Channel WHATSAPP blocked - user lacks OPTIMIZE license`);
+            return false;
+          }
+          return true;
+        }
         if (advancedChannels.includes(channelType) && !hasAdvancedNotifications) {
           console.log(`[NotificationService] 🔐 Channel ${channelType} blocked - user lacks NOTIF_ADV license`);
           return false;
@@ -324,6 +343,11 @@ export class NotificationService {
 
             case ChannelType.SMS:
               success = await this.sendSMSNotification(notification);
+              if (success) usedAdvancedNotification = true;
+              break;
+
+            case ChannelType.WHATSAPP:
+              success = await this.sendWhatsAppNotification(notification);
               if (success) usedAdvancedNotification = true;
               break;
 
@@ -871,6 +895,44 @@ export class NotificationService {
       return true;
     } catch (error) {
       console.error('Error sending SMS notification:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Send WhatsApp notification
+   * @param {Notification} notification - The notification to send
+   * @returns {Promise<boolean>} Success status
+   */
+  static async sendWhatsAppNotification(notification) {
+    try {
+      const user = await User.findById(notification.user_id).select('phone firstName');
+      if (!user || !user.phone) {
+        console.warn(`[NotificationService] No phone number for user ${notification.user_id}, cannot send WhatsApp notification`);
+        return false;
+      }
+
+      // Check user preferences specifically for whatsapp
+      const settings = await NotificationSettings.getSettingsForUser(notification.user_id);
+      if (!settings.channels?.whatsapp?.enabled) {
+        console.log(`[NotificationService] WhatsApp notification disabled for user ${notification.user_id}`);
+        return false;
+      }
+
+      const templateName = notification.metadata?.whatsapp_template || "hello_world";
+      const languageCode = notification.metadata?.whatsapp_language || "en_US";
+      const components = notification.metadata?.whatsapp_components || [];
+
+      await whatsappService.sendWhatsApp(
+        user.phone,
+        templateName,
+        languageCode,
+        components
+      );
+
+      return true;
+    } catch (error) {
+      console.error('[NotificationService] Error sending WhatsApp notification:', error);
       return false;
     }
   }

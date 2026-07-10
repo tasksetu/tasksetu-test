@@ -114,6 +114,80 @@ export default function EditProfile() {
   });
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
+  // WhatsApp OTP Verification states & handlers
+  const [otpVal, setOtpVal] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpError, setOtpError] = useState("");
+
+  const handleSendOtp = async () => {
+    if (!formData.phoneNumber || formData.phoneNumber.length < 10) {
+      showErrorToast("Please enter a valid 10-digit phone number");
+      return;
+    }
+    setIsSendingOtp(true);
+    setOtpError("");
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/users/whatsapp/send-otp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ phone: formData.phoneNumber }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setOtpSent(true);
+        showSuccessToast("OTP sent successfully via WhatsApp");
+      } else {
+        showErrorToast(data.error || "Failed to send OTP");
+      }
+    } catch (err) {
+      console.error(err);
+      showErrorToast("Error sending OTP");
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpVal || otpVal.trim().length !== 5) {
+      setOtpError("Please enter a valid 5-digit OTP");
+      return;
+    }
+    setIsVerifyingOtp(true);
+    setOtpError("");
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/users/whatsapp/verify-otp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ otp: otpVal.trim() }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        showSuccessToast("WhatsApp number verified successfully!");
+        setOtpSent(false);
+        setOtpVal("");
+        queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/verify"] });
+      } else {
+        setOtpError(data.error || "Verification failed");
+      }
+    } catch (err) {
+      console.error(err);
+      setOtpError("You entered the wrong OTP. Enter again.");
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const firstPasswordFieldRef = useRef(null);
   // Inline errors for password form
@@ -1116,8 +1190,19 @@ export default function EditProfile() {
               </div>
 
               {/* Phone Number */}
-              <div className="w-full">
+              <div className="w-full relative">
                 <Label htmlFor="phoneNumber">Phone Number</Label>
+                {currentUser?.phoneVerified ? (
+                  <span className="absolute right-0 top-0.5 text-xs font-semibold text-green-600 flex items-center gap-1 bg-green-50 px-2 py-0.5 rounded border border-green-200">
+                    ✓ Verified
+                  </span>
+                ) : (
+                  formData.phoneNumber && formData.phoneNumber.length === 10 && !errors.phoneNumber && (
+                    <span className="absolute right-0 top-0.5 text-xs font-semibold text-amber-600 flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                      ⚠ Not Verified
+                    </span>
+                  )
+                )}
                 <Input
                   id="phoneNumber"
                   name="phoneNumber"
@@ -1127,19 +1212,79 @@ export default function EditProfile() {
                   pattern="^[0-9]{0,10}$"
                   value={formData.phoneNumber}
                   onChange={handleInputChange}
-                  placeholder="10 digits"
+                  placeholder="Enter your WhatsApp number"
+                  disabled={otpSent}
                   data-testid="input-phone"
                   className={`w-full ${
                     errors.phoneNumber
                       ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                       : ""
-                  }`}
+                  } ${otpSent ? "bg-gray-100 cursor-not-allowed" : ""}`}
                 />
                 {errors.phoneNumber ? (
                   <p className="text-xs text-red-500 mt-1">
                     {errors.phoneNumber}
                   </p>
                 ) : null}
+
+                {formData.phoneNumber && formData.phoneNumber.length === 10 && !errors.phoneNumber && !currentUser?.phoneVerified && (
+                  <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-sm space-y-2">
+                    {!otpSent ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-gray-600">Verify this number to receive WhatsApp alerts</span>
+                        <Button
+                          type="button"
+                          variant="primary"
+                          onClick={handleSendOtp}
+                          disabled={isSendingOtp}
+                          className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white font-medium rounded-sm px-3"
+                        >
+                          {isSendingOtp ? "Sending..." : "Send OTP"}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="text-xs text-gray-600">
+                          We sent a 5-digit verification code to <strong>{formData.phoneNumber}</strong>.
+                        </div>
+                        <div className="flex gap-2">
+                          <Input
+                            type="text"
+                            placeholder="Enter OTP"
+                            maxLength="5"
+                            value={otpVal}
+                            onChange={(e) => setOtpVal(e.target.value.replace(/\D/g, ""))}
+                            disabled={isVerifyingOtp}
+                            className="h-8 text-xs border border-gray-300 rounded-sm px-2.5 tracking-widest text-center font-bold"
+                          />
+                          <Button
+                            type="button"
+                            variant="primary"
+                            onClick={handleVerifyOtp}
+                            disabled={isVerifyingOtp}
+                            className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white font-medium rounded-sm px-4"
+                          >
+                            {isVerifyingOtp ? "Verifying..." : "Verify OTP"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setOtpSent(false)}
+                            disabled={isVerifyingOtp}
+                            className="h-8 text-xs text-gray-600 hover:bg-gray-100 rounded-sm px-2"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                        {otpError && (
+                          <div className="text-xs text-red-600 font-medium">
+                            ❌ {otpError}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>

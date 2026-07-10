@@ -296,7 +296,8 @@ const notificationSettingsSchema = new mongoose.Schema({
     in_app: channelSettingsSchema,
     email: channelSettingsSchema,
     push: channelSettingsSchema,
-    sms: channelSettingsSchema
+    sms: channelSettingsSchema,
+    whatsapp: channelSettingsSchema
   },
 
   // Event-specific preferences
@@ -474,6 +475,11 @@ notificationSettingsSchema.statics.createDefaultSettings = async function (userI
       sms: {
         enabled: false,
         frequency: NotificationFrequency.OFF,
+        quiet_hours: { enabled: true, start: '22:00', end: '08:00' }
+      },
+      whatsapp: {
+        enabled: false,
+        frequency: NotificationFrequency.REAL_TIME,
         quiet_hours: { enabled: true, start: '22:00', end: '08:00' }
       }
     },

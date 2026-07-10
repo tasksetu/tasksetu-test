@@ -401,4 +401,7 @@ router.put(
   userController.resetUserPassword
 );
 
+router.post("/users/whatsapp/send-otp", authenticateToken, userController.sendWhatsAppOtp);
+router.post("/users/whatsapp/verify-otp", authenticateToken, userController.verifyWhatsAppOtp);
+
 export default router;
