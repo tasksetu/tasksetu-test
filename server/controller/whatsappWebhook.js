@@ -69,7 +69,13 @@ export const handleWebhook = async (req, res) => {
     const command = text.toLowerCase();
 
     // 3. Main Menu / Reset State Trigger
-    if (["hi", "hello", "menu", "0"].includes(command)) {
+    const isGreeting = 
+      /^(hi+|hello|hey|helo|hola|menu|help|0|start)$/i.test(command) ||
+      command.startsWith("hi") || 
+      command.startsWith("hello") || 
+      command.startsWith("hey");
+
+    if (isGreeting) {
       session.currentStep = "idle";
       session.tempData = {};
       await session.save();
