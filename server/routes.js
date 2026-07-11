@@ -48,6 +48,7 @@ import roleRoutes from "./routes/roleRoutes.js";
 import organizationSettingsRoutes from "./routes/organizationSettingsRoutes.js";
 import transactionRoutes from "./routes/transactionRoutes.js"; // 🆕 Transaction history routes
 import billingDetailsRoutes from "./routes/billingDetailsRoutes.js"; // 🆕 Billing details routes
+import { verifyWebhook, handleWebhook } from "./controller/whatsappWebhook.js";
 import organizationHierarchyRoutes from "./routes/organizationHierarchyRoutes.js"; // 🆕 Organization hierarchy routes
 import { createDueDateNotifications } from "./controller/taskController.js";
 import rateLimit from "express-rate-limit";
@@ -359,6 +360,10 @@ export async function registerRoutes(app) {
       res.status(500).json({ message: "Failed to fetch team members" });
     }
   });
+
+  // WhatsApp webhook routes
+  app.get("/api/whatsapp/webhook", verifyWebhook);
+  app.post("/api/whatsapp/webhook", handleWebhook);
 
   // User routes
   app.get("/api/users", authenticateToken, async (req, res) => {
