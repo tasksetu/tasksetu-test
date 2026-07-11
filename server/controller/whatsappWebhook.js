@@ -106,7 +106,7 @@ export const handleWebhook = async (req, res) => {
             $or: [{ assignedTo: user._id }, { createdBy: user._id }],
             is_deleted: { $ne: true },
             dueDate: { $gte: startOfDay, $lte: endOfDay },
-            status: { $nin: ["DONE", "CANCELLED"] },
+            status: { $nin: ["DONE", "CANCELLED", "COMPLETED", "completed"] },
           });
 
           if (tasks.length === 0) {
@@ -127,7 +127,7 @@ export const handleWebhook = async (req, res) => {
             $or: [{ assignedTo: user._id }, { createdBy: user._id }],
             is_deleted: { $ne: true },
             dueDate: { $lt: new Date() },
-            status: { $nin: ["DONE", "CANCELLED"] },
+            status: { $nin: ["DONE", "CANCELLED", "COMPLETED", "completed"] },
           });
 
           if (tasks.length === 0) {
