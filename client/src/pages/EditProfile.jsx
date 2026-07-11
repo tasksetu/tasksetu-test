@@ -1213,13 +1213,13 @@ export default function EditProfile() {
                   value={formData.phoneNumber}
                   onChange={handleInputChange}
                   placeholder="Enter your WhatsApp number"
-                  disabled={otpSent}
+                  disabled={otpSent || currentUser?.phoneVerified}
                   data-testid="input-phone"
                   className={`w-full ${
                     errors.phoneNumber
                       ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                       : ""
-                  } ${otpSent ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                  } ${(otpSent || currentUser?.phoneVerified) ? "bg-gray-100 cursor-not-allowed" : ""}`}
                 />
                 {errors.phoneNumber ? (
                   <p className="text-xs text-red-500 mt-1">

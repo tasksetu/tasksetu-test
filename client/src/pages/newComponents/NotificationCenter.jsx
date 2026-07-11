@@ -1215,7 +1215,7 @@ function NotificationSettings({
                             </div>
                           </div>
                           <label
-                            className={`relative inline-flex items-center ${isOptimizeTier ? "cursor-pointer" : "cursor-not-allowed"}`}
+                            className={`relative inline-flex items-center ${isOptimizeTier && userPhoneVerified ? "cursor-pointer" : "cursor-not-allowed"}`}
                           >
                             <input
                               type="checkbox"
@@ -1223,27 +1223,21 @@ function NotificationSettings({
                                 settings.channels?.whatsapp?.enabled ?? false
                               }
                               onChange={() => handleChannelToggle("whatsapp")}
-                              disabled={!isOptimizeTier}
+                              disabled={!isOptimizeTier || !userPhoneVerified}
                               className="sr-only peer"
                             />
                             <div
-                              className={`w-10 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all ${isOptimizeTier ? "peer-checked:bg-gradient-to-r peer-checked:from-green-500 peer-checked:to-emerald-600" : "peer-checked:bg-gray-400"}`}
+                              className={`w-10 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all ${isOptimizeTier && userPhoneVerified ? "peer-checked:bg-gradient-to-r peer-checked:from-green-500 peer-checked:to-emerald-600" : "peer-checked:bg-gray-400"}`}
                             ></div>
                           </label>
                         </div>
 
-                        {settings.channels?.whatsapp?.enabled && isOptimizeTier && (
+                        {isOptimizeTier && !userPhoneVerified && (
                           <div className="mt-3 pt-3 border-t border-green-200/50 space-y-2">
-                            {userPhoneVerified ? (
-                              <div className="flex items-center gap-2 text-xs text-green-700 bg-green-100/50 p-2 rounded-sm border border-green-200">
-                                <span>✅ Verified Number: <strong>{userPhone}</strong></span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-between text-xs text-amber-700 bg-amber-50 p-2 rounded-sm border border-amber-200">
-                                <span>⚠️ Number verification required to receive alerts.</span>
-                                <Link href="/edit-profile" className="text-blue-600 hover:underline font-medium">Verify in Profile</Link>
-                              </div>
-                            )}
+                            <div className="flex items-center justify-between text-xs text-amber-700 bg-amber-50 p-2 rounded-sm border border-amber-200">
+                              <span>⚠️ Number verification required to receive alerts.</span>
+                              <Link href="/edit-profile" className="text-blue-600 hover:underline font-medium">Verify in Profile</Link>
+                            </div>
                           </div>
                         )}
                       </div>

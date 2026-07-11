@@ -53,13 +53,15 @@ export const authenticateToken = async (req, res, next) => {
 
     req.user = {
       id: user._id,
-      userId: user._id, // Add this for compatibility
-      _id: user._id,    // Add this too
+      userId: user._id,
+      _id: user._id,    
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
       name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
       role: user.role,
+      phone: user.phone || "",
+      phoneVerified: user.phoneVerified || false,
       organizationId: user.organization_id,
       permissions: user.permissions || [],
       isPrimaryAdmin: user.isPrimaryAdmin || false,

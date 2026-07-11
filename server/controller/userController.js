@@ -1603,39 +1603,54 @@ export const sendWhatsAppOtp = async (req, res) => {
     const otp = Math.floor(10000 + Math.random() * 90000).toString();
     const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // Update user in database
-    await User.findByIdAndUpdate(userId, {
-      phone: phone.trim(),
-      phoneVerificationOtp: otp,
-      phoneVerificationOtpExpires: expiry,
-      phoneVerified: false,
-    });
+    // Update user in database and get updated record
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        phone: phone.trim(),
+        phoneVerificationOtp: otp,
+        phoneVerificationOtpExpires: expiry,
+        phoneVerified: false,
+      },
+      { new: true }
+    );
+
+    const userName = updatedUser?.firstName || "User";
 
     const { sendWhatsApp } = await import("../services/whatsappService.js");
 
-    try {
-      // Send using utility verification template
-      await sendWhatsApp(
-        phone,
-        "phone_verification_otp",
-        "en_US",
-        [
-          {
-            type: "body",
-            parameters: [
-              {
-                type: "text",
-                text: otp,
-              },
-            ],
-          },
-        ]
-      );
-    } catch (whatsappError) {
-      console.warn("⚠️ WhatsApp template failed, trying direct Hello World fallback:", whatsappError.message);
-      // Fallback: If template doesn't exist yet in user's Meta Sandbox, trigger hello_world so the API doesn't fail
-      await sendWhatsApp(phone, "hello_world", "en_US");
-    }
+    // Send using utility verification template
+    await sendWhatsApp(
+      phone,
+      "verifyphone",
+      "en_US",
+      [
+        {
+          type: "body",
+          parameters: [
+            {
+              type: "text",
+              text: otp,
+            },
+            {
+              type: "text",
+              text: "Tasksetu Phone Verification",
+            },
+          ],
+        },
+        {
+          type: "button",
+          sub_type: "url",
+          index: "0",
+          parameters: [
+            {
+              type: "text",
+              text: otp,
+            },
+          ],
+        },
+      ]
+    );
 
     res.json({ success: true, message: "Verification OTP sent successfully via WhatsApp" });
   } catch (error) {

@@ -84,6 +84,8 @@ export async function authenticateToken(req, res, next) {
       organizationId: organizationId,
       organizationName: organizationName,
       role: decoded.role,
+      phone: user.phone || "",
+      phoneVerified: user.phoneVerified || false,
       permissions: user.permissions || [],
       isPrimaryAdmin: user.isPrimaryAdmin || false,
     };
