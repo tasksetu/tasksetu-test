@@ -100,12 +100,14 @@ export const handleWebhook = async (req, res) => {
       case "idle": {
         if (text === "1") {
           const userTimezone = await TimezoneHelper.getUserTimezone(user._id);
-          const { startOfDay, endOfDay } = TimezoneHelper.getDayBoundaries(userTimezone);
+          const local = TimezoneHelper.getLocalTime(userTimezone);
+          const startOfToday = new Date(Date.UTC(local.year, local.month - 1, local.dayOfMonth, 0, 0, 0, 0));
+          const endOfToday = new Date(Date.UTC(local.year, local.month - 1, local.dayOfMonth, 23, 59, 59, 999));
 
           const tasks = await Task.find({
             $or: [{ assignedTo: user._id }, { createdBy: user._id }],
             is_deleted: { $ne: true },
-            dueDate: { $gte: startOfDay, $lte: endOfDay },
+            dueDate: { $gte: startOfToday, $lte: endOfToday },
             status: { $nin: ["DONE", "CANCELLED", "COMPLETED", "completed"] },
           });
 
@@ -114,19 +116,33 @@ export const handleWebhook = async (req, res) => {
           } else {
             let list = `🗓️ *Today's Tasks*\n\n`;
             tasks.forEach((t, i) => {
-              const formattedTime = t.dueDate ? TimezoneHelper.formatInTimezone(t.dueDate, userTimezone, { hour: '2-digit', minute: '2-digit', hour12: true }) : "";
-              const timeSuffix = formattedTime ? ` (Due: ${formattedTime})` : "";
-              list += `${i + 1}. *${t.title}* (${t.status})${timeSuffix}\n`;
+              const utcH = t.dueDate ? t.dueDate.getUTCHours() : 0;
+              const utcM = t.dueDate ? t.dueDate.getUTCMinutes() : 0;
+              const ampm = utcH >= 12 ? "PM" : "AM";
+              const hour12 = utcH % 12 || 12;
+              const minStr = utcM.toString().padStart(2, "0");
+              const formattedTime = `${hour12}:${minStr} ${ampm}`;
+              list += `${i + 1}. *${t.title}* (${t.status}) (Due: ${formattedTime})\n`;
             });
             list += `\n↩️ Reply *0* for the Main Menu.`;
             await sendWhatsAppText(from, list);
           }
         } else if (text === "2") {
           const userTimezone = await TimezoneHelper.getUserTimezone(user._id);
+          const local = TimezoneHelper.getLocalTime(userTimezone);
+          const localNowAsUtc = new Date(Date.UTC(
+            local.year,
+            local.month - 1,
+            local.dayOfMonth,
+            local.hours,
+            local.minutes,
+            local.seconds
+          ));
+
           const tasks = await Task.find({
             $or: [{ assignedTo: user._id }, { createdBy: user._id }],
             is_deleted: { $ne: true },
-            dueDate: { $lt: new Date() },
+            dueDate: { $lt: localNowAsUtc },
             status: { $nin: ["DONE", "CANCELLED", "COMPLETED", "completed"] },
           });
 
@@ -135,7 +151,15 @@ export const handleWebhook = async (req, res) => {
           } else {
             let list = `⚠️ *Overdue Tasks*\n\n`;
             tasks.forEach((t, i) => {
-              const formattedDate = t.dueDate ? TimezoneHelper.formatDateTimeInTimezone(t.dueDate, userTimezone) : "No Date";
+              const day = t.dueDate ? t.dueDate.getUTCDate() : 1;
+              const month = t.dueDate ? ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][t.dueDate.getUTCMonth()] : "Jan";
+              const year = t.dueDate ? t.dueDate.getUTCFullYear() : 2026;
+              const utcH = t.dueDate ? t.dueDate.getUTCHours() : 0;
+              const utcM = t.dueDate ? t.dueDate.getUTCMinutes() : 0;
+              const ampm = utcH >= 12 ? "pm" : "am";
+              const hour12 = utcH % 12 || 12;
+              const minStr = utcM.toString().padStart(2, "0");
+              const formattedDate = `${day} ${month} ${year}, ${hour12}:${minStr} ${ampm}`;
               list += `• *${t.title}* (Due: ${formattedDate})\n`;
             });
             list += `\n↩️ Reply *0* for the Main Menu.`;
@@ -166,10 +190,8 @@ export const handleWebhook = async (req, res) => {
 
         await QuickTask.create({
           title: text,
-          user: user._id,
-          priority: "medium",
-          dueDate: new Date(),
-          status: "pending",
+          createdBy: user._id,
+          organization: user.organization_id,
         });
 
         session.currentStep = "idle";
@@ -254,7 +276,6 @@ export const handleWebhook = async (req, res) => {
         const input = text.toLowerCase();
         const taskTitle = session.tempData?.title || "Regular Task via WhatsApp";
         const dateStr = session.tempData?.dueDateStr || TimezoneHelper.formatDateInTimezone(new Date(), "UTC");
-        const userTimezone = await TimezoneHelper.getUserTimezone(user._id);
         let finalDueDate;
 
         if (input !== "skip" && input !== "no") {
@@ -269,10 +290,11 @@ export const handleWebhook = async (req, res) => {
             return;
           }
           const timeStr = `${match[1].padStart(2, '0')}:${match[2]}:00`;
-          finalDueDate = TimezoneHelper.parseInTimezone(`${dateStr}T${timeStr}`, userTimezone);
+          // Save exactly as local time value in UTC
+          finalDueDate = new Date(`${dateStr}T${timeStr}Z`);
         } else {
           // Default to end of day if skipped
-          finalDueDate = TimezoneHelper.parseInTimezone(`${dateStr}T23:59:59`, userTimezone);
+          finalDueDate = new Date(`${dateStr}T23:59:59Z`);
         }
 
         await Task.create({
@@ -291,7 +313,15 @@ export const handleWebhook = async (req, res) => {
         session.tempData = {};
         await session.save();
 
-        const formattedDateTime = TimezoneHelper.formatDateTimeInTimezone(finalDueDate, userTimezone);
+        const day = finalDueDate.getUTCDate();
+        const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][finalDueDate.getUTCMonth()];
+        const year = finalDueDate.getUTCFullYear();
+        const utcH = finalDueDate.getUTCHours();
+        const utcM = finalDueDate.getUTCMinutes();
+        const ampm = utcH >= 12 ? "PM" : "AM";
+        const hour12 = utcH % 12 || 12;
+        const minStr = utcM.toString().padStart(2, "0");
+        const formattedDateTime = `${day} ${month} ${year}, ${hour12}:${minStr} ${ampm}`;
 
         await sendWhatsAppText(
           from,
