@@ -3,6 +3,7 @@ import { WhatsappSession } from "../modals/whatsappSessionModal.js";
 import Task from "../modals/taskModal.js";
 import { QuickTask } from "../modals/quickTaskModal.js";
 import { sendWhatsAppText } from "../services/whatsappService.js";
+import { TimezoneHelper } from "../utils/timezoneHelper.js";
 
 // GET webhook verification handler
 export const verifyWebhook = (req, res) => {
@@ -98,15 +99,13 @@ export const handleWebhook = async (req, res) => {
     switch (session.currentStep) {
       case "idle": {
         if (text === "1") {
-          const startOfToday = new Date();
-          startOfToday.setHours(0, 0, 0, 0);
-          const endOfToday = new Date();
-          endOfToday.setHours(23, 59, 59, 999);
+          const userTimezone = await TimezoneHelper.getUserTimezone(user._id);
+          const { startOfDay, endOfDay } = TimezoneHelper.getDayBoundaries(userTimezone);
 
           const tasks = await Task.find({
             $or: [{ assignedTo: user._id }, { createdBy: user._id }],
             is_deleted: { $ne: true },
-            dueDate: { $gte: startOfToday, $lte: endOfToday },
+            dueDate: { $gte: startOfDay, $lte: endOfDay },
             status: { $nin: ["DONE", "CANCELLED"] },
           });
 
@@ -115,12 +114,15 @@ export const handleWebhook = async (req, res) => {
           } else {
             let list = `🗓️ *Today's Tasks*\n\n`;
             tasks.forEach((t, i) => {
-              list += `${i + 1}. *${t.title}* (${t.status})\n`;
+              const formattedTime = t.dueDate ? TimezoneHelper.formatInTimezone(t.dueDate, userTimezone, { hour: '2-digit', minute: '2-digit', hour12: true }) : "";
+              const timeSuffix = formattedTime ? ` (Due: ${formattedTime})` : "";
+              list += `${i + 1}. *${t.title}* (${t.status})${timeSuffix}\n`;
             });
             list += `\n↩️ Reply *0* for the Main Menu.`;
             await sendWhatsAppText(from, list);
           }
         } else if (text === "2") {
+          const userTimezone = await TimezoneHelper.getUserTimezone(user._id);
           const tasks = await Task.find({
             $or: [{ assignedTo: user._id }, { createdBy: user._id }],
             is_deleted: { $ne: true },
@@ -133,7 +135,7 @@ export const handleWebhook = async (req, res) => {
           } else {
             let list = `⚠️ *Overdue Tasks*\n\n`;
             tasks.forEach((t, i) => {
-              const formattedDate = t.dueDate ? new Date(t.dueDate).toLocaleDateString() : "No Date";
+              const formattedDate = t.dueDate ? TimezoneHelper.formatDateTimeInTimezone(t.dueDate, userTimezone) : "No Date";
               list += `• *${t.title}* (Due: ${formattedDate})\n`;
             });
             list += `\n↩️ Reply *0* for the Main Menu.`;
@@ -203,26 +205,28 @@ export const handleWebhook = async (req, res) => {
       }
 
       case "awaiting_regular_task_date": {
-        let parsedDate = null;
+        const userTimezone = await TimezoneHelper.getUserTimezone(user._id);
+        let dateStr = "";
         const input = text.toLowerCase();
 
         if (input === "today") {
-          parsedDate = new Date();
+          dateStr = TimezoneHelper.formatDateInTimezone(new Date(), userTimezone);
         } else if (input === "tomorrow") {
-          parsedDate = new Date();
-          parsedDate.setDate(parsedDate.getDate() + 1);
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          dateStr = TimezoneHelper.formatDateInTimezone(tomorrow, userTimezone);
         } else {
-          // Attempt YYYY-MM-DD parse
+          // Validate YYYY-MM-DD format
           const parts = text.split("-");
           if (parts.length === 3) {
             const date = new Date(text);
             if (!isNaN(date.getTime())) {
-              parsedDate = date;
+              dateStr = text; // Match original input format
             }
           }
         }
 
-        if (!parsedDate) {
+        if (!dateStr) {
           await sendWhatsAppText(
             from,
             "⚠️ Invalid date format.\n\nPlease reply with *YYYY-MM-DD* (e.g. 2026-07-12) or reply 'today' / 'tomorrow'."
@@ -230,10 +234,10 @@ export const handleWebhook = async (req, res) => {
           return;
         }
 
-        // Store parsed date and progress to time step
+        // Store parsed date string (YYYY-MM-DD) and progress to time step
         session.tempData = {
           title: session.tempData?.title,
-          dueDate: parsedDate.toISOString()
+          dueDateStr: dateStr
         };
         session.currentStep = "awaiting_regular_task_time";
         await session.save();
@@ -249,7 +253,9 @@ export const handleWebhook = async (req, res) => {
       case "awaiting_regular_task_time": {
         const input = text.toLowerCase();
         const taskTitle = session.tempData?.title || "Regular Task via WhatsApp";
-        let finalDueDate = new Date(session.tempData?.dueDate || Date.now());
+        const dateStr = session.tempData?.dueDateStr || TimezoneHelper.formatDateInTimezone(new Date(), "UTC");
+        const userTimezone = await TimezoneHelper.getUserTimezone(user._id);
+        let finalDueDate;
 
         if (input !== "skip" && input !== "no") {
           // Parse HH:MM format
@@ -262,12 +268,11 @@ export const handleWebhook = async (req, res) => {
             );
             return;
           }
-          const hours = parseInt(match[1], 10);
-          const minutes = parseInt(match[2], 10);
-          finalDueDate.setHours(hours, minutes, 0, 0);
+          const timeStr = `${match[1].padStart(2, '0')}:${match[2]}:00`;
+          finalDueDate = TimezoneHelper.parseInTimezone(`${dateStr}T${timeStr}`, userTimezone);
         } else {
           // Default to end of day if skipped
-          finalDueDate.setHours(23, 59, 59, 999);
+          finalDueDate = TimezoneHelper.parseInTimezone(`${dateStr}T23:59:59`, userTimezone);
         }
 
         await Task.create({
@@ -286,10 +291,7 @@ export const handleWebhook = async (req, res) => {
         session.tempData = {};
         await session.save();
 
-        const formattedDateTime = finalDueDate.toLocaleString(undefined, {
-          dateStyle: "medium",
-          timeStyle: input === "skip" || input === "no" ? undefined : "short"
-        });
+        const formattedDateTime = TimezoneHelper.formatDateTimeInTimezone(finalDueDate, userTimezone);
 
         await sendWhatsAppText(
           from,
