@@ -1,6 +1,6 @@
 import { User } from "../modals/userModal.js";
 import { WhatsappSession } from "../modals/whatsappSessionModal.js";
-import { Task } from "../models.js";
+import Task from "../modals/taskModal.js";
 import { QuickTask } from "../modals/quickTaskModal.js";
 import { sendWhatsAppText } from "../services/whatsappService.js";
 
@@ -105,15 +105,15 @@ export const handleWebhook = async (req, res) => {
 
           const tasks = await Task.find({
             $or: [{ assignedTo: user._id }, { createdBy: user._id }],
-            isDeleted: { $ne: true },
+            is_deleted: { $ne: true },
             dueDate: { $gte: startOfToday, $lte: endOfToday },
             status: { $nin: ["DONE", "CANCELLED"] },
           });
 
           if (tasks.length === 0) {
-            await sendWhatsAppText(from, "📅 *Today's Tasks*\n\nYou have no pending tasks due today.\n\n↩️ Reply *0* for the Main Menu.");
+            await sendWhatsAppText(from, "🗓️ *Today's Tasks*\n\nYou have no pending tasks due today.\n\n↩️ Reply *0* for the Main Menu.");
           } else {
-            let list = `📅 *Today's Tasks*\n\n`;
+            let list = `🗓️ *Today's Tasks*\n\n`;
             tasks.forEach((t, i) => {
               list += `${i + 1}. *${t.title}* (${t.status})\n`;
             });
@@ -126,7 +126,7 @@ export const handleWebhook = async (req, res) => {
 
           const tasks = await Task.find({
             $or: [{ assignedTo: user._id }, { createdBy: user._id }],
-            isDeleted: { $ne: true },
+            is_deleted: { $ne: true },
             dueDate: { $lt: startOfToday },
             status: { $nin: ["DONE", "CANCELLED"] },
           });
@@ -199,7 +199,7 @@ export const handleWebhook = async (req, res) => {
 
         await sendWhatsAppText(
           from,
-          `📅 *Set Due Date*\n\n` +
+          `🗓️ *Set Due Date*\n\n` +
           `Please reply with the due date in *YYYY-MM-DD* format (e.g. 2026-07-12) or reply 'today' / 'tomorrow'.`
         );
         break;
@@ -242,6 +242,9 @@ export const handleWebhook = async (req, res) => {
           dueDate: parsedDate,
           status: "OPEN",
           priority: "medium",
+          organization: user.organization_id,
+          taskType: "regular",
+          createdByRole: Array.isArray(user.role) ? user.role : [user.role || "employee"],
         });
 
         session.currentStep = "idle";
