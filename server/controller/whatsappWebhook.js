@@ -233,13 +233,51 @@ export const handleWebhook = async (req, res) => {
           return;
         }
 
+        // Store parsed date and progress to time step
+        session.tempData = {
+          title: session.tempData?.title,
+          dueDate: parsedDate.toISOString()
+        };
+        session.currentStep = "awaiting_regular_task_time";
+        await session.save();
+
+        await sendWhatsAppText(
+          from,
+          `⏰ *Set Due Time*\n\n` +
+          `Please reply with the time in 24-hour format (e.g. *14:30* or *18:00*) or reply 'skip' to set no specific time.`
+        );
+        break;
+      }
+
+      case "awaiting_regular_task_time": {
+        const input = text.toLowerCase();
         const taskTitle = session.tempData?.title || "Regular Task via WhatsApp";
+        let finalDueDate = new Date(session.tempData?.dueDate || Date.now());
+
+        if (input !== "skip" && input !== "no") {
+          // Parse HH:MM format
+          const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
+          const match = text.match(timeRegex);
+          if (!match) {
+            await sendWhatsAppText(
+              from,
+              "⚠️ Invalid time format.\n\nPlease reply with the time in 24-hour format (e.g. *14:30* or *18:00*) or reply 'skip'."
+            );
+            return;
+          }
+          const hours = parseInt(match[1], 10);
+          const minutes = parseInt(match[2], 10);
+          finalDueDate.setHours(hours, minutes, 0, 0);
+        } else {
+          // Default to end of day if skipped
+          finalDueDate.setHours(23, 59, 59, 999);
+        }
 
         await Task.create({
           title: taskTitle,
           createdBy: user._id,
           assignedTo: user._id,
-          dueDate: parsedDate,
+          dueDate: finalDueDate,
           status: "OPEN",
           priority: "medium",
           organization: user.organization_id,
@@ -251,11 +289,16 @@ export const handleWebhook = async (req, res) => {
         session.tempData = {};
         await session.save();
 
+        const formattedDateTime = finalDueDate.toLocaleString(undefined, {
+          dateStyle: "medium",
+          timeStyle: input === "skip" || input === "no" ? undefined : "short"
+        });
+
         await sendWhatsAppText(
           from,
           `✅ *Regular Task Created!*\n\n` +
           `Title: *${taskTitle}*\n` +
-          `Due: ${parsedDate.toLocaleDateString()}\n\n` +
+          `Due: ${formattedDateTime}\n\n` +
           `↩️ Reply *0* for the Main Menu.`
         );
         break;
