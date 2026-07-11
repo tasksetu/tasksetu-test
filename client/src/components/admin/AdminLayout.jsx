@@ -54,7 +54,7 @@ function AdminLayoutInner({ children, user, sidebarCollapsed, sidebarOpen,
         />
       </div>
 
-      <div className={`flex-1 flex flex-col w-full min-h-screen bg-gray-50 transition-all duration-300 ${
+      <div className={`flex-1 flex flex-col min-w-0 min-h-screen bg-gray-50 transition-all duration-300 ${
         sidebarCollapsed ? "lg:ml-[70px]" : "lg:ml-[280px]"
       }`}>
         <Header
