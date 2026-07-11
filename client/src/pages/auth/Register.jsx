@@ -348,15 +348,15 @@ export default function Register() {
       <div className="flex items-start justify-between gap-6">
         <div className="max-w-3xl">
           <div className="flex items-center gap-2 mb-6">
-            <div className="h-5 w-5 rounded bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center">
+            <div className="h-9 w-9 rounded bg-blue-600 text-white text-xl font-bold flex items-center justify-center">
               TS
             </div>
-            <span className="text-[15px] font-semibold text-gray-800">
-              TaskSetu
+            <span className="text-2xl font-semibold text-gray-800">
+              TaskSetu -<span className="text-2xl text-blue-600"> UAT</span>
             </span>
           </div>
 
-          <h2 className="text-[40px] font-bold text-gray-900 leading-[1.1] tracking-[-0.8px]">
+          <h2 className="text-[40px] font-bold text-gray-900 leading-[1.1] tracking-[-0.8px] -mt-1">
             Simple. Lightweight.
             <br />
             <span className="text-blue-600">Task Management</span> That Just
