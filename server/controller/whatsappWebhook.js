@@ -121,13 +121,10 @@ export const handleWebhook = async (req, res) => {
             await sendWhatsAppText(from, list);
           }
         } else if (text === "2") {
-          const startOfToday = new Date();
-          startOfToday.setHours(0, 0, 0, 0);
-
           const tasks = await Task.find({
             $or: [{ assignedTo: user._id }, { createdBy: user._id }],
             is_deleted: { $ne: true },
-            dueDate: { $lt: startOfToday },
+            dueDate: { $lt: new Date() },
             status: { $nin: ["DONE", "CANCELLED"] },
           });
 
