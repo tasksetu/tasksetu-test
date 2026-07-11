@@ -192,7 +192,7 @@ export const handleWebhook = async (req, res) => {
 
         await QuickTask.create({
           title: text,
-          createdBy: user._id,
+          user: user._id,
           organization: user.organization_id,
         });
 
