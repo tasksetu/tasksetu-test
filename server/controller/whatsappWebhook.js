@@ -99,7 +99,8 @@ export const handleWebhook = async (req, res) => {
     switch (session.currentStep) {
       case "idle": {
         if (text === "1") {
-          const userTimezone = await TimezoneHelper.getUserTimezone(user._id);
+          let userTimezone = await TimezoneHelper.getUserTimezone(user._id);
+          if (userTimezone === "UTC") userTimezone = "Asia/Kolkata";
           const local = TimezoneHelper.getLocalTime(userTimezone);
           const startOfToday = new Date(Date.UTC(local.year, local.month - 1, local.dayOfMonth, 0, 0, 0, 0));
           const endOfToday = new Date(Date.UTC(local.year, local.month - 1, local.dayOfMonth, 23, 59, 59, 999));
@@ -128,7 +129,8 @@ export const handleWebhook = async (req, res) => {
             await sendWhatsAppText(from, list);
           }
         } else if (text === "2") {
-          const userTimezone = await TimezoneHelper.getUserTimezone(user._id);
+          let userTimezone = await TimezoneHelper.getUserTimezone(user._id);
+          if (userTimezone === "UTC") userTimezone = "Asia/Kolkata";
           const local = TimezoneHelper.getLocalTime(userTimezone);
           const localNowAsUtc = new Date(Date.UTC(
             local.year,
