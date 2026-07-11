@@ -1634,7 +1634,7 @@ export const sendWhatsAppOtp = async (req, res) => {
             },
             {
               type: "text",
-              text: "Tasksetu Phone Verification",
+              text: "TS Verification",
             },
           ],
         },
