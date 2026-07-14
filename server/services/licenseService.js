@@ -1,38 +1,3 @@
-/**
- * LICENSE SERVICE - HEART OF THE MODULE (v3 - USER-LEVEL LICENSING WITH FEATURE-BASED USAGE)
- * 
- * ✅ CORE PRINCIPLES (FINAL & AUTHORITATIVE):
- * 
- * 🔑 Rule 1 — LicenseInstance is ACCESS, not USAGE
- *    - LicenseInstance only decides which limits apply
- *    - Usage is per user, not per license instance
- * 
- * 🔑 Rule 2 — Usage is FEATURE-based
- *    - Usage tracked in UserFeatureUsage model
- *    - Independent of license assignment
- * 
- * 🔑 Rule 3 — Upgrade NEVER deletes usage
- *    - Only changes the ceiling (limits)
- *    - Usage carries forward
- * 
- * 🔑 Rule 4 — Downgrade is VALIDATED, not forced
- *    - Only allowed if current usage fits target license limits
- * 
- * REQUEST → USER LICENSE CHECK → FEATURE CHECK → USER LIMIT CHECK → ALLOW / BLOCK
- * 
- * This service exposes these methods:
- * - checkFeatureAccess(userId, feature_code)
- * - checkFeatureLimit(userId, feature_code)
- * - consumeFeature(userId, feature_code, amount)
- * - decrementFeature(userId, feature_code, amount) - for delete/undo
- * - getLicenseSummary(userId)
- * - getUserLicenseInfo(userId)
- * - canAssignLicense(adminUserId, targetUserId, targetLicenseCode)
- * - assignLicenseToUser(adminUserId, targetUserId, licenseCode)
- * - validateLicenseChange(userId, currentLicense, targetLicense)
- * - checkDowngradeEligibility(userId, targetLicenseCode)
- */
-
 import { OrganizationSubscription } from '../modals/organizationSubscriptionModal.js';
 import { Organization } from '../modals/organizationModal.js';
 import { User } from '../modals/userModal.js';
@@ -62,22 +27,7 @@ export const getFeatureDisplayName = (featureCode) => {
   return FEATURE_DISPLAY_NAMES[featureCode] || featureCode;
 };
 
-/**
- * Get trial days from License model dynamically
- * @param {String} licenseCode - License code (e.g., 'EXPLORE')
- * @returns {Promise<Number>} Number of trial days
- */
-export const getTrialDays = async (licenseCode = 'EXPLORE') => {
-  try {
-    const license = await License.findOne({ license_code: licenseCode });
-    const trialDays = license?.trial_days || 6; // Default fallback to 6 days
-    console.log(`📅 Trial days for ${licenseCode}: ${trialDays}`);
-    return trialDays;
-  } catch (error) {
-    console.error('❌ Error fetching trial_days, using default 6:', error);
-    return 6; // Safe fallback
-  }
-};
+
 
 /**
  * ✅ NEW: Get user's own license information (USER-LEVEL, no inheritance)
@@ -1389,16 +1339,11 @@ export const assignLicenseToUser = async (adminUserId, targetUserId, licenseCode
     const expiryDate = new Date(now);
     let daysToAdd = 30; // Default fallback
 
-    if (licenseDef && licenseDef.billing_cycle === 'TRIAL') {
-      daysToAdd = licenseDef.trial_days;
-      console.log(`ℹ️ [LICENSE SERVICE] Using trial duration from license definition: ${daysToAdd} days`);
-    } else {
-      // Check subscription billing cycle for paid licenses
-      const subscription = await OrganizationSubscription.findOne({ organization_id: organizationId }).session(session);
-      const billingCycle = subscription?.billing_cycle || 'MONTHLY';
-      daysToAdd = billingCycle === 'YEARLY' ? 365 : 30;
-      console.log(`ℹ️ [LICENSE SERVICE] Using ${billingCycle} duration: ${daysToAdd} days`);
-    }
+    // Check subscription billing cycle for paid licenses
+    const subscription = await OrganizationSubscription.findOne({ organization_id: organizationId }).session(session);
+    const billingCycle = subscription?.billing_cycle || 'MONTHLY';
+    daysToAdd = billingCycle === 'YEARLY' ? 365 : 30;
+    console.log(`ℹ️ [LICENSE SERVICE] Using ${billingCycle} duration: ${daysToAdd} days`);
 
     expiryDate.setDate(expiryDate.getDate() + daysToAdd);
 

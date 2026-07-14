@@ -589,11 +589,7 @@ export const verifyLicensePayment = async (req, res) => {
       }
 
       const renewalDate = new Date(baseDate);
-      if (licensePlan.billing_cycle === 'TRIAL') {
-        // Use trial_days from license definition
-        renewalDate.setDate(renewalDate.getDate() + (licensePlan.trial_days));
-        console.log(`ℹ️ [MULTI-LICENSE] Using trial duration: ${licensePlan.trial_days} days`);
-      } else if (billing_cycle.toUpperCase() === 'MONTHLY') {
+      if (billing_cycle.toUpperCase() === 'MONTHLY') {
         renewalDate.setDate(renewalDate.getDate() + 30); // Use exact 30 days to avoid month length variations
       } else {
         renewalDate.setFullYear(renewalDate.getFullYear() + 1);
@@ -1582,3 +1578,4 @@ export const cancelPurchase = async (req, res) => {
     });
   }
 };
+

@@ -4,7 +4,6 @@ import { FeatureUsageTracking } from '../modals/featureUsageTrackingModal.js';
 import LicenseInstance from '../modals/licenseInstanceModal.js';
 import { User } from '../modals/userModal.js';
 import { OrganizationLicensePurchase } from '../modals/organizationLicensePurchaseModal.js';
-import { getTrialDays } from '../services/licenseService.js';
 import { emailService } from '../services/emailService.js';               // ✅ NEW
 import { NotificationService } from '../services/notificationService.js'; // ✅ NEW
 import { TriggerEvent, EntityType, NotificationPriority, ChannelType } from '../modals/notificationModal.js'; // ✅ NEW
@@ -184,13 +183,7 @@ export const startLicenseInstanceExpiryJob = () => {
       console.log('🔄 Running License Expiry check (PLAN, EXECUTE, OPTIMIZE)...');
       const now = new Date();
 
-      // Get trial duration for EXPLORE from DB
-      const exploreTrialDays = await getTrialDays('EXPLORE');
-      const getNewExploreExpiry = () => {
-        const date = new Date();
-        date.setDate(date.getDate() + exploreTrialDays);
-        return date;
-      };
+
 
       // 1. Mark expired OrganizationLicensePurchases as EXPIRED
       const expiredPurchases = await OrganizationLicensePurchase.updateMany(

@@ -559,9 +559,6 @@ export const upgradeSubscription = async (req, res) => {
       if (licenseDef) {
         if (billing_cycle === 'YEARLY') {
           daysToAdd = 365;
-        } else if (licenseDef.billing_cycle === 'TRIAL') {
-          daysToAdd = licenseDef.trial_days;
-          console.log(`ℹ️ [LICENSE CONTROLLER] Using trial duration from license definition: ${daysToAdd} days`);
         } else {
           daysToAdd = 30; // Standard monthly
         }
@@ -632,15 +629,12 @@ export const upgradeSubscription = async (req, res) => {
     const licenseDef = await License.findOne({ license_code: license_code.toUpperCase() });
 
     let daysToAdd = billing_cycle === 'YEARLY' ? 365 : 30;
-    if (licenseDef && licenseDef.billing_cycle === 'TRIAL') {
-      daysToAdd = licenseDef.trial_days;
-    }
 
     if (!subscription) {
       subscription = new OrganizationSubscription({
         organization_id: organizationId,
         license_code: license_code.toUpperCase(),
-        status: (licenseDef?.billing_cycle === 'TRIAL') ? 'TRIAL' : 'ACTIVE',
+        status: 'ACTIVE',
         billing_cycle: billing_cycle || 'MONTHLY',
         seats_purchased: seats || licenseDef?.max_users,
         subscription_start_date: new Date(),
@@ -650,11 +644,11 @@ export const upgradeSubscription = async (req, res) => {
       });
     } else {
       subscription.license_code = license_code.toUpperCase();
-      subscription.status = (licenseDef?.billing_cycle === 'TRIAL') ? 'TRIAL' : 'ACTIVE';
+      subscription.status = 'ACTIVE';
       subscription.billing_cycle = billing_cycle || subscription.billing_cycle;
       subscription.seats_purchased = seats || subscription.seats_purchased;
 
-      if (subscription.status === 'TRIAL' || subscription.status === 'EXPIRED' || subscription.status === 'ACTIVE') {
+      if (subscription.status === 'EXPIRED' || subscription.status === 'ACTIVE') {
         subscription.subscription_start_date = new Date();
         subscription.next_billing_date = new Date(
           Date.now() + (daysToAdd) * 24 * 60 * 60 * 1000

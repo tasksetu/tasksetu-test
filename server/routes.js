@@ -894,7 +894,6 @@ export async function registerRoutes(app) {
         price_monthly: plan.price_monthly,
         price_yearly: plan.price_yearly,
         max_users: plan.max_users,
-        trial_days: plan.trial_days,
         features_summary: plan.features_summary || [],
         is_popular: plan.is_popular || false,
         is_current: plan.license_code === currentLicenseCode,

@@ -131,7 +131,7 @@ const userSchema = new mongoose.Schema(
     license_expiry: {
       type: Date,
       default: null,
-      comment: 'Expiry date for user\'s license (for EXPLORE trial: createdAt + trial_days from License model)'
+       comment: 'Expiry date for user\'s license (NULL = no expiry / free plan)'
     },
 
     // 🆕 PENDING LICENSE: Stores a scheduled license change (e.g., downgrade that activates after current plan expires)
@@ -171,7 +171,7 @@ const userSchema = new mongoose.Schema(
     account_type: {
       type: String,
       enum: ['individual', 'company'],
-      default: 'company',
+      default: 'individual',
       comment: 'DEPRECATED: Account type - being phased out',
     },
     // Seat Management Fields (DEPRECATED - being replaced by atomic license instances)

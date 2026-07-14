@@ -47,12 +47,6 @@ const licenseSchema = new mongoose.Schema(
       required: true,
       default: -1, // -1 means unlimited
     },
-    trial_days: {
-      type: Number,
-      required: true,
-      min: 0,
-      default: 0,
-    },
     is_active: {
       type: Boolean,
       default: true,

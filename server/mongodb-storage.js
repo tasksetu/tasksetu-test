@@ -157,26 +157,9 @@ export class MongoStorage {
     if (!userData.license_code) {
       userData.license_code = 'EXPLORE';
     }
-    if (!userData.license_expiry) {
-      // 📌 Get trial_days dynamically from License model
-      try {
-        const { License } = await import('./modals/licenseModal.js');
-        const exploreLicense = await License.findOne({ license_code: 'EXPLORE' });
-        const trialDays = exploreLicense?.trial_days || 6; // Fallback to 6 days
-
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + trialDays);
-        userData.license_expiry = expiryDate;
-
-        console.log(`📅 Setting EXPLORE trial expiry: ${expiryDate.toISOString()} (${trialDays} days)`);
-      } catch (error) {
-        console.error('❌ Error fetching trial_days, using 6 days default:', error);
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + 6);
-        userData.license_expiry = expiryDate;
-      }
+    if (userData.license_code === 'EXPLORE') {
+      userData.license_expiry = null;
     }
-
     console.log("user created....", userData);
     const user = new User(userData);
     const savedUser = await user.save();

@@ -340,8 +340,6 @@ export const upgradeLicense = async (req, res) => {
         if (licenseDef) {
             if (billingCycle === 'YEARLY') {
                 daysToAdd = 365;
-            } else if (licenseDef.billing_cycle === 'TRIAL') {
-                daysToAdd = licenseDef.trial_days;
             } else {
                 daysToAdd = 30; // Standard monthly
             }

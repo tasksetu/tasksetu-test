@@ -1057,16 +1057,25 @@ export default function LicenseManagementPage() {
     console.log("License Definition:", licenseDef);
     console.log("Trial Days from License Def:", licenseDef?.trial_days);
 
+    const getDaysDifference = (targetDate) => {
+      if (!targetDate) return 0;
+      const target = new Date(targetDate);
+      const current = new Date();
+      
+      // Strip time components to calculate pure calendar days
+      const targetDateOnly = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+      const currentDateOnly = new Date(current.getFullYear(), current.getMonth(), current.getDate());
+      
+      const diffTime = targetDateOnly.getTime() - currentDateOnly.getTime();
+      return Math.round(diffTime / (1000 * 60 * 60 * 24));
+    };
+
     // PRIORITY 1: Use currentLicenseData.expiry from /api/license/current
     if (currentLicenseData?.expiry) {
-      const expiry = new Date(currentLicenseData.expiry);
-      const now = new Date();
-      const diffTime = expiry.getTime() - now.getTime();
-      const calculatedDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const calculatedDays = getDaysDifference(currentLicenseData.expiry);
 
       console.log("📍 Using expiry from /api/license/current:");
       console.log("  - Expiry from API:", currentLicenseData.expiry);
-      console.log("  - Current Date:", now.toISOString());
       console.log("  - Calculated Days:", calculatedDays);
       console.log(
         "  - Expected Days (from trial_days):",
@@ -1075,7 +1084,7 @@ export default function LicenseManagementPage() {
 
       // ⚠️ Warning if days remaining exceed total trial days defined in DB
       if (licenseDef?.trial_days && currentLicenseData?.status === "TRIAL") {
-        const daysFromAPI = Math.ceil(calculatedDays);
+        const daysFromAPI = calculatedDays;
         const expectedTotalDays = licenseDef.trial_days;
 
         if (daysFromAPI > expectedTotalDays) {
@@ -1095,17 +1104,11 @@ export default function LicenseManagementPage() {
 
     // Fallback: Check licenseInfo for trial/expiry dates
     if (licenseInfo?.trialEndDate) {
-      const expiry = new Date(licenseInfo.trialEndDate);
-      const now = new Date();
-      const diffTime = expiry.getTime() - now.getTime();
-      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return getDaysDifference(licenseInfo.trialEndDate);
     }
 
     if (licenseInfo?.subscriptionEndDate) {
-      const expiry = new Date(licenseInfo.subscriptionEndDate);
-      const now = new Date();
-      const diffTime = expiry.getTime() - now.getTime();
-      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return getDaysDifference(licenseInfo.subscriptionEndDate);
     }
 
     // Fallback to subscription data
@@ -1113,17 +1116,11 @@ export default function LicenseManagementPage() {
       subscriptionData?.subscription_status === "trial" &&
       subscriptionData?.trial_end
     ) {
-      const expiry = new Date(subscriptionData.trial_end);
-      const now = new Date();
-      const diffTime = expiry.getTime() - now.getTime();
-      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return getDaysDifference(subscriptionData.trial_end);
     }
 
     if (subscriptionData?.subscription_end_date) {
-      const expiry = new Date(subscriptionData.subscription_end_date);
-      const now = new Date();
-      const diffTime = expiry.getTime() - now.getTime();
-      const calculatedDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const calculatedDays = getDaysDifference(subscriptionData.subscription_end_date);
 
       // Fix for incorrect dates: If the calculated days is around 4-5 but seems wrong
       if (
@@ -1139,9 +1136,7 @@ export default function LicenseManagementPage() {
           const correctExpiry = new Date(
             startDate.getTime() + 365 * 24 * 60 * 60 * 1000,
           );
-          const correctDays = Math.ceil(
-            (correctExpiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-          );
+          const correctDays = getDaysDifference(correctExpiry);
 
           if (correctDays > 300 && correctDays <= 365) {
             return correctDays;
