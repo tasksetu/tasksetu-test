@@ -1599,6 +1599,17 @@ export const sendWhatsAppOtp = async (req, res) => {
       return res.status(400).json({ success: false, error: "Phone number is required" });
     }
 
+    const { getUserLicense } = await import("../utils/licenseEnforcement.js");
+    const license = await getUserLicense(userId);
+    const licenseCode = (license?.license_code || "").toUpperCase();
+    if (licenseCode !== "OPTIMIZE") {
+      console.log("License Code are", licenseCode);
+      return res.status(403).json({
+        success: false,
+        error: "You do not have a top plan, Please upgrade you plan"
+      });
+    }
+
     // Generate 5-digit random OTP
     const otp = Math.floor(10000 + Math.random() * 90000).toString();
     const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
