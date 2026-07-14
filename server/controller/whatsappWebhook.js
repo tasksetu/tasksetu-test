@@ -4,6 +4,7 @@ import Task from "../modals/taskModal.js";
 import { QuickTask } from "../modals/quickTaskModal.js";
 import { sendWhatsAppText } from "../services/whatsappService.js";
 import { TimezoneHelper } from "../utils/timezoneHelper.js";
+import { NotificationSettings } from "../modals/notificationSettingsModal.js";
 
 // GET webhook verification handler
 export const verifyWebhook = (req, res) => {
@@ -77,6 +78,16 @@ export const handleWebhook = async (req, res) => {
       command.startsWith("hey");
 
     if (isGreeting) {
+      // Check if user has enabled WhatsApp notifications
+      const settings = await NotificationSettings.findOne({ user_id: user._id });
+      if (settings && settings.channels?.whatsapp?.enabled === false) {
+        await sendWhatsAppText(
+          from,
+          "please enable you what'sapp notification from notification setting"
+        );
+        return;
+      }
+
       session.currentStep = "idle";
       session.tempData = {};
       await session.save();
