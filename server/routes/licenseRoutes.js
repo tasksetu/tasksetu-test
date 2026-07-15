@@ -28,6 +28,7 @@ import {
   checkDowngradeEligibility,
   validateLicenseChange,    // 🆕 NEW v3
   getOrganizationUsersWithLicenses,
+  createCoupon,             // 🆕 NEW
 } from '../controllers/licenseController.js';
 import {
   getLicensePoolStatus,
@@ -279,6 +280,13 @@ router.post(
   authenticateToken,
   roleAuth(['super_admin']),
   overrideLicense
+);
+
+// Create a new coupon (super admin only)
+router.post(
+  '/create-coupon',
+  authenticateToken,
+  createCoupon
 );
 
 export default router;

@@ -2013,3 +2013,70 @@ export const getOrganizationUsersWithLicenses = async (req, res) => {
     });
   }
 };
+
+/**
+ * 🆕 Create a new coupon (Super Admin only)
+ * POST /api/license/create-coupon
+ */
+export const createCoupon = async (req, res) => {
+  try {
+    // Extra safety check: Ensure user is a super_admin
+    if (!req.user?.role?.includes('super_admin')) {
+      return res.status(403).json({
+        message: 'Only super admins can create.'
+      });
+    }
+
+    const { 
+      code, 
+      discount, 
+      expires_at, 
+      description, 
+      usage_limit, 
+      applicable_plans 
+    } = req.body;
+
+    if (!code || !discount || !expires_at) {
+      return res.status(400).json({
+        success: false,
+        message: 'Code, discount, and expires_at are required',
+      });
+    }
+
+    const existingCoupon = await Coupon.findOne({ code: code.toUpperCase() });
+    if (existingCoupon) {
+      return res.status(400).json({
+        success: false,
+        message: 'Coupon code already exists',
+      });
+    }
+
+    const userId = req.user?.id || req.user?._id || req.user?.userId;
+
+    const newCoupon = new Coupon({
+      code: code.toUpperCase(),
+      discount: Number(discount),
+      expires_at: new Date(expires_at),
+      description: description || '',
+      usage_limit: usage_limit ? Number(usage_limit) : null,
+      applicable_plans: applicable_plans || [],
+      created_by: userId || null,
+      valid: true
+    });
+
+    await newCoupon.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Coupon created successfully',
+      coupon: newCoupon,
+    });
+  } catch (error) {
+    console.error('❌ Error creating coupon:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating coupon',
+      error: error.message,
+    });
+  }
+};

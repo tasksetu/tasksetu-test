@@ -226,9 +226,9 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
             toast({
               title: "Payment Successful!",
               description: isIndividual
-                ? (isDowngradeSelected()
+                ? isDowngradeSelected()
                   ? "Your downgrade has been scheduled. It will activate when your current plan expires."
-                  : "Your individual plan has been updated successfully.")
+                  : "Your individual plan has been updated successfully."
                 : `${instancesCreated} license instance${instancesCreated > 1 ? "s" : ""} created and added to your organization pool.`,
             });
 
@@ -362,10 +362,45 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
       }
 
       const data = await response.json();
-      setAppliedCoupon(data.coupon);
+      const coupon = data.coupon;
+
+      // Check if coupon is applicable to selected plans
+      if (coupon.applicable_plans && coupon.applicable_plans.length > 0) {
+        let isApplicable = true;
+        
+        if (isIndividual) {
+          if (!selectedIndividualPlan || !coupon.applicable_plans.includes(selectedIndividualPlan.toUpperCase())) {
+            isApplicable = false;
+          }
+        } else {
+          const selectedPlans = Object.entries(planSeats)
+            .filter(([_, seats]) => seats > 0)
+            .map(([code]) => code.toUpperCase());
+            
+          if (selectedPlans.length === 0) {
+            isApplicable = false;
+          } else {
+            for (const plan of selectedPlans) {
+              if (!coupon.applicable_plans.includes(plan)) {
+                isApplicable = false;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!isApplicable) {
+          setCouponError("This coupon is not applicable to the selected plan(s).");
+          setAppliedCoupon(null);
+          setIsValidatingCoupon(false);
+          return;
+        }
+      }
+
+      setAppliedCoupon(coupon);
       toast({
         title: "Coupon Applied!",
-        description: `${data.coupon.discount}% discount applied to your purchase.`,
+        description: `${coupon.discount}% discount applied to your purchase.`,
       });
       setCouponError("");
     } catch (error) {
@@ -439,6 +474,10 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
       }
       return { ...prev, [planCode]: seats };
     });
+    // Clear coupon when changing seats to ensure it's still applicable
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError("");
   };
 
   const isDowngradeSelected = () => {
@@ -487,6 +526,10 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
   const handleIndividualSelect = (planCode) => {
     if (hasPendingDowngrade()) return; // Block selection when pending downgrade exists
     setSelectedIndividualPlan(planCode);
+    // Clear coupon when changing plan to ensure it's still applicable
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError("");
   };
 
   const handlePurchaseAll = () => {
@@ -720,17 +763,15 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
     .map((sub) => sub.license_code);
 
   const currentActivePlansList = purchasablePlans.filter((plan) =>
-    ownedPlanCodes.includes(plan.license_code)
+    ownedPlanCodes.includes(plan.license_code),
   );
   const newPlansList = purchasablePlans.filter(
-    (plan) => !ownedPlanCodes.includes(plan.license_code)
+    (plan) => !ownedPlanCodes.includes(plan.license_code),
   );
 
   const renderPlanRow = (plan) => {
     const price =
-      billingCycle === "monthly"
-        ? plan.price_monthly
-        : plan.price_yearly;
+      billingCycle === "monthly" ? plan.price_monthly : plan.price_yearly;
 
     const isSelected = isIndividual
       ? selectedIndividualPlan === plan.license_code
@@ -909,7 +950,7 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
                       currentSubscription.current_license}
                   </p>
                 </div>
-                <div>
+                <div >
                   <p className="text-xs text-gray-600">Billing Cycle</p>
                   <p className="text-sm font-medium text-gray-900 capitalize leading-tight">
                     {currentSubscription.billing_cycle}
@@ -933,7 +974,11 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
                   <p className="text-xs text-gray-600">Grace Period</p>
                   <p className="text-sm font-medium text-gray-900 leading-tight">
                     {(() => {
-                      const code = (currentSubscription.license_code || currentSubscription.current_license || "").toUpperCase();
+                      const code = (
+                        currentSubscription.license_code ||
+                        currentSubscription.current_license ||
+                        ""
+                      ).toUpperCase();
                       const days = GRACE_PERIOD_DAYS[code] || 0;
                       return days > 0 ? `${days} days` : "N/A";
                     })()}
@@ -947,7 +992,15 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
                   <Clock className="h-4 w-4 text-orange-500 flex-shrink-0 mt-0.5" />
                   <div className="text-xs text-orange-800">
                     <p className="font-semibold">Grace Period Active</p>
-                    <p>Your plan expired. You have {currentSubscription.grace_period_info.days_remaining_in_grace} day(s) left in grace period. Renewing now will start your new plan from the original expiry date.</p>
+                    <p>
+                      Your plan expired. You have{" "}
+                      {
+                        currentSubscription.grace_period_info
+                          .days_remaining_in_grace
+                      }{" "}
+                      day(s) left in grace period. Renewing now will start your
+                      new plan from the original expiry date.
+                    </p>
                   </div>
                 </div>
               )}
@@ -959,13 +1012,21 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
                   <div className="text-xs text-indigo-800">
                     <p className="font-semibold">Scheduled Plan Change</p>
                     <p>
-                      Your plan will change to <strong>{currentSubscription.pending_license.license_code}</strong> on{" "}
-                      {new Date(currentSubscription.pending_license.scheduled_start_date).toLocaleDateString("en-IN", {
+                      Your plan will change to{" "}
+                      <strong>
+                        {currentSubscription.pending_license.license_code}
+                      </strong>{" "}
+                      on{" "}
+                      {new Date(
+                        currentSubscription.pending_license
+                          .scheduled_start_date,
+                      ).toLocaleDateString("en-IN", {
                         day: "numeric",
                         month: "short",
                         year: "numeric",
-                      })}.
-                      This change cannot be modified. New purchases are blocked until the scheduled plan activates.
+                      })}
+                      . This change cannot be modified. New purchases are
+                      blocked until the scheduled plan activates.
                     </p>
                   </div>
                 </div>
@@ -984,9 +1045,10 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {currentSubscriptions.map((sub, idx) => {
-                  const usagePercent = sub.seats_purchased > 0
-                    ? Math.round((sub.seats_used / sub.seats_purchased) * 100)
-                    : 0;
+                  const usagePercent =
+                    sub.seats_purchased > 0
+                      ? Math.round((sub.seats_used / sub.seats_purchased) * 100)
+                      : 0;
 
                   return (
                     <div
@@ -997,18 +1059,20 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
                         <span className="font-bold text-sm text-gray-900">
                           {sub.license_name}
                         </span>
-                        <span className={cn(
-                          "text-xs px-2 py-0.5 rounded-full font-medium",
-                          usagePercent >= 100 
-                            ? "bg-red-50 text-red-600 border border-red-100" 
-                            : usagePercent > 0 
-                              ? "bg-amber-50 text-amber-600 border border-amber-100" 
-                              : "bg-green-50 text-green-600 border border-green-100"
-                        )}>
+                        <span
+                          className={cn(
+                            "text-xs px-2 py-0.5 rounded-full font-medium",
+                            usagePercent >= 100
+                              ? "bg-red-50 text-red-600 border border-red-100"
+                              : usagePercent > 0
+                                ? "bg-amber-50 text-amber-600 border border-amber-100"
+                                : "bg-green-50 text-green-600 border border-green-100",
+                          )}
+                        >
                           {usagePercent}% used
                         </span>
                       </div>
-                      
+
                       <div className="space-y-1.5">
                         <div className="flex justify-between text-xs text-gray-600">
                           <span>Assigned Seats</span>
@@ -1016,13 +1080,15 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
                             {sub.seats_used} / {sub.seats_purchased}
                           </span>
                         </div>
-                        
+
                         {/* Progress Bar */}
                         <div className="w-full bg-gray-100 rounded-full h-1.5">
                           <div
                             className={cn(
                               "h-1.5 rounded-full transition-all",
-                              usagePercent >= 100 ? "bg-red-500" : "bg-blue-500"
+                              usagePercent >= 100
+                                ? "bg-red-500"
+                                : "bg-blue-500",
                             )}
                             style={{ width: `${Math.min(100, usagePercent)}%` }}
                           />
@@ -1037,7 +1103,7 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
 
           {/* Billing Cycle Selection */}
           <div>
-            <Label className="text-sm font-medium text-gray-700 mb-2 block">
+            <Label className="text-sm font-medium text-gray-700 mb-2 mt-4 block">
               Billing Cycle
             </Label>
             <div className="flex space-x-2">
@@ -1069,6 +1135,60 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
             </div>
           </div>
 
+          {/* All Plans with Seat Selectors or Radio Selection */}
+          <div>
+            {isIndividual ? (
+              <>
+                <Label className="text-sm font-medium text-gray-700 mb-2 mt-4 block">
+                  Select License
+                </Label>
+                <div className="grid gap-3">
+                  {purchasablePlans.map((plan) => renderPlanRow(plan))}
+                </div>
+              </>
+            ) : (
+              <div className="space-y-6">
+                {/* Section 1: Add Seats to Current Licenses */}
+                {currentActivePlansList.length > 0 && (
+                  <div>
+                    <div className="flex flex-col mb-3">
+                      <Label className="text-sm font-semibold text-blue-900 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                        Add Seats to Current Licenses
+                      </Label>
+                      <span className="text-xs text-gray-500 mt-0.5 ml-3">
+                        Add more capacity to the plans your organization is
+                        already using
+                      </span>
+                    </div>
+                    <div className="grid gap-3">
+                      {currentActivePlansList.map((plan) =>
+                        renderPlanRow(plan),
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Section 2: Purchase New Licenses */}
+                {newPlansList.length > 0 && (
+                  <div>
+                    <div className="flex flex-col mb-3">
+                      <Label className="text-sm font-semibold text-purple-900 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                        Purchase New License Plans
+                      </Label>
+                      <span className="text-xs text-gray-500 mt-0.5 ml-3">
+                        Subscribe to new plans and features for your team
+                      </span>
+                    </div>
+                    <div className="grid gap-3">
+                      {newPlansList.map((plan) => renderPlanRow(plan))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           {/* Coupon Code Section */}
           <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
             <Label className="text-sm font-medium text-gray-700 mb-2 block">
@@ -1121,59 +1241,6 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
               </p>
             )}
           </div>
-
-          {/* All Plans with Seat Selectors or Radio Selection */}
-          <div>
-            {isIndividual ? (
-              <>
-                <Label className="text-sm font-medium text-gray-700 mb-3 block">
-                  Select Plan
-                </Label>
-                <div className="grid gap-3">
-                  {purchasablePlans.map((plan) => renderPlanRow(plan))}
-                </div>
-              </>
-            ) : (
-              <div className="space-y-6">
-                {/* Section 1: Add Seats to Current Licenses */}
-                {currentActivePlansList.length > 0 && (
-                  <div>
-                    <div className="flex flex-col mb-3">
-                      <Label className="text-sm font-semibold text-blue-900 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-                        Add Seats to Current Licenses
-                      </Label>
-                      <span className="text-xs text-gray-500 mt-0.5 ml-3">
-                        Add more capacity to the plans your organization is already using
-                      </span>
-                    </div>
-                    <div className="grid gap-3">
-                      {currentActivePlansList.map((plan) => renderPlanRow(plan))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Section 2: Purchase New Licenses */}
-                {newPlansList.length > 0 && (
-                  <div>
-                    <div className="flex flex-col mb-3">
-                      <Label className="text-sm font-semibold text-purple-900 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
-                        Purchase New License Plans
-                      </Label>
-                      <span className="text-xs text-gray-500 mt-0.5 ml-3">
-                        Subscribe to new plans and features for your team
-                      </span>
-                    </div>
-                    <div className="grid gap-3">
-                      {newPlansList.map((plan) => renderPlanRow(plan))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* Order Summary */}
           {totalSeats > 0 && (
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-5">
@@ -1343,22 +1410,31 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
                   Plan Downgrade
                 </p>
                 <p>
-                  This is a downgrade. Your new plan will start after your current plan expires
+                  This is a downgrade. Your new plan will start after your
+                  current plan expires
                   {currentSubscription?.expiry_date && (
-                    <> on{" "}
+                    <>
+                      {" "}
+                      on{" "}
                       <strong>
-                        {new Date(currentSubscription.expiry_date).toLocaleDateString("en-IN", {
+                        {new Date(
+                          currentSubscription.expiry_date,
+                        ).toLocaleDateString("en-IN", {
                           day: "numeric",
                           month: "short",
                           year: "numeric",
                         })}
                       </strong>
                     </>
-                  )}.
-                  Your current plan features will remain active until then.
+                  )}
+                  . Your current plan features will remain active until then.
                 </p>
                 {(() => {
-                  const code = (currentSubscription?.license_code || currentSubscription?.current_license || "").toUpperCase();
+                  const code = (
+                    currentSubscription?.license_code ||
+                    currentSubscription?.current_license ||
+                    ""
+                  ).toUpperCase();
                   const graceDays = GRACE_PERIOD_DAYS[code] || 0;
                   if (graceDays > 0) {
                     return (
@@ -1397,8 +1473,8 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
                 <p className="font-medium mb-1">Important:</p>
                 {isIndividual ? (
                   <p>
-                    Your selected plan will be applied to your individual account
-                    immediately after purchase.
+                    Your selected plan will be applied to your individual
+                    account immediately after purchase.
                   </p>
                 ) : (
                   <p>
