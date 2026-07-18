@@ -288,15 +288,16 @@ const Sidebar = ({
           minWidth: isMobile ? "280px" : isCollapsed ? "70px" : "220px",
         }}
       >
-        {/* Close button for mobile */}
-        {isMobile && isMobileMenuOpen && (
-          <button
-            onClick={closeMobileMenu}
-            className="absolute top-4 right-4 p-1 rounded-sm hover:bg-blue-800/50 z-50 md:hidden"
-          >
-            <X size={20} />
-          </button>
-        )}
+        {/* Close button for mobile and half-screens */}
+        <button
+          onClick={() => {
+            setSidebarOpen?.(false);
+            closeMobileMenu();
+          }}
+          className="absolute top-4 right-4 p-1 rounded-sm hover:bg-blue-800/50 z-50 lg:hidden text-white"
+        >
+          <X size={20} />
+        </button>
 
         {/* Brand Header */}
         <div

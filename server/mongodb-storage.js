@@ -32,7 +32,7 @@ import {
 export class MongoStorage {
   // Token generation methods
   generateToken(user) {
-    const JWT_SECRET = process.env.JWT_SECRET || "your-jwt-secret-key";
+    const JWT_SECRET = process.env.JWT_SECRET;
     return jwt.sign(
       {
         id: user.id || user._id,

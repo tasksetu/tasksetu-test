@@ -10,7 +10,7 @@ const storage = new MongoStorage();
 
 export class AuthService {
   constructor() {
-    this.JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+    this.JWT_SECRET = process.env.JWT_SECRET;
     this.JWT_EXPIRES_IN = "24h"; // Token expires in 24 hours
     this.VERIFICATION_TOKEN_EXPIRES = 24 * 60 * 60 * 1000; // 24 hours
     this.RESET_TOKEN_EXPIRES = 24 * 60 * 60 * 1000; // 24 hours

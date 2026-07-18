@@ -1,7 +1,17 @@
 import React, { useState } from "react";
 import { useShowToast } from "@/utils/ToastMessage";
 import { Button } from "@/components/ui/button";
-
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 export default function TasksCalendarView({
   tasks,
   onTaskClick,
@@ -416,9 +426,7 @@ export default function TasksCalendarView({
       setGoogleCalendarStatus("connecting");
 
       // Check if Google Calendar is properly configured
-      const clientId =
-        import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-        "917137353724-ftng1fau0pm0hdl65l1i5et8fmssvedj.apps.googleusercontent.com";
+      const clientId ="798343498792-8pb6s3n9771km4c87di18d4qiprv6obd.apps.googleusercontent.com";
 
       if (!clientId || clientId === "your-google-client-id") {
         setGoogleCalendarStatus("error");
@@ -443,6 +451,7 @@ export default function TasksCalendarView({
       const redirectUri = encodeURIComponent(
         `${window.location.origin}/google-calendar-callback`,
       );
+      console.log("redirect url check ", redirectUri)
       const scope = encodeURIComponent(
         "https://www.googleapis.com/auth/calendar",
       );
@@ -1053,27 +1062,31 @@ Note: Live feed URLs require server-side implementation.`;
                   </svg>
                   <span>Google Calendar Connected</span>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={disconnectGoogleCalendar}
-                  className="text-gray-600 hover:text-red-600 hover:bg-red-50"
-                  title="Disconnect Google Calendar"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="h-8 text-xs px-3 font-medium text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                      title="Disconnect Google Calendar"
+                    >
+                      Disconnect
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Disconnect Google Calendar?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to disconnect your Google Calendar? Tasks will no longer sync automatically.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={disconnectGoogleCalendar} className="bg-red-600 hover:bg-red-700 text-white">
+                        Disconnect
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
 

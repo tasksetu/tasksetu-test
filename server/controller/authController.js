@@ -203,7 +203,7 @@ export const authController = {
     try {
       const { id, email, role, organizationId } = req.body;
       const jwt = await import("jsonwebtoken");
-      const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+      const JWT_SECRET = process.env.JWT_SECRET;
       const token = jwt.default.sign(
         { id, email, role, organizationId },
         JWT_SECRET,

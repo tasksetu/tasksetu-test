@@ -1505,7 +1505,7 @@ const IndividualDashboard = ({
                   <div className="p-3">
                     <div className="bg-green-50 border border-green-200 text-green-700 py-2 px-3 text-sm flex items-center gap-2 rounded-sm">
                       <CheckSquare size={14} /> All clear! No tasks for this
-                      view.
+                      view.aichchchik
                     </div>
                   </div>
                 )}
