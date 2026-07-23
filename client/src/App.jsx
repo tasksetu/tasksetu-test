@@ -213,11 +213,7 @@ function ProtectedRoute({ component: Component, allowedRoles = [], ...props }) {
   }, []);
   // Show loading while we have a token and are fetching user data
   if (token && isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return null;
   }
 
   // Don't render if no token or no user
@@ -409,9 +405,7 @@ function App() {
     ].includes(location) || location.startsWith("/register/");
 
   // 🔒 Auto-logout after 30 minutes of inactivity
-  console.log("🔐 App.jsx - Calling useInactivityLogout hook");
   const { showWarning, remainingTime, formatTime } = useInactivityLogout();
-  console.log("🔐 App.jsx - Hook returned:", { showWarning, remainingTime });
 
   // 🔒 Token expiry (24h) + browser close cleanup
   useTokenCleanup();
@@ -422,10 +416,6 @@ function App() {
         <SubtaskProvider>
           <ViewProvider>
             {/* Inactivity Warning Modal - Auto-logout, No dismiss option */}
-            {console.log(
-              "🎨 App.jsx - Rendering InactivityWarningModal, showWarning:",
-              showWarning,
-            )}
             <InactivityWarningModal
               show={showWarning}
               remainingTime={remainingTime}

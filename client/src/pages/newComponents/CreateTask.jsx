@@ -20,7 +20,6 @@ import ApprovalTaskForm from "../../forms/ApprovalTaskForm";
 import { useRole } from "../../features/shared/hooks/useRole";
 import { useAssignmentOptions } from "../../features/shared/hooks/useAssignmentOptions";
 import { useAuth } from "../../features/shared/hooks/useAuth";
-import { hasAccess } from "../../utils/auth";
 import {
   ApprovalTaskIcon,
   MilestoneTaskIcon,
@@ -233,7 +232,9 @@ export default function CreateTask({
       if (response.data.success) {
         const formattedCollaborators = response.data.data.map(
           (collaborator) => {
-            const rolesStr = Array.isArray(collaborator.role) ? collaborator.role.join(", ") : collaborator.role;
+            const rolesStr = Array.isArray(collaborator.role)
+              ? collaborator.role.join(", ")
+              : collaborator.role;
             const label = `${collaborator.name} (${collaborator.email || ""}) ${rolesStr || ""}`;
             return {
               value: collaborator.id,
@@ -268,7 +269,9 @@ export default function CreateTask({
 
       if (response.data.success) {
         const formattedApprovers = response.data.data.map((approver) => {
-          const rolesStr = Array.isArray(approver.role) ? approver.role.join(", ") : approver.role;
+          const rolesStr = Array.isArray(approver.role)
+            ? approver.role.join(", ")
+            : approver.role;
           const selfStr = approver.isSelf ? " (You)" : "";
           const label = `${approver.name} (${approver.email || ""}) ${rolesStr || ""}${selfStr}`;
           return {
@@ -898,8 +901,22 @@ export default function CreateTask({
         // Normal task creation without conversion
         showSuccessToast("Task created");
       }
-      // 🔔 Invalidate notifications cache to show new notifications immediately
+      // 🔔 Invalidate all task, report and analytics queries to fetch new task & report data immediately
+      queryClient.invalidateQueries({ queryKey: ["/api/mytasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quick-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["allTasks"] });
+      queryClient.invalidateQueries({ queryKey: ["mytasks"] });
+      queryClient.invalidateQueries({ queryKey: ["regularTasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" &&
+          (query.queryKey[0].toLowerCase().includes("report") ||
+            query.queryKey[0].toLowerCase().includes("analytics") ||
+            query.queryKey[0].toLowerCase().includes("task")),
+      });
 
       // Call parent onSubmit if needed
       if (typeof onSubmit === "function") {
@@ -1533,6 +1550,23 @@ function LegacyCreateTask({
       });
 
       console.log("Task created successfully:", response.data);
+
+      // 🔔 Invalidate all task, report and analytics queries to fetch new task & report data immediately
+      queryClient.invalidateQueries({ queryKey: ["/api/mytasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quick-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["allTasks"] });
+      queryClient.invalidateQueries({ queryKey: ["mytasks"] });
+      queryClient.invalidateQueries({ queryKey: ["regularTasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" &&
+          (query.queryKey[0].toLowerCase().includes("report") ||
+            query.queryKey[0].toLowerCase().includes("analytics") ||
+            query.queryKey[0].toLowerCase().includes("task")),
+      });
 
       // Reset form after successful submission
       reset();

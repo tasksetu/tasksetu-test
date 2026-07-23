@@ -296,7 +296,7 @@ export default function RegularTaskManager() {
       return response;
     },
     retry: 1,
-    staleTime: 30000,
+    staleTime: 0,
   });
 
   // Fetch team members for assignment dropdown

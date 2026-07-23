@@ -30,7 +30,8 @@ function AdminLayoutInner({ children, user, sidebarCollapsed, sidebarOpen,
       return data.success ? data.data : data;
     },
     enabled: !!token,
-    staleTime: 30000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const currentTasks = tasksResponse?.tasks || tasksResponse?.data || tasksResponse || [];
@@ -112,11 +113,7 @@ export function AdminLayout({ children }) {
   const userRole = activeRole?.toLowerCase();
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <CommonLoader variant="spinner" size="lg" color="text-indigo-600" />
-      </div>
-    );
+    return null;
   }
 
   if (userRole === "super_admin" || userRole === "superadmin") {

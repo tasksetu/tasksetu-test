@@ -255,8 +255,9 @@ const IndividualDashboard = ({
     },
     enabled: !!token,
     retry: 2,
-    staleTime: 30000,
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const {
@@ -281,8 +282,9 @@ const IndividualDashboard = ({
     },
     enabled: !!token,
     retry: 1,
-    staleTime: 30000,
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const {
@@ -305,14 +307,22 @@ const IndividualDashboard = ({
     },
     retry: false,
     enabled: !!token,
-    staleTime: 30000,
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const currentRole = effectiveRole;
   const allTasks =
     tasksResponse?.tasks || tasksResponse?.data || tasksResponse || [];
   const [localTasks, setLocalTasks] = useState(null);
+
+  // Clear local override whenever fresh tasks arrive from server
+  React.useEffect(() => {
+    if (tasksResponse) {
+      setLocalTasks(null);
+    }
+  }, [tasksResponse]);
   const currentTasks = localTasks ?? (allTasks.length > 0 ? allTasks : tasks);
 
   const [quickTaskInput, setQuickTaskInput] = useState("");
@@ -623,21 +633,21 @@ const IndividualDashboard = ({
     });
 
     return [...filtered]
-    .sort((a, b) => {
-      const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
-      const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
-      return dateB - dateA;
-    })
-    .slice(0, 5); // ← CHANGE 4 to 5
-}, [
-  currentTasks,
-  searchTerm,
-  selectedFilter,
-  priorityFilter,
-  dueFrom,
-  dueTo,
-  isOverdue,
-]);
+      .sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+        const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+        return dateB - dateA;
+      })
+      .slice(0, 5); // ← CHANGE 4 to 5
+  }, [
+    currentTasks,
+    searchTerm,
+    selectedFilter,
+    priorityFilter,
+    dueFrom,
+    dueTo,
+    isOverdue,
+  ]);
 
   // ─── ALL HANDLERS ───────────────────────────────────────────────
   const handleQuickTaskSubmit = async () => {

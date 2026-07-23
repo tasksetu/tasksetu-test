@@ -62,7 +62,7 @@ export default function OverdueTasks() {
         category: categoryFilter,
       }),
     retry: 1,
-    staleTime: 30000, // 30 seconds
+    staleTime: 0,
   });
 
   // Extract tasks from API response

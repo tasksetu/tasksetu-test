@@ -142,7 +142,7 @@ const OrganizationDashboard = () => {
     },
     enabled: !!localStorage.getItem("token") && !!activeRole,
     retry: 1,
-    staleTime: 30000,
+    staleTime: 0,
   });
 
   const pct = (a, b) => (b === 0 ? 0 : Math.round((a / b) * 100));
@@ -684,7 +684,8 @@ const OrganizationDashboard = () => {
               })()}
             </h2>
             <p className="text-sm mt-2 m-0" style={{ color: "#9a9a9a" }}>
-              Dashboard <span className="text-blue-600">Organization Workspace</span>
+              Dashboard{" "}
+              <span className="text-blue-600">Organization Workspace</span>
             </p>
           </div>
 
@@ -788,46 +789,222 @@ const OrganizationDashboard = () => {
                 </div>
                 <div className="mt-auto pt-1 w-full opacity-95">
                   {label === "Past Due" ? (
-                    <svg viewBox="0 0 110 38" width="100%" height="38" preserveAspectRatio="none">
-                      <rect x="2" y="18" width="10" height="16" rx="2" fill="#fda4af" opacity="0.7" />
-                      <rect x="17" y="10" width="10" height="24" rx="2" fill="#ef4444" opacity="0.9" />
-                      <rect x="32" y="21" width="10" height="13" rx="2" fill="#fda4af" opacity="0.65" />
-                      <rect x="47" y="6" width="10" height="28" rx="2" fill="#dc2626" />
-                      <rect x="62" y="14" width="10" height="20" rx="2" fill="#fb7185" opacity="0.75" />
-                      <rect x="77" y="22" width="10" height="12" rx="2" fill="#fda4af" opacity="0.6" />
-                      <rect x="92" y="9" width="10" height="25" rx="2" fill="#ef4444" opacity="0.9" />
+                    <svg
+                      viewBox="0 0 110 38"
+                      width="100%"
+                      height="38"
+                      preserveAspectRatio="none"
+                    >
+                      <rect
+                        x="2"
+                        y="18"
+                        width="10"
+                        height="16"
+                        rx="2"
+                        fill="#fda4af"
+                        opacity="0.7"
+                      />
+                      <rect
+                        x="17"
+                        y="10"
+                        width="10"
+                        height="24"
+                        rx="2"
+                        fill="#ef4444"
+                        opacity="0.9"
+                      />
+                      <rect
+                        x="32"
+                        y="21"
+                        width="10"
+                        height="13"
+                        rx="2"
+                        fill="#fda4af"
+                        opacity="0.65"
+                      />
+                      <rect
+                        x="47"
+                        y="6"
+                        width="10"
+                        height="28"
+                        rx="2"
+                        fill="#dc2626"
+                      />
+                      <rect
+                        x="62"
+                        y="14"
+                        width="10"
+                        height="20"
+                        rx="2"
+                        fill="#fb7185"
+                        opacity="0.75"
+                      />
+                      <rect
+                        x="77"
+                        y="22"
+                        width="10"
+                        height="12"
+                        rx="2"
+                        fill="#fda4af"
+                        opacity="0.6"
+                      />
+                      <rect
+                        x="92"
+                        y="9"
+                        width="10"
+                        height="25"
+                        rx="2"
+                        fill="#ef4444"
+                        opacity="0.9"
+                      />
                     </svg>
                   ) : label === "Completed Today" ? (
-                    <svg viewBox="0 0 110 38" width="100%" height="38" preserveAspectRatio="none">
+                    <svg
+                      viewBox="0 0 110 38"
+                      width="100%"
+                      height="38"
+                      preserveAspectRatio="none"
+                    >
                       <defs>
-                        <linearGradient id="grad-completed-org" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.22" />
-                          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                        <linearGradient
+                          id="grad-completed-org"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="0%"
+                            stopColor="#3b82f6"
+                            stopOpacity="0.22"
+                          />
+                          <stop
+                            offset="100%"
+                            stopColor="#3b82f6"
+                            stopOpacity="0"
+                          />
                         </linearGradient>
                       </defs>
-                      <path d="M0,30 C10,26 20,24 30,19 C40,15 50,17 60,12 C70,8 80,10 90,5 C100,3 105,2 110,1" fill="none" stroke="#3b82f6" strokeWidth="1.8" strokeLinecap="round" />
-                      <path d="M0,30 C10,26 20,24 30,19 C40,15 50,17 60,12 C70,8 80,10 90,5 C100,3 105,2 110,1 L110,38 L0,38 Z" fill="url(#grad-completed-org)" />
+                      <path
+                        d="M0,30 C10,26 20,24 30,19 C40,15 50,17 60,12 C70,8 80,10 90,5 C100,3 105,2 110,1"
+                        fill="none"
+                        stroke="#3b82f6"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M0,30 C10,26 20,24 30,19 C40,15 50,17 60,12 C70,8 80,10 90,5 C100,3 105,2 110,1 L110,38 L0,38 Z"
+                        fill="url(#grad-completed-org)"
+                      />
                     </svg>
                   ) : label === "Before Due Date" ? (
-                    <svg viewBox="0 0 110 38" width="100%" height="38" preserveAspectRatio="none">
+                    <svg
+                      viewBox="0 0 110 38"
+                      width="100%"
+                      height="38"
+                      preserveAspectRatio="none"
+                    >
                       <defs>
-                        <linearGradient id="grad-progress-org" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#10b981" stopOpacity="0.2" />
-                          <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+                        <linearGradient
+                          id="grad-progress-org"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="0%"
+                            stopColor="#10b981"
+                            stopOpacity="0.2"
+                          />
+                          <stop
+                            offset="100%"
+                            stopColor="#10b981"
+                            stopOpacity="0"
+                          />
                         </linearGradient>
                       </defs>
-                      <path d="M0,20 C8,11 16,28 24,18 C32,7 40,24 48,15 C56,8 64,21 72,12 C80,4 88,18 96,10 C102,5 106,8 110,6" fill="none" stroke="#10b981" strokeWidth="1.8" strokeLinecap="round" />
-                      <path d="M0,20 C8,11 16,28 24,18 C32,7 40,24 48,15 C56,8 64,21 72,12 C80,4 88,18 96,10 C102,5 106,8 110,6 L110,38 L0,38 Z" fill="url(#grad-progress-org)" />
+                      <path
+                        d="M0,20 C8,11 16,28 24,18 C32,7 40,24 48,15 C56,8 64,21 72,12 C80,4 88,18 96,10 C102,5 106,8 110,6"
+                        fill="none"
+                        stroke="#10b981"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M0,20 C8,11 16,28 24,18 C32,7 40,24 48,15 C56,8 64,21 72,12 C80,4 88,18 96,10 C102,5 106,8 110,6 L110,38 L0,38 Z"
+                        fill="url(#grad-progress-org)"
+                      />
                     </svg>
                   ) : (
-                    <svg viewBox="0 0 110 38" width="100%" height="38" preserveAspectRatio="none">
-                      <rect x="2" y="20" width="11" height="14" rx="2" fill="#fbbf24" opacity="0.65" />
-                      <rect x="17" y="14" width="11" height="20" rx="2" fill="#f59e0b" opacity="0.75" />
-                      <rect x="32" y="18" width="11" height="16" rx="2" fill="#fbbf24" opacity="0.7" />
-                      <rect x="47" y="8" width="11" height="26" rx="2" fill="#d97706" opacity="0.95" />
-                      <rect x="62" y="12" width="11" height="22" rx="2" fill="#f59e0b" opacity="0.78" />
-                      <rect x="77" y="4" width="11" height="30" rx="2" fill="#b45309" />
-                      <rect x="92" y="10" width="11" height="24" rx="2" fill="#f59e0b" opacity="0.88" />
+                    <svg
+                      viewBox="0 0 110 38"
+                      width="100%"
+                      height="38"
+                      preserveAspectRatio="none"
+                    >
+                      <rect
+                        x="2"
+                        y="20"
+                        width="11"
+                        height="14"
+                        rx="2"
+                        fill="#fbbf24"
+                        opacity="0.65"
+                      />
+                      <rect
+                        x="17"
+                        y="14"
+                        width="11"
+                        height="20"
+                        rx="2"
+                        fill="#f59e0b"
+                        opacity="0.75"
+                      />
+                      <rect
+                        x="32"
+                        y="18"
+                        width="11"
+                        height="16"
+                        rx="2"
+                        fill="#fbbf24"
+                        opacity="0.7"
+                      />
+                      <rect
+                        x="47"
+                        y="8"
+                        width="11"
+                        height="26"
+                        rx="2"
+                        fill="#d97706"
+                        opacity="0.95"
+                      />
+                      <rect
+                        x="62"
+                        y="12"
+                        width="11"
+                        height="22"
+                        rx="2"
+                        fill="#f59e0b"
+                        opacity="0.78"
+                      />
+                      <rect
+                        x="77"
+                        y="4"
+                        width="11"
+                        height="30"
+                        rx="2"
+                        fill="#b45309"
+                      />
+                      <rect
+                        x="92"
+                        y="10"
+                        width="11"
+                        height="24"
+                        rx="2"
+                        fill="#f59e0b"
+                        opacity="0.88"
+                      />
                     </svg>
                   )}
                 </div>
@@ -874,14 +1051,55 @@ const OrganizationDashboard = () => {
                 </div>
                 <div className="mt-auto pt-1 w-full opacity-95">
                   {isProgressCard ? (
-                    <svg viewBox="0 0 110 38" width="100%" height="38" preserveAspectRatio="none">
-                      <rect x="0" y="13" width="110" height="7" rx="3.5" fill="#e0e7ff" />
-                      <rect x="0" y="13" width={`${(percentage || 0) * 1.1}`} height="7" rx="3.5" fill="#4f46e5" />
-                      <text x="0" y="33" fontSize="8" fill="#6b7280" fontFamily="sans-serif">Org completion</text>
-                      <text x="82" y="33" fontSize="8" fill="#4f46e5" fontFamily="sans-serif" fontWeight="700">{percentage || 0}%</text>
+                    <svg
+                      viewBox="0 0 110 38"
+                      width="100%"
+                      height="38"
+                      preserveAspectRatio="none"
+                    >
+                      <rect
+                        x="0"
+                        y="13"
+                        width="110"
+                        height="7"
+                        rx="3.5"
+                        fill="#e0e7ff"
+                      />
+                      <rect
+                        x="0"
+                        y="13"
+                        width={`${(percentage || 0) * 1.1}`}
+                        height="7"
+                        rx="3.5"
+                        fill="#4f46e5"
+                      />
+                      <text
+                        x="0"
+                        y="33"
+                        fontSize="8"
+                        fill="#6b7280"
+                        fontFamily="sans-serif"
+                      >
+                        Org completion
+                      </text>
+                      <text
+                        x="82"
+                        y="33"
+                        fontSize="8"
+                        fill="#4f46e5"
+                        fontFamily="sans-serif"
+                        fontWeight="700"
+                      >
+                        {percentage || 0}%
+                      </text>
                     </svg>
                   ) : label === "Due Today" ? (
-                    <svg viewBox="0 0 110 38" width="100%" height="38" preserveAspectRatio="none">
+                    <svg
+                      viewBox="0 0 110 38"
+                      width="100%"
+                      height="38"
+                      preserveAspectRatio="none"
+                    >
                       {[12, 18, 26, 20, 32, 24, 30].map((h, i) => (
                         <rect
                           key={i}
@@ -896,14 +1114,74 @@ const OrganizationDashboard = () => {
                       ))}
                     </svg>
                   ) : (
-                    <svg viewBox="0 0 110 38" width="100%" height="38" preserveAspectRatio="none">
-                      <rect x="2" y="20" width="11" height="14" rx="2" fill="#fbbf24" opacity="0.65" />
-                      <rect x="17" y="14" width="11" height="20" rx="2" fill="#f59e0b" opacity="0.75" />
-                      <rect x="32" y="18" width="11" height="16" rx="2" fill="#fbbf24" opacity="0.7" />
-                      <rect x="47" y="8" width="11" height="26" rx="2" fill="#d97706" opacity="0.95" />
-                      <rect x="62" y="12" width="11" height="22" rx="2" fill="#f59e0b" opacity="0.78" />
-                      <rect x="77" y="4" width="11" height="30" rx="2" fill="#b45309" />
-                      <rect x="92" y="10" width="11" height="24" rx="2" fill="#f59e0b" opacity="0.88" />
+                    <svg
+                      viewBox="0 0 110 38"
+                      width="100%"
+                      height="38"
+                      preserveAspectRatio="none"
+                    >
+                      <rect
+                        x="2"
+                        y="20"
+                        width="11"
+                        height="14"
+                        rx="2"
+                        fill="#fbbf24"
+                        opacity="0.65"
+                      />
+                      <rect
+                        x="17"
+                        y="14"
+                        width="11"
+                        height="20"
+                        rx="2"
+                        fill="#f59e0b"
+                        opacity="0.75"
+                      />
+                      <rect
+                        x="32"
+                        y="18"
+                        width="11"
+                        height="16"
+                        rx="2"
+                        fill="#fbbf24"
+                        opacity="0.7"
+                      />
+                      <rect
+                        x="47"
+                        y="8"
+                        width="11"
+                        height="26"
+                        rx="2"
+                        fill="#d97706"
+                        opacity="0.95"
+                      />
+                      <rect
+                        x="62"
+                        y="12"
+                        width="11"
+                        height="22"
+                        rx="2"
+                        fill="#f59e0b"
+                        opacity="0.78"
+                      />
+                      <rect
+                        x="77"
+                        y="4"
+                        width="11"
+                        height="30"
+                        rx="2"
+                        fill="#b45309"
+                      />
+                      <rect
+                        x="92"
+                        y="10"
+                        width="11"
+                        height="24"
+                        rx="2"
+                        fill="#f59e0b"
+                        opacity="0.88"
+                      />
                     </svg>
                   )}
                 </div>
@@ -1087,7 +1365,11 @@ const OrganizationDashboard = () => {
                     <tbody className="divide-y divide-gray-100">
                       {filteredTasks.length === 0 ? (
                         <tr>
-                          <td colSpan="7" className="px-4 py-8 text-center text-sm" style={{ color: "#9a9a9a" }}>
+                          <td
+                            colSpan="7"
+                            className="px-4 py-8 text-center text-sm"
+                            style={{ color: "#9a9a9a" }}
+                          >
                             No tasks found.{" "}
                             <button
                               className="text-blue-600 hover:underline"
@@ -1112,17 +1394,30 @@ const OrganizationDashboard = () => {
                             className="hover:bg-gray-50 transition-colors cursor-pointer"
                             onClick={() => handleTaskClick(task.id)}
                           >
-                            <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                            <td
+                              className="py-2 px-3"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <input type="checkbox" className="rounded" />
                             </td>
                             <td className="py-2 px-3">
                               <div className="flex items-center gap-1.5">
                                 {getTaskTypeIcon(task, 13)}
                                 {task.isPastDue && (
-                                  <span title="Past Due" className="text-red-500 text-xs">⚠️</span>
+                                  <span
+                                    title="Past Due"
+                                    className="text-red-500 text-xs"
+                                  >
+                                    ⚠️
+                                  </span>
                                 )}
                                 {task.isDueToday && (
-                                  <span title="Due Today" className="text-orange-500 text-xs">📅</span>
+                                  <span
+                                    title="Due Today"
+                                    className="text-orange-500 text-xs"
+                                  >
+                                    📅
+                                  </span>
                                 )}
                                 <span
                                   className="text-sm font-medium truncate max-w-[200px] block"
@@ -1591,7 +1886,10 @@ const OrganizationDashboard = () => {
             </div>
             <div className="p-4">
               <div className="flex items-end gap-3 mb-3">
-                <p className="text-3xl font-bold m-0" style={{ color: "#1f2937" }}>
+                <p
+                  className="text-3xl font-bold m-0"
+                  style={{ color: "#1f2937" }}
+                >
                   {orgOnTimeRate}%
                 </p>
                 <p className="text-xs mb-1" style={{ color: "#9a9a9a" }}>
@@ -1605,8 +1903,12 @@ const OrganizationDashboard = () => {
                 />
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-green-600">On-time: {orgCompletion.onTime}</span>
-                <span className="text-red-500">Overdue closed: {orgCompletion.overdueClosed}</span>
+                <span className="text-green-600">
+                  On-time: {orgCompletion.onTime}
+                </span>
+                <span className="text-red-500">
+                  Overdue closed: {orgCompletion.overdueClosed}
+                </span>
               </div>
             </div>
           </div>
@@ -1691,7 +1993,10 @@ const OrganizationDashboard = () => {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-sm p-5 w-full max-w-md shadow-xl border border-gray-200">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold" style={{ color: "#676a6c" }}>
+              <h3
+                className="text-base font-semibold"
+                style={{ color: "#676a6c" }}
+              >
                 Schedule Report
               </h3>
               <button
@@ -1703,7 +2008,10 @@ const OrganizationDashboard = () => {
             </div>
             <form onSubmit={handleScheduleSave} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: "#676a6c" }}>
+                <label
+                  className="block text-xs font-medium mb-1"
+                  style={{ color: "#676a6c" }}
+                >
                   Frequency
                 </label>
                 <select
@@ -1723,7 +2031,10 @@ const OrganizationDashboard = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: "#676a6c" }}>
+                <label
+                  className="block text-xs font-medium mb-1"
+                  style={{ color: "#676a6c" }}
+                >
                   Email
                 </label>
                 <input

@@ -15,7 +15,7 @@ export default function RoleBasedRedirect() {
 
     if (!user) {
       // Not authenticated, redirect to login
-      setLocation('/login');
+      setLocation("/login");
       return;
     }
 
@@ -23,13 +23,24 @@ export default function RoleBasedRedirect() {
     const userRoles = Array.isArray(user.role) ? user.role : [user.role];
 
     // Redirect based on user role
-    if (userRoles.includes('superadmin') || userRoles.includes('super_admin')) {
-      setLocation('/superadmin');
-    } else if (userRoles.some(role => ['admin', 'org_admin', 'manager', 'member', 'employee', 'individual'].includes(role))) {
-      setLocation('/dashboard');
+    if (userRoles.includes("superadmin") || userRoles.includes("super_admin")) {
+      setLocation("/superadmin");
+    } else if (
+      userRoles.some((role) =>
+        [
+          "admin",
+          "org_admin",
+          "manager",
+          "member",
+          "employee",
+          "individual",
+        ].includes(role),
+      )
+    ) {
+      setLocation("/dashboard");
     } else {
       // Unknown role, redirect to login
-      setLocation('/login');
+      setLocation("/login");
     }
   }, [user, isLoading, setLocation]);
 

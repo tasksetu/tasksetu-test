@@ -125,9 +125,7 @@ export const useUserRole = () => {
 };
 
 // Check if the user has a specific role
-export const hasAccess = (requiredRoles = []) => {
-  const { user } = useUserRole();
-
+export const hasAccess = (user, requiredRoles = []) => {
   if (!user) return false;
 
   // Case 1: User has multiple roles → check activeRole 
@@ -140,6 +138,11 @@ export const hasAccess = (requiredRoles = []) => {
     return requiredRoles.includes(user.role[0]);
   }
 
+  // Case 3: User role is a string
+  if (typeof user.role === 'string') {
+    console.log("user role:",user.role)
+    return requiredRoles.includes(user.role);
+  }
   return false;
 };
 

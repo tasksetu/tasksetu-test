@@ -14,7 +14,6 @@ import {
 import { getReactSelectStyles } from "@/components/ui/design-system.config";
 import { useTaskPriorities } from "@/hooks/useTaskPriorities";
 import { getDefaultPriorityCode } from "@/utils/priorityUtils";
-// import { hasAccess } from "../utils/auth";
 
 // Advanced Fields Modal Component
 const AdvancedFieldsModal = ({

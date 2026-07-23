@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
-export default function ProtectedRoute({ children, requiredRole = null, allowedRoles = [] }) {
+export default function ProtectedRoute({
+  children,
+  requiredRole = null,
+  allowedRoles = [],
+}) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [user, setUser] = useState(null);
@@ -11,7 +15,7 @@ export default function ProtectedRoute({ children, requiredRole = null, allowedR
 
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setIsLoading(false);
@@ -19,10 +23,10 @@ export default function ProtectedRoute({ children, requiredRole = null, allowedR
       }
 
       try {
-        const response = await fetch('/api/auth/me', {
+        const response = await fetch("/api/auth/me", {
           headers: {
-            'Authorization': `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         });
 
         if (response.ok) {
@@ -31,10 +35,12 @@ export default function ProtectedRoute({ children, requiredRole = null, allowedR
           setIsAuthenticated(true);
 
           // Normalize role for comparison (handle both superadmin and super_admin)
-          const normalizedUserRole = userData.role === 'superadmin' ? 'super_admin' : userData.role;
-          const normalizedRequiredRole = requiredRole === 'superadmin' ? 'super_admin' : requiredRole;
-          const normalizedAllowedRoles = allowedRoles.map(role =>
-            role === 'superadmin' ? 'super_admin' : role
+          const normalizedUserRole =
+            userData.role === "superadmin" ? "super_admin" : userData.role;
+          const normalizedRequiredRole =
+            requiredRole === "superadmin" ? "super_admin" : requiredRole;
+          const normalizedAllowedRoles = allowedRoles.map((role) =>
+            role === "superadmin" ? "super_admin" : role,
           );
 
           // Check role authorization
@@ -42,44 +48,52 @@ export default function ProtectedRoute({ children, requiredRole = null, allowedR
             toast({
               title: "Access Denied",
               description: "You don't have permission to access this page",
-              variant: "destructive"
+              variant: "destructive",
             });
-            if (userData.role === 'super_admin' || userData.role === 'superadmin') {
-              setLocation('/superadmin');
+            if (
+              userData.role === "super_admin" ||
+              userData.role === "superadmin"
+            ) {
+              setLocation("/superadmin");
             } else {
-              setLocation('/dashboard');
+              setLocation("/dashboard");
             }
             return;
           }
 
-          if (allowedRoles.length > 0 && !normalizedAllowedRoles.includes(normalizedUserRole)) {
+          if (
+            allowedRoles.length > 0 &&
+            !normalizedAllowedRoles.includes(normalizedUserRole)
+          ) {
             toast({
               title: "Access Denied",
               description: "You don't have permission to access this page",
-              variant: "destructive"
+              variant: "destructive",
             });
-            if (userData.role === 'super_admin' || userData.role === 'superadmin') {
-              setLocation('/superadmin');
+            if (
+              userData.role === "super_admin" ||
+              userData.role === "superadmin"
+            ) {
+              setLocation("/superadmin");
             } else {
-              setLocation('/dashboard');
+              setLocation("/dashboard");
             }
             return;
           }
-
         } else {
           // Invalid token
-          localStorage.removeItem('token');
+          localStorage.removeItem("token");
           toast({
             title: "Session Expired",
             description: "Please log in again",
-            variant: "destructive"
+            variant: "destructive",
           });
-          setLocation('/login');
+          setLocation("/login");
         }
       } catch (error) {
-        console.error('Auth check failed:', error);
-        localStorage.removeItem('token');
-        setLocation('/login');
+        console.error("Auth check failed:", error);
+        localStorage.removeItem("token");
+        setLocation("/login");
       } finally {
         setIsLoading(false);
       }

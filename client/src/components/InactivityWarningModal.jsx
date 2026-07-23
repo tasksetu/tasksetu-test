@@ -1,26 +1,11 @@
-/**
- * InactivityWarningModal Component
- *
- * Shows a warning modal before auto-logout
- */
-
 import React from "react";
 import { AlertCircle, Clock } from "lucide-react";
 import SESSION_CONFIG from "../config/sessionConfig";
 
 const InactivityWarningModal = ({ show, remainingTime, formatTime }) => {
-  console.log("🎨 InactivityWarningModal - Rendered with props:", {
-    show,
-    remainingTime,
-  });
-
   if (!show) {
-    console.log("🎨 InactivityWarningModal - Not showing (show=false)");
     return null;
   }
-
-  console.log("🎨 InactivityWarningModal - DISPLAYING MODAL NOW!");
-
   return (
     <>
       {/* Backdrop - Non-dismissible */}

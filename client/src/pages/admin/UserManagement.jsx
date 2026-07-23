@@ -109,7 +109,6 @@ export default function UserManagement() {
     },
     enabled: true,
     staleTime: 0,
-    gcTime: 0, // React Query v5 uses gcTime instead of cacheTime
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });

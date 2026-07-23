@@ -669,24 +669,6 @@ export default function LicenseManagementPage() {
   const plansData = plansResponse?.licenses || plansResponse?.data || [];
   const subscriptionData =
     subscriptionResponse?.subscription || subscriptionResponse?.data;
-
-  // 🔍 DEBUG: Log raw API responses
-  console.log("\n🔍 ========== STEP 1: RAW API RESPONSES ==========");
-  console.log(
-    "🔍 Current License Response:",
-    JSON.stringify(currentLicenseResponse, null, 2),
-  );
-  console.log("🔍 Plans Response:", JSON.stringify(plansResponse, null, 2));
-  console.log(
-    "🔍 Subscription Response:",
-    JSON.stringify(subscriptionResponse, null, 2),
-  );
-  console.log("🔍 Current Date:", new Date().toISOString());
-  console.log("🔍 Current Date (Local):", new Date().toLocaleString());
-  console.log("🔍 ==============================================\n");
-
-  // Use organization features API which includes usage data
-  // Features come as an object grouped by category: { CORE: [...], ADVANCED: [...] }
   const orgFeatures = licenseInfoResponse?.features || {};
   const featuresData = Array.isArray(orgFeatures)
     ? orgFeatures
@@ -736,13 +718,6 @@ export default function LicenseManagementPage() {
     userFeatures = currentLicenseData?.features || {};
     userLimits = currentLicenseData?.licenseDetails || {};
 
-    console.log(
-      "👤 User Assigned License (from /api/license/current):",
-      assignedLicense,
-    );
-    console.log("🎫 Active License Code:", activeLicenseCode);
-    console.log("✨ User Features:", userFeatures);
-    console.log("📊 User Limits:", userLimits);
   } else {
     // Org Admin - use organization license
     assignedLicense = {
@@ -760,22 +735,7 @@ export default function LicenseManagementPage() {
       "EXECUTE";
     userFeatures = currentLicenseData?.features || {};
     userLimits = currentLicenseData?.licenseDetails || {};
-
-    console.log("\n🔍 ========== STEP 2: LICENSE ASSIGNMENT ==========");
-    console.log("🏢 Org License:", JSON.stringify(assignedLicense, null, 2));
-    console.log("🎫 Active License Code:", activeLicenseCode);
-    console.log(
-      "📅 Renewal Date from assignedLicense:",
-      assignedLicense?.renewal_date,
-    );
-    console.log(
-      "📅 Expiry from currentLicenseData:",
-      currentLicenseData?.expiry,
-    );
-    console.log("🔍 ==============================================\n");
   }
-
-  console.log("📊 License Usage:", licenseUsage);
 
   // Find current plan based on the active license
   const currentPlan = plansData.find(
@@ -1423,13 +1383,6 @@ export default function LicenseManagementPage() {
 
   const plans = convertPlansForDisplay();
 
-  if (plansLoading || subscriptionLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      </div>
-    );
-  }
 
   const getSelectedPlanPrice = () => {
     const plan = plans[selectedPlan];
@@ -1676,51 +1629,12 @@ export default function LicenseManagementPage() {
             subscriptionLoading ||
             currentLicenseLoading ||
             userProfileLoading ? (
-              <div className="space-y-3 sm:space-y-3 animate-pulse">
-                {/* Loading Skeleton - Current License Card */}
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                  {/* Header Skeleton */}
-                  <div className="px-6 py-5 border-b bg-gradient-to-r from-gray-100 to-gray-50">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 bg-gray-200 rounded-xl">
-                        <div className="h-7 w-7 bg-gray-300 rounded"></div>
-                      </div>
-                      <div className="flex-1">
-                        <div className="h-6 bg-gray-300 rounded w-40 mb-2"></div>
-                        <div className="h-4 bg-gray-200 rounded w-32"></div>
-                      </div>
-                      <div className="h-8 w-20 bg-gray-200 rounded-full"></div>
-                    </div>
-                  </div>
-                  {/* Content Skeleton */}
-                  <div className="p-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-                      {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="p-3 bg-gray-50 rounded-lg">
-                          <div className="h-3 bg-gray-200 rounded w-20 mb-2"></div>
-                          <div className="h-4 bg-gray-300 rounded w-16"></div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {[1, 2, 3, 4, 5, 6].map((i) => (
-                        <div
-                          key={i}
-                          className="h-7 bg-gray-200 rounded-full w-24"
-                        ></div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Loading Indicator */}
-                <div className="flex items-center justify-center min-h-[150px]">
-                  <div className="flex flex-col items-center gap-3">
-                    <Loader className="w-8 h-8 animate-spin text-blue-600" />
-                    <p className="text-lg text-gray-600">
-                      Loading license data...
-                    </p>
-                  </div>
+              <div className="flex items-center justify-center min-h-[150px]">
+                <div className="flex flex-col items-center gap-3">
+                  <Loader className="w-8 h-8 animate-spin text-blue-600" />
+                  <p className="text-lg text-gray-600">
+                    Loading license data...
+                  </p>
                 </div>
               </div>
             ) : currentLicenseError ? (
@@ -2590,40 +2504,7 @@ export default function LicenseManagementPage() {
             {plansLoading ||
             subscriptionLoading ||
             currentLicenseLoading ||
-            userProfileLoading ? (
-              <div className="space-y-3 sm:space-y-3 animate-pulse">
-                {/* Loading Skeleton - Usage Overview Card */}
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="h-5 w-5 bg-gray-300 rounded"></div>
-                      <div className="h-5 bg-gray-300 rounded w-32"></div>
-                    </div>
-                    <div className="h-8 w-24 bg-gray-200 rounded"></div>
-                  </div>
-                  <div className="p-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="bg-gray-50 rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <div className="h-5 w-5 bg-gray-300 rounded"></div>
-                              <div className="h-4 bg-gray-300 rounded w-20"></div>
-                            </div>
-                            <div className="h-4 bg-gray-200 rounded w-16"></div>
-                          </div>
-                          <div className="h-2 bg-gray-200 rounded-full mb-2"></div>
-                          <div className="flex justify-between">
-                            <div className="h-3 bg-gray-200 rounded w-12"></div>
-                            <div className="h-3 bg-gray-200 rounded w-12"></div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : currentLicenseError ? (
+            userProfileLoading ? null : currentLicenseError ? (
               null
             ) : (
               <div className="space-y-3 sm:space-y-3">

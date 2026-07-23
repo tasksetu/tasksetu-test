@@ -11,21 +11,6 @@ const GlobalSubtaskDrawer = () => {
   // Determine if user can assign subtasks to others based on active role
   const isOrgUser = canAssignToOthers(activeRole || 'individual');
 
-  console.log('🔍 GlobalSubtaskDrawer render:', {
-    isSubtaskDrawerOpen,
-    hasParentTask: !!parentTask,
-    parentTaskType: typeof parentTask,
-    parentTaskId: parentTask?.id,
-    parentTask_id: parentTask?._id,
-    parentTaskDocId: parentTask?._doc?._id,
-    mode,
-    editData,
-    hasUpdateHandler: !!onUpdateSubtask,
-    hasRefreshCallback: !!refreshCallback,
-    activeRole,
-    isOrgUser
-  });
-
   if (!isSubtaskDrawerOpen || !parentTask) {
     return null;
   }
