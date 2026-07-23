@@ -456,7 +456,7 @@ export default function NotificationCenter() {
     <div className=" px-6 py-3 flex flex-1 flex-col min-h-0 bg-gray-50">
       {/* License Info Banner - Show for Explore tier users */}
       {!hasAdvancedNotifications && !licenseLoading && (
-        <div className="shrink-0 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-sm p-3 flex items-center justify-between">
+        <div className="shrink-0 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-sm p-3 mb-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
               <span className="text-xl">🔔</span>

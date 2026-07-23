@@ -87,7 +87,7 @@ export function FormPreview({ form, onClose, layout }) {
             {/* Submit Button */}
             <div className="pt-4 border-t">
               <Button
-                className="w-full bg-green-600 hover:bg-green-700 text-white"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 type="button"
               >
                 Submit Form (Preview Mode)

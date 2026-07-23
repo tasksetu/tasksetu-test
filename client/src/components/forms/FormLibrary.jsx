@@ -513,36 +513,29 @@ const FormLibrary = () => {
   };
 
   return (
-    <div className="form-library-page [&_.card]:!rounded-sm [&_input:not([type='checkbox']):not([type='radio'])]:!rounded-sm [&_select]:!rounded-sm [&_textarea]:!rounded-sm [&_.form-input]:!rounded-sm [&_.form-select]:!rounded-sm [&_.form-textarea]:!rounded-sm [&_button:not(.rounded-full)]:!rounded-sm [&_table]:!rounded-sm [&_.bg-white.border]:!rounded-sm [&_.rounded-sm]:!rounded-sm [&_.rounded-md]:!rounded-sm [&_.rounded-lg]:!rounded-sm [&_.rounded-xl]:!rounded-sm [&_.rounded-2xl]:!rounded-sm [&_.rounded]:!rounded-sm [&_[data-loader-ring]]:!rounded-full [&_input]:h-8 [&_input]:min-h-8 [&_input]:max-h-8 [&_input]:py-0 [&_input]:box-border [&_input]:leading-none">
+    <div className="bg-gray-50 min-h-screen px-6 py-3 pb-6">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="h-12 w-12 rounded-sm bg-blue-500  flex items-center justify-center">
-                <File className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-normal m-0" style={{ color: "#676a6c" }}>
-                  Form Librarys
-                </h1>
-                <p className="mt-0 text-sm text-blue-600">
-                  Manage, create, and track all your form templates.
-                </p>
-              </div>
-            </div>
-            <Link href="/form-builder">
-              <Button variant="primary" className="h-8">
-                <Plus className="h-4 w-4 mr-2" />
-                Create New Form
-              </Button>
-            </Link>
+      <div className="mb-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-normal m-0" style={{ color: "#676a6c" }}>
+              Form Library
+            </h1>
+            <p className="mt-0 text-sm text-blue-600">
+              Manage, create, and track all your form templates.
+            </p>
           </div>
+          <Link href="/form-builder">
+            <Button variant="primary" className="h-8">
+              <Plus className="h-4 w-4 mr-2" />
+              Create New Form
+            </Button>
+          </Link>
         </div>
       </div>
 
-      <div className="p-4 bg-gray-50 min-h-screen">
-        <div className="bg-white p-4 rounded-sm shadow-sm">
+      <div>
+        <div className="bg-white p-4 rounded-sm shadow-sm border border-gray-200">
           {/* Toolbar */}
           <div className="mb-3">
             {/* Single Row: Search, Status, Sort By, Order, Clear */}
@@ -700,7 +693,7 @@ const FormLibrary = () => {
               ) : forms.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7}>
-                    <div className="text-center py-12 border-2 border-dashed border-slate-300 rounded-sm">
+                    <div className="text-center py-12 bg-slate-50/50 rounded-sm">
                       <div className="flex flex-col items-center space-y-3">
                         <div className="p-3 bg-slate-100 rounded-sm">
                           <FileText className="h-6 w-6 text-slate-400" />

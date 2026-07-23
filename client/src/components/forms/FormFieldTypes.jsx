@@ -359,7 +359,7 @@ export function FormFieldTypes({
           <Button
             onClick={handleDone}
             disabled={selectedTypes.length === 0}
-            className="bg-green-600 hover:bg-green-700 text-white rounded-sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-sm"
           >
             <Check className="h-4 w-4 mr-2" />
             Done

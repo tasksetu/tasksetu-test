@@ -1151,67 +1151,41 @@ export default function FormBuilder() {
   };
 
   return (
-    <div className="form-builder-page p-4 bg-slate-50 min-h-screen [&_.card]:!rounded-sm [&_input:not([type='checkbox']):not([type='radio'])]:!rounded-sm [&_select]:!rounded-sm [&_textarea]:!rounded-sm [&_.form-input]:!rounded-sm [&_.form-select]:!rounded-sm [&_.form-textarea]:!rounded-sm [&_button:not(.rounded-full)]:!rounded-sm [&_table]:!rounded-sm [&_.bg-white.border]:!rounded-sm [&_.rounded-sm]:!rounded-sm [&_.rounded-md]:!rounded-sm [&_.rounded-lg]:!rounded-sm [&_.rounded-xl]:!rounded-sm [&_.rounded-2xl]:!rounded-sm [&_.rounded]:!rounded-sm [&_input]:h-8 [&_input]:min-h-8 [&_input]:max-h-8 [&_input]:py-0 [&_input]:box-border [&_input]:leading-none">
+    <div className="bg-slate-50 min-h-screen px-6 py-3 pb-6">
       {/* Enhanced Header */}
-      <div className=" bg-white p-4 mb-3 rounded-sm border border-slate-200 shadow-sm">
-        <div>
-          <h1 className="text-2xl font-normal m-0" style={{ color: "#676a6c" }}>Form Builders</h1>
-          <p className="mt-0 text-sm text-blue-600">
-            Create and customize dynamic forms with drag-and-drop simplicity
-          </p>
-        </div>
-        <div className="">
-          <div className="flex items-center justify-center space-x-3 mt-1">
-            <Button
-              size="sm"
-              onClick={handleSaveDraft}
-              disabled={createFormMutation.isPending}
-              className="h-8 rounded-sm bg-gray-600 hover:bg-gray-700 text-white"
-            >
-              <File className="h-4 w-4 mr-0" />
-              Draft Form
-            </Button>
-            {/* <Button
-              onClick={handleSave}
-              disabled={createFormMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Save className="h-4 w-4 mr-2" />
-              Save Form
-            </Button> */}
-            <Button
-              size="sm"
-              onClick={handleSaveAndPublish}
-              disabled={createFormMutation.isPending}
-              className="h-8 rounded-sm bg-green-600 hover:bg-green-700 text-white"
-            >
-              <Rocket className="h-4 w-4 mr-0" />
-              Save & Publish
-            </Button>
+      <div className="mb-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-normal m-0" style={{ color: "#676a6c" }}>Form Builder</h1>
+            <p className="mt-0 text-sm text-blue-600">
+              Create and customize dynamic forms with drag-and-drop simplicity
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              className="h-8 rounded-sm"
+              className="h-8 rounded-sm flex items-center gap-1.5 text-xs font-medium bg-white"
               title="Undo"
               onClick={handleUndo}
               disabled={currentStep <= 0}
             >
-              <Undo2 className="h-4 w-4 mr-0" /> Undo
+              <Undo2 className="h-4 w-4" /> Undo
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="h-8 rounded-sm"
+              className="h-8 rounded-sm flex items-center gap-1.5 text-xs font-medium bg-white"
               title="Redo"
               onClick={handleRedo}
               disabled={currentStep >= history.length - 1}
             >
-              <Redo2 className="h-4 w-4 mr-0" /> Redo
+              <Redo2 className="h-4 w-4" /> Redo
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="h-8 rounded-none"
+              className="h-8 rounded-sm flex items-center gap-1.5 text-xs font-medium bg-white"
               title="Validation Check"
               onClick={() => {
                 const { errors, warnings } = validateForm();
@@ -1236,17 +1210,35 @@ export default function FormBuilder() {
                 }
               }}
             >
-              <ShieldCheck className="mr-0 h-4 w-4" />
+              <ShieldCheck className="h-4 w-4" />
               Validate
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="h-8 rounded-sm"
+              className="h-8 rounded-sm flex items-center gap-1.5 text-xs font-medium bg-white"
               onClick={() => setShowPreview(true)}
             >
-              <Eye className="mr-0 h-4 w-4" />
+              <Eye className="h-4 w-4" />
               Preview
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveDraft}
+              disabled={createFormMutation.isPending}
+              className="h-8 rounded-sm bg-gray-600 hover:bg-gray-700 text-white flex items-center gap-1.5 text-xs font-medium"
+            >
+              <File className="h-4 w-4" />
+              Draft Form
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveAndPublish}
+              disabled={createFormMutation.isPending}
+              className="h-8 rounded-sm bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 text-xs font-medium"
+            >
+              <Rocket className="h-4 w-4" />
+              Save & Publish
             </Button>
           </div>
         </div>
@@ -1420,7 +1412,7 @@ export default function FormBuilder() {
                 <Button
                   type="button"
                   onClick={() => setFieldTypesDialogOpen(true)}
-                  className="h-8 shrink-0  bg-green-600 hover:bg-green-700 text-white rounded-sm"
+                  className="h-8 shrink-0  bg-blue-600 hover:bg-blue-700 text-white rounded-sm"
                 >
                   <Plus className="h-4 w-4 mr-0" />
                   Add form field
@@ -1527,7 +1519,7 @@ export default function FormBuilder() {
                 ))}
 
                 {form.fields.length === 0 && (
-                  <div className="text-center max-h-[400px] py-12 border-2 border-dashed border-slate-300 rounded-sm">
+                  <div className="text-center max-h-[400px] py-12 bg-slate-50/50 rounded-sm">
                     <div className="flex flex-col items-center space-y-3">
                       <Button
                         type="button"
@@ -1581,7 +1573,7 @@ export default function FormBuilder() {
                     !form.title.trim() ||
                     form.fields.length === 0
                   }
-                  className="bg-green-600 hover:bg-green-700 text-white disabled:bg-slate-300 "
+                  className="bg-blue-600 hover:bg-green-700 text-white disabled:bg-slate-300 "
                 >
                   <Save className="h-4 w-4 mr-2" />
                   {createFormMutation.isPending ? "Saving..." : "Save Form"}
