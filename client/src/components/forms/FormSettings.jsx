@@ -33,7 +33,7 @@ export function FormSettings({
               Allow Anonymous Submissions
             </label>
             <Switch
-              className="rounded-full [&_span]:rounded-full"
+              className="rounded-full [&_span]:rounded-full data-[state=checked]:bg-blue-600"
               checked={settings.allowAnonymous}
               onCheckedChange={(checked) =>
                 handleChange("allowAnonymous", checked)
@@ -58,7 +58,7 @@ export function FormSettings({
                   </p>
                 </div>
                 <Switch
-                  className="rounded-full [&_span]:rounded-full"
+                  className="rounded-full [&_span]:rounded-full data-[state=checked]:bg-blue-600"
                   checked={settings.restrictPublishToOwner || false}
                   onCheckedChange={(checked) =>
                     handleChange("restrictPublishToOwner", checked)
