@@ -1185,9 +1185,6 @@ export default function BillingPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="p-3 bg-blue-100 rounded-xl">
-              <Receipt className="h-8 w-8 text-blue-600" />
-            </div>
             <div>
               <h1
                 className="text-2xl font-normal m-0"

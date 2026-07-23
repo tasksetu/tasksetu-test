@@ -232,55 +232,37 @@ export function PurchasePlanModal({ isOpen, onClose, isIndividual = false }) {
                 : `${instancesCreated} license instance${instancesCreated > 1 ? "s" : ""} created and added to your organization pool.`,
             });
 
-            // Clear the useLicense localStorage cache so stale data is not served
+            // Clear legacy cache
             localStorage.removeItem("tasksetu_license_cache");
 
-            // Force immediate refetch of all license-related queries (type: 'all' forces
-            // refetch even if there are no active observers, since this modal is closed before handler fires)
-            // PurchasePlanModal internal queries
-            queryClient.refetchQueries({
-              queryKey: ["/api/organization/multi-subscriptions"],
-              type: "all",
+            // 🔔 Invalidate & refetch all license, subscription, features, and profile queries immediately
+            queryClient.invalidateQueries({
+              predicate: (query) =>
+                typeof query.queryKey[0] === "string" &&
+                (query.queryKey[0].toLowerCase().includes("license") ||
+                  query.queryKey[0].toLowerCase().includes("subscription") ||
+                  query.queryKey[0].toLowerCase().includes("profile") ||
+                  query.queryKey[0].toLowerCase().includes("feature") ||
+                  query.queryKey[0].toLowerCase().includes("pool") ||
+                  query.queryKey[0].toLowerCase().includes("user")),
             });
-            queryClient.refetchQueries({
-              queryKey: ["/api/organization/license"],
-              type: "all",
-            });
+            queryClient.invalidateQueries({ queryKey: ["license-pool"] });
+            queryClient.invalidateQueries({ queryKey: ["org-users-licenses"] });
+            queryClient.invalidateQueries({ queryKey: ["current-license-info"] });
+
+            queryClient.refetchQueries({ queryKey: ["/api/organization/multi-subscriptions"], type: "all" });
+            queryClient.refetchQueries({ queryKey: ["/api/organization/license"], type: "all" });
             queryClient.refetchQueries({ queryKey: ["users"], type: "all" });
             queryClient.refetchQueries({ queryKey: ["invoices"], type: "all" });
-
-            // LicenseManagementPage queries - force refetch so UI updates without page refresh
-            queryClient.refetchQueries({
-              queryKey: ["/api/license/current"],
-              type: "all",
-            });
-            queryClient.refetchQueries({
-              queryKey: ["/api/license/licenses"],
-              type: "all",
-            });
-            queryClient.refetchQueries({
-              queryKey: ["/api/license/plans"],
-              type: "all",
-            });
-            queryClient.refetchQueries({
-              queryKey: ["/api/license/organization/subscription"],
-              type: "all",
-            });
-            queryClient.refetchQueries({
-              queryKey: ["/api/license/organization/features"],
-              type: "all",
-            });
-            queryClient.refetchQueries({
-              queryKey: ["current-license-info"],
-              type: "all",
-            });
-            // For individual users - profile gets updated with new assigned license
-            if (isIndividual) {
-              queryClient.refetchQueries({
-                queryKey: ["/api/profile"],
-                type: "all",
-              });
-            }
+            queryClient.refetchQueries({ queryKey: ["/api/license/current"], type: "all" });
+            queryClient.refetchQueries({ queryKey: ["/api/license/licenses"], type: "all" });
+            queryClient.refetchQueries({ queryKey: ["/api/license/plans"], type: "all" });
+            queryClient.refetchQueries({ queryKey: ["/api/license/organization/subscription"], type: "all" });
+            queryClient.refetchQueries({ queryKey: ["/api/license/organization/features"], type: "all" });
+            queryClient.refetchQueries({ queryKey: ["current-license-info"], type: "all" });
+            queryClient.refetchQueries({ queryKey: ["license-pool"], type: "all" });
+            queryClient.refetchQueries({ queryKey: ["org-users-licenses"], type: "all" });
+            queryClient.refetchQueries({ queryKey: ["/api/profile"], type: "all" });
 
             onClose();
             resetForm();

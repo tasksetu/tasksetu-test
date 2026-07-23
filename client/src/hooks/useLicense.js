@@ -53,7 +53,9 @@ export const useLicense = () => {
                 features: featuresData,
             };
         },
-        staleTime: 5 * 60 * 1000, // 5 minutes cache duration
+        staleTime: 0,
+        refetchOnMount: "always",
+        refetchOnWindowFocus: true,
         retry: 1,
     });
 

@@ -70,6 +70,9 @@ function LicenseDifferencesSection({
       if (!response.ok) throw new Error("Failed to fetch features list");
       return response.json();
     },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   // Define feature categories with their limits per plan
@@ -598,6 +601,9 @@ export default function LicenseManagementPage() {
       if (!response.ok) throw new Error("Failed to fetch current license");
       return response.json();
     },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   // Fetch dynamic license plans
@@ -612,6 +618,9 @@ export default function LicenseManagementPage() {
       if (!response.ok) throw new Error("Failed to fetch plans");
       return response.json();
     },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   // Fetch current subscription data
@@ -630,6 +639,9 @@ export default function LicenseManagementPage() {
       if (!response.ok) throw new Error("Failed to fetch subscription");
       return response.json();
     },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   // Fetch organization license info for real-time data
@@ -644,6 +656,9 @@ export default function LicenseManagementPage() {
       if (!response.ok) throw new Error("Failed to fetch license info");
       return response.json();
     },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   // Features are already fetched from /api/license/organization/features
@@ -663,6 +678,9 @@ export default function LicenseManagementPage() {
         return response.json();
       },
       enabled: !isOrgAdmin, // Only fetch for non-admin users
+      staleTime: 0,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
     },
   );
 
@@ -1454,9 +1472,7 @@ export default function LicenseManagementPage() {
                 </div>
               </div>
             )}
-            <div className="p-2 sm:p-3 bg-blue-100 rounded-xl">
-              <Zap className="w-5 h-5 sm:w-7 sm:h-7 text-blue-600" />
-            </div>
+            
             <div>
               <h1
                 className="text-2xl font-normal m-0"

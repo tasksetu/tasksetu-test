@@ -59,7 +59,9 @@ export function useUserLicenseManagement() {
 
       return response.json();
     },
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     retry: 2,
   });
 
@@ -90,7 +92,9 @@ export function useUserLicenseManagement() {
 
       return response.json();
     },
-    staleTime: 30 * 1000,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     retry: 2,
   });
 
