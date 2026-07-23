@@ -1425,7 +1425,7 @@ export default function LicenseManagementPage() {
   return (
     <div className="bg-gray-50 [&_.card]:!rounded-sm [&_input:not([type='checkbox']):not([type='radio'])]:!rounded-sm [&_select]:!rounded-sm [&_textarea]:!rounded-sm [&_.form-input]:!rounded-sm [&_.form-select]:!rounded-sm [&_.form-textarea]:!rounded-sm [&_button:not(.rounded-full)]:!rounded-sm [&_table]:!rounded-sm [&_.bg-white.border]:!rounded-sm [&_.rounded-sm]:!rounded-sm [&_.rounded-md]:!rounded-sm [&_.rounded-lg]:!rounded-sm [&_.rounded-xl]:!rounded-sm [&_.rounded-2xl]:!rounded-sm [&_.rounded]:!rounded-sm [&_.rounded-r-lg]:!rounded-r-sm [&_.rounded-r-md]:!rounded-r-sm [&_input]:h-8 [&_input]:min-h-8 [&_input]:max-h-8 [&_input]:py-0 [&_input]:box-border [&_select]:h-8 [&_select]:min-h-8 [&_select]:max-h-8 [&_select]:py-0 [&_select]:box-border [&_textarea]:min-h-8 [&_.form-input]:h-8 [&_.form-input]:min-h-8 [&_.form-input]:max-h-8 [&_.form-input]:py-0 [&_.form-input]:box-border [&_.form-select]:h-8 [&_.form-select]:min-h-8 [&_.form-select]:max-h-8 [&_.form-select]:py-0 [&_.form-select]:box-border">
       <div
-        className="max-w-7xl mx-auto p-3 sm:p-4 pb-6"
+        className="max-w-7xl mx-auto px-6 py-3 pb-6"
         data-testid="license-management-page"
       >
         {/* Header Section */}

@@ -452,19 +452,19 @@ export default function HelpSupport() {
           {/* Column 1: FAQ (lg:col-span-5) */}
           <div
             ref={faqRef}
-            className="lg:col-span-6 bg-white border border-gray-200 p-5 shadow-sm"
+            className="lg:col-span-6 bg-white border border-gray-200 p-6 shadow-sm"
           >
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
-              <h2 className="font-bold text-gray-900 text-sm">
+            <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 mb-4">
+              <h2 className="text-xl font-bold text-gray-900">
                 Frequently Asked Questions
               </h2>
               <button
                 onClick={() => setShowAllFAQs(!showAllFAQs)}
-                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                className="text-sm font-medium text-blue-600 hover:underline flex items-center gap-1"
               >
                 {showAllFAQs ? "Show Less" : "View all"}{" "}
                 <ArrowRight
-                  className={`w-3 h-3 transition-transform ${showAllFAQs ? "rotate-90" : ""}`}
+                  className={`w-3.5 h-3.5 transition-transform ${showAllFAQs ? "rotate-90" : ""}`}
                 />
               </button>
             </div>
@@ -472,7 +472,7 @@ export default function HelpSupport() {
               className={
                 showAllFAQs
                   ? "space-y-4"
-                  : "max-h-[220px] overflow-y-auto pr-1.5 space-y-4"
+                  : "max-h-[260px] overflow-y-auto pr-1.5 space-y-4"
               }
             >
               {faqCategories.map((category, catIdx) => (
@@ -480,10 +480,10 @@ export default function HelpSupport() {
                   <div className="flex items-center gap-2 mb-1.5">
                     <div className={cn("p-1.5 rounded-sm", category.bgColor)}>
                       <category.icon
-                        className={cn("h-3.5 w-3.5", category.color)}
+                        className={cn("h-4 w-4", category.color)}
                       />
                     </div>
-                    <h3 className="font-semibold text-gray-800 text-xs">
+                    <h3 className="font-semibold text-gray-800 text-sm">
                       {category.category}
                     </h3>
                   </div>
@@ -492,12 +492,12 @@ export default function HelpSupport() {
                       <AccordionItem
                         key={`${catIdx}-${faqIdx}`}
                         value={`faq-${catIdx}-${faqIdx}`}
-                        className="border rounded-sm px-3 bg-gray-50/30 hover:bg-gray-50/60 transition-colors"
+                        className="border rounded-sm px-3.5 bg-gray-50/30 hover:bg-gray-50/60 transition-colors"
                       >
-                        <AccordionTrigger className="h-9 py-1 text-left text-[11px] font-semibold text-gray-700 leading-normal hover:no-underline">
+                        <AccordionTrigger className="h-10 py-1.5 text-left text-sm font-medium text-gray-800 leading-normal hover:no-underline">
                           {faq.q}
                         </AccordionTrigger>
-                        <AccordionContent className="text-gray-500 text-[11px] leading-relaxed pb-3 pt-1">
+                        <AccordionContent className="text-gray-600 text-sm leading-relaxed pb-3 pt-1">
                           {faq.a}
                         </AccordionContent>
                       </AccordionItem>
@@ -514,20 +514,20 @@ export default function HelpSupport() {
           {/* Support Ticket Form */}
           <div className="bg-white border border-gray-200 p-6 shadow-sm">
             <div className="border-b border-gray-100 pb-3.5 mb-5">
-              <h2 className="text-lg font-bold text-gray-900">
+              <h2 className="text-xl font-bold text-gray-900">
                 Raise a Support Ticket
               </h2>
-              <p className="text-gray-500 text-xs mt-1">
+              <p className="text-gray-600 text-sm mt-1">
                 Submit your issue and our support team will get back to you.
               </p>
             </div>
 
             <form onSubmit={handleContactSubmit} className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Category select */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-gray-700">
-                    Category *
+                  <label className="text-sm font-medium text-gray-700">
+                    Category <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
@@ -538,7 +538,7 @@ export default function HelpSupport() {
                           category: e.target.value,
                         })
                       }
-                      className="w-full h-8 pl-3 pr-8 border border-gray-300 bg-white text-xs rounded-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer text-gray-900"
+                      className="w-full h-9 pl-3 pr-8 border border-gray-300 bg-white text-sm rounded-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer text-gray-900"
                     >
                       <option value="general">General Inquiry</option>
                       <option value="technical">Technical Support</option>
@@ -553,8 +553,8 @@ export default function HelpSupport() {
 
                 {/* Priority select */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-gray-700">
-                    Priority *
+                  <label className="text-sm font-medium text-gray-700">
+                    Priority <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
@@ -565,22 +565,19 @@ export default function HelpSupport() {
                           priority: e.target.value,
                         })
                       }
-                      className="w-full h-8 pl-3 pr-8 border border-gray-300 bg-white text-xs rounded-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer text-gray-900"
+                      className="w-full h-9 pl-3 pr-8 border border-gray-300 bg-white text-sm rounded-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer text-gray-900"
                     >
                       <option value="low">Low</option>
                       <option value="normal">Normal</option>
                       <option value="high" disabled={!hasDedicatedSupport}>
                         High {!hasDedicatedSupport ? "🔒" : ""}
                       </option>
-                      {/* <option value="urgent" disabled={!hasDedicatedSupport}>
-                        Urgent {!hasDedicatedSupport ? "🔒" : ""}
-                      </option> */}
                     </select>
                     <ChevronDown className="absolute right-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none opacity-50" />
                   </div>
                   {!hasDedicatedSupport && (
-                    <p className="text-[10px] text-amber-600 flex items-center gap-1 mt-0.5">
-                      <Lock className="w-2.5 h-2.5" /> High require
+                    <p className="text-xs text-amber-600 flex items-center gap-1 mt-0.5 font-medium">
+                      <Lock className="w-3 h-3" /> High requires
                       Dedicated Support license.
                     </p>
                   )}
@@ -588,8 +585,8 @@ export default function HelpSupport() {
 
                 {/* Subject input */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-gray-700">
-                    Subject *
+                  <label className="text-sm font-medium text-gray-700">
+                    Subject <span className="text-red-500">*</span>
                   </label>
                   <Input
                     type="text"
@@ -601,15 +598,15 @@ export default function HelpSupport() {
                         subject: e.target.value,
                       })
                     }
-                    className="h-8 text-xs"
+                    className="h-9 text-sm text-gray-900"
                   />
                 </div>
               </div>
 
               {/* Description textarea */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-700">
-                  Description *
+                <label className="text-sm font-medium text-gray-700">
+                  Description <span className="text-red-500">*</span>
                 </label>
                 <Textarea
                   placeholder="Please provide more details about your issue..."
@@ -618,13 +615,13 @@ export default function HelpSupport() {
                     setContactForm({ ...contactForm, message: e.target.value })
                   }
                   rows={5}
-                  className="text-xs resize-none"
+                  className="text-sm text-gray-900 resize-none"
                 />
               </div>
 
               {/* File Attachments */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-700">
+                <label className="text-sm font-medium text-gray-700">
                   Attachments{" "}
                   <span className="text-gray-400 font-normal">
                     (optional, max 5 files, 10MB each)
@@ -636,7 +633,7 @@ export default function HelpSupport() {
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
                   className={cn(
-                    "border-2 border-dashed rounded-sm p-3 text-center cursor-pointer transition-all duration-200",
+                    "border-2 border-dashed rounded-sm p-4 text-center cursor-pointer transition-all duration-200",
                     isDragging
                       ? "border-blue-400 bg-blue-50"
                       : "border-gray-200 hover:border-blue-300 hover:bg-gray-50/50",
@@ -656,13 +653,13 @@ export default function HelpSupport() {
                   />
                   <div className="flex flex-col items-center gap-1">
                     <Paperclip className="w-5 h-5 text-gray-400" />
-                    <p className="text-xs text-gray-500">
+                    <p className="text-sm text-gray-500">
                       <span className="text-blue-600 font-medium">
                         Click to upload
                       </span>{" "}
                       or drag and drop
                     </p>
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-xs text-gray-400">
                       Images, PDF, Word, Excel, ZIP (max 10MB)
                     </p>
                   </div>
@@ -674,7 +671,7 @@ export default function HelpSupport() {
                     {attachedFiles.map((file, index) => (
                       <div
                         key={index}
-                        className="relative group flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-sm px-2.5 py-1.5 text-xs"
+                        className="relative group flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-sm px-2.5 py-1.5 text-sm"
                       >
                         {isImageFile(file) ? (
                           <img
@@ -686,10 +683,10 @@ export default function HelpSupport() {
                           <File className="w-4 h-4 text-gray-400 flex-shrink-0" />
                         )}
                         <div className="flex flex-col min-w-0">
-                          <span className="text-gray-700 font-medium truncate max-w-[120px]">
+                          <span className="text-gray-700 font-medium truncate max-w-[140px]">
                             {file.name}
                           </span>
-                          <span className="text-gray-400 text-[10px]">
+                          <span className="text-gray-400 text-xs">
                             {formatFileSize(file.size)}
                           </span>
                         </div>
@@ -701,7 +698,7 @@ export default function HelpSupport() {
                           }}
                           className="ml-1 p-0.5 rounded-full hover:bg-red-100 text-gray-400 hover:text-red-500 transition-colors"
                         >
-                          <X className="w-3 h-3" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ))}
@@ -713,7 +710,7 @@ export default function HelpSupport() {
                 <Button
                   type="submit"
                   disabled={createTicketMutation.isPending}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-6 h-9"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-6 h-9"
                 >
                   {createTicketMutation.isPending
                     ? "Submitting..."
@@ -727,11 +724,11 @@ export default function HelpSupport() {
         {/* Ticket History Section */}
         {tickets.length > 0 && (
           <div className="bg-white border border-gray-200 p-6 shadow-sm">
-            <div className="border-b border-gray-100 pb-3 mb-4">
-              <h2 className="text-base font-bold text-gray-900">
+            <div className="border-b border-gray-100 pb-3.5 mb-5">
+              <h2 className="text-xl font-bold text-gray-900">
                 Your Support Tickets
               </h2>
-              <p className="text-gray-500 text-xs mt-0.5">
+              <p className="text-gray-600 text-sm mt-1">
                 Track and reply to your submitted tickets
               </p>
             </div>
@@ -739,37 +736,37 @@ export default function HelpSupport() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50/50 border-b border-gray-150">
-                    <th className="px-4 py-2.5 text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-700">
                       Ticket ID
                     </th>
-                    <th className="px-4 py-2.5 text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-700">
                       Subject
                     </th>
-                    <th className="px-4 py-2.5 text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-700">
                       Category
                     </th>
-                    <th className="px-4 py-2.5 text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-700">
                       Priority
                     </th>
-                    <th className="px-4 py-2.5 text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-700">
                       Status
                     </th>
-                    <th className="px-4 py-2.5 text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-700">
                       Created At
                     </th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">
                       Action
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {tickets.map((t) => (
-                    <tr key={t._id} className="hover:bg-gray-50/30 text-xs">
-                      <td className="px-4 py-3 font-semibold text-blue-600">
+                    <tr key={t._id} className="hover:bg-gray-50/30 text-sm">
+                      <td className="px-4 py-3.5 font-semibold text-blue-600">
                         #{t._id.slice(-6).toUpperCase()}
                       </td>
                       <td
-                        className="px-4 py-3 font-medium text-gray-800 max-w-xs"
+                        className="px-4 py-3.5 font-medium text-gray-900 max-w-xs"
                         title={t.subject}
                       >
                         <div className="flex items-center gap-1.5">
@@ -779,42 +776,42 @@ export default function HelpSupport() {
                               className="flex items-center gap-0.5 text-gray-400 flex-shrink-0"
                               title={`${t.attachments.length} attachment(s)`}
                             >
-                              <Paperclip className="w-3 h-3" />
-                              <span className="text-[10px]">
+                              <Paperclip className="w-3.5 h-3.5" />
+                              <span className="text-xs">
                                 {t.attachments.length}
                               </span>
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-500 capitalize">
+                      <td className="px-4 py-3.5 text-gray-600 capitalize">
                         {t.category}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3.5">
                         <Badge
                           variant="outline"
-                          className="capitalize text-[10px] scale-95 origin-left font-medium"
+                          className="capitalize text-xs font-medium"
                         >
                           {t.priority}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3.5">
                         <Badge
                           variant="outline"
-                          className="capitalize text-[10px] scale-95 origin-left font-medium bg-slate-50"
+                          className="capitalize text-xs font-medium bg-slate-50"
                         >
                           {t.status.replace(/_/g, " ")}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-gray-400">
+                      <td className="px-4 py-3.5 text-gray-500 text-xs">
                         {new Date(t.createdAt).toLocaleDateString()}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3.5 text-right">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => setSelectedTicket(t)}
-                          className="h-7 text-[11px]"
+                          className="h-8 text-xs font-medium"
                         >
                           View & Reply
                         </Button>
@@ -828,14 +825,14 @@ export default function HelpSupport() {
         )}
 
         {/* Response Policy Section */}
-        <div className="bg-blue-50/50 border border-blue-100 p-5 shadow-sm">
+        <div className="bg-blue-50/50 border border-blue-100 p-6 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
             <div className="flex items-center gap-6">
               <div className="space-y-1">
-                <p className="text-xs font-medium text-blue-600 uppercase tracking-wider">
+                <p className="text-sm font-semibold text-blue-600 uppercase tracking-wider">
                   Response Policy
                 </p>
-                <h3 className="text-base font-bold text-gray-900">
+                <h3 className="text-lg font-bold text-gray-900">
                   We usually respond within
                 </h3>
                 <h2 className="text-4xl font-extrabold text-blue-600 leading-none py-1">
@@ -844,32 +841,32 @@ export default function HelpSupport() {
               </div>
             </div>
 
-            <ul className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-gray-600">
+            <ul className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-700 font-medium">
               <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-blue-500" />
+                <CheckCircle2 className="w-4.5 h-4.5 text-blue-500" />
                 Detailed responses
               </li>
               <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-blue-500" />
+                <CheckCircle2 className="w-4.5 h-4.5 text-blue-500" />
                 Step-by-step solutions
               </li>
               <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-blue-500" />
+                <CheckCircle2 className="w-4.5 h-4.5 text-blue-500" />
                 Personalized support
               </li>
             </ul>
 
-            <div className="flex items-center gap-2.5 md:border-l md:border-blue-100 md:pl-6">
-              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <Mail className="w-4 h-4 text-blue-600" />
+            <div className="flex items-center gap-3 md:border-l md:border-blue-100 md:pl-6">
+              <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <Mail className="w-4.5 h-4.5 text-blue-600" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] text-gray-400">
+                <p className="text-xs text-gray-500 font-medium">
                   Direct Email Support
                 </p>
                 <a
                   href="mailto:support@tasksetu.com"
-                  className="text-xs font-semibold text-blue-600 hover:underline"
+                  className="text-sm font-semibold text-blue-600 hover:underline"
                 >
                   support@tasksetu.com
                 </a>
@@ -877,9 +874,7 @@ export default function HelpSupport() {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Ticket Details Chat Dialog */}
+      </div>      {/* Ticket Details Chat Dialog */}
       {selectedTicket && (
         <Dialog
           open={true}
@@ -890,25 +885,25 @@ export default function HelpSupport() {
               <div className="flex justify-between items-start gap-4 mr-6">
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">
+                    <span className="text-xs font-bold text-blue-600 uppercase tracking-wide">
                       #{selectedTicket._id.slice(-6).toUpperCase()}
                     </span>
                     <span className="text-gray-300">•</span>
-                    <span className="text-[10px] text-gray-500 capitalize">
+                    <span className="text-xs text-gray-500 capitalize font-medium">
                       {selectedTicket.category} Ticket
                     </span>
                   </div>
-                  <DialogTitle className="text-lg font-bold text-gray-900 leading-snug">
+                  <DialogTitle className="text-xl font-bold text-gray-900 leading-snug">
                     {selectedTicket.subject}
                   </DialogTitle>
                 </div>
                 <div className="flex gap-1.5 flex-shrink-0">
-                  <Badge variant="outline" className="capitalize text-[10px]">
+                  <Badge variant="outline" className="capitalize text-xs font-medium">
                     {selectedTicket.priority}
                   </Badge>
                   <Badge
                     variant="outline"
-                    className="capitalize text-[10px] bg-slate-50"
+                    className="capitalize text-xs font-medium bg-slate-50"
                   >
                     {selectedTicket.status.replace(/_/g, " ")}
                   </Badge>
@@ -925,14 +920,14 @@ export default function HelpSupport() {
                 </div>
                 <div className="space-y-1 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-gray-900">
+                    <span className="text-sm font-semibold text-gray-900">
                       {selectedTicket.userName}
                     </span>
-                    <span className="text-[10px] text-gray-400">
+                    <span className="text-xs text-gray-400">
                       {new Date(selectedTicket.createdAt).toLocaleString()}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                     {selectedTicket.message}
                   </p>
 
@@ -940,8 +935,8 @@ export default function HelpSupport() {
                   {selectedTicket.attachments &&
                     selectedTicket.attachments.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-gray-100">
-                        <p className="text-[10px] font-semibold text-gray-500 mb-2 flex items-center gap-1">
-                          <Paperclip className="w-3 h-3" />
+                        <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1">
+                          <Paperclip className="w-3.5 h-3.5" />
                           Attachments ({selectedTicket.attachments.length})
                         </p>
                         <div className="space-y-2">
@@ -982,17 +977,17 @@ export default function HelpSupport() {
                                   href={att.fileUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="group flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-sm px-2 py-1 text-[10px] hover:border-blue-300 hover:bg-blue-50/50 transition-colors"
+                                  className="group flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-sm px-2 py-1 text-xs hover:border-blue-300 hover:bg-blue-50/50 transition-colors"
                                 >
                                   {isImage ? (
-                                    <ImageIcon className="w-3 h-3 text-gray-400" />
+                                    <ImageIcon className="w-3.5 h-3.5 text-gray-400" />
                                   ) : (
-                                    <File className="w-3 h-3 text-gray-400" />
+                                    <File className="w-3.5 h-3.5 text-gray-400" />
                                   )}
-                                  <span className="text-gray-600 font-medium truncate max-w-[100px]">
+                                  <span className="text-gray-700 font-medium truncate max-w-[120px]">
                                     {att.fileName}
                                   </span>
-                                  <span className="text-gray-400">
+                                  <span className="text-gray-400 text-xs">
                                     {att.fileSize < 1024
                                       ? att.fileSize + " B"
                                       : att.fileSize < 1024 * 1024
@@ -1040,14 +1035,14 @@ export default function HelpSupport() {
                       </div>
                       <div className="space-y-1 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-semibold text-gray-900">
+                          <span className="text-sm font-semibold text-gray-900">
                             {response.respondedByName}
                           </span>
-                          <span className="text-[10px] text-gray-400">
+                          <span className="text-xs text-gray-400">
                             {new Date(response.respondedAt).toLocaleString()}
                           </span>
                         </div>
-                        <p className="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                           {response.message}
                         </p>
                       </div>
@@ -1055,7 +1050,7 @@ export default function HelpSupport() {
                   );
                 })
               ) : (
-                <div className="text-center py-2 text-gray-400 text-[11px] italic">
+                <div className="text-center py-2 text-gray-400 text-xs italic">
                   No responses from support yet.
                 </div>
               )}
@@ -1070,7 +1065,7 @@ export default function HelpSupport() {
                     value={userReply}
                     onChange={(e) => setUserReply(e.target.value)}
                     rows={2.5}
-                    className="text-xs resize-none"
+                    className="text-sm text-gray-900 resize-none"
                     disabled={userReplyMutation.isPending}
                   />
                   <div className="flex justify-end gap-2">
@@ -1079,7 +1074,7 @@ export default function HelpSupport() {
                       variant="outline"
                       onClick={() => setSelectedTicket(null)}
                       disabled={userReplyMutation.isPending}
-                      className="h-8 text-xs"
+                      className="h-9 text-sm font-medium"
                     >
                       Close
                     </Button>
@@ -1088,12 +1083,12 @@ export default function HelpSupport() {
                       disabled={
                         userReplyMutation.isPending || !userReply.trim()
                       }
-                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 h-8 flex items-center gap-1"
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 h-9 flex items-center gap-1.5"
                     >
                       {userReplyMutation.isPending
                         ? "Sending..."
                         : "Send Message"}
-                      <Send className="w-3 h-3" />
+                      <Send className="w-3.5 h-3.5" />
                     </Button>
                   </div>
                 </form>
