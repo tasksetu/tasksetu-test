@@ -69,7 +69,8 @@ const createReactQueryHook = (queryKeyPrefix, endpoint) => {
       data: queryResult.data?.data || queryResult.data,
       // Metadata like license from the top level
       license: queryResult.data?.license,
-      loading: queryResult.isLoading || queryResult.isFetching,
+      loading: (queryResult.isLoading || queryResult.isFetching) && !queryResult.data,
+      isFetching: queryResult.isFetching,
       error: queryResult.error,
       refetch: queryResult.refetch,
       filters: effectiveFilters,
