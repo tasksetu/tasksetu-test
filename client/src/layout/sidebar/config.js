@@ -160,6 +160,13 @@ const baseItems = {
       // },
     ],
   },
+  // process builder module
+  processBuilder: {
+    id: "process-builder",
+    label: "Process Builder",
+    icon: Layers,
+    path: "/process-builder",
+  },
   // Settings for employee & manager (view only)
   settingsViewOnly: {
     id: "settings",
@@ -239,6 +246,7 @@ export const sidebarMenus = {
       path: "/reports",
     },
     baseItems.form,
+    baseItems.processBuilder,
     baseItems.settingsViewOnly,
     baseItems.help,
     baseItems.logout,
@@ -259,6 +267,7 @@ export const sidebarMenus = {
       path: "/reports",
     },
     baseItems.form,
+    baseItems.processBuilder,
     baseItems.settingsManagement, // Individual users manage their own subscription
     baseItems.help,
     baseItems.logout,
@@ -280,6 +289,7 @@ export const sidebarMenus = {
       path: "/reports",
     },
     baseItems.form,
+    baseItems.processBuilder,
     baseItems.settingsViewOnly,
     baseItems.help,
     baseItems.logout,
@@ -338,6 +348,7 @@ export const sidebarMenus = {
       ],
     },
     baseItems.form,
+    baseItems.processBuilder,
     baseItems.settingsManagement,
     baseItems.help,
     baseItems.logout,
@@ -396,6 +407,7 @@ export const sidebarMenus = {
       ],
     },
     baseItems.form,
+    baseItems.processBuilder,
     baseItems.settingsManagement,
     baseItems.help,
     baseItems.logout,

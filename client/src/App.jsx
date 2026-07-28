@@ -137,14 +137,12 @@ import RegularTaskManager from "./pages/newComponents/RegularTaskManager";
 import FormLibrary from "./components/forms/FormLibrary";
 import FormBuilder from "./components/forms/FormBuilder";
 import FormVersionHistory from "./components/forms/FormVersionHistory";
+import ProcessBuilderPage from "./pages/ProcessBuilderPage";
 import PublicForm from "./pages/PublicForm";
 import EditProfile from "./pages/EditProfile";
 import HelpSupport from "./pages/HelpSupport";
 import Documentation from "./pages/Documentation";
 import SuperAdminCompanyDetails from "./pages/super-admin/SuperAdminCompanyDetails";
-// import RecurringTaskEdit from "./pages/newComponents/RecurringTaskEdit";
-
-// Using the properly configured queryClient from lib/queryClient.js
 
 // User Role Check Component
 
@@ -698,6 +696,12 @@ function App() {
               <Route path="/form-version-history">
                 <AdminLayout>
                   <ProtectedRoute component={FormVersionHistory} />
+                </AdminLayout>
+              </Route>
+              {/* Process Builder Route */}
+              <Route path="/process-builder">
+                <AdminLayout>
+                  <ProtectedRoute component={ProcessBuilderPage} />
                 </AdminLayout>
               </Route>
               {/* Individual User Task Pages */}
