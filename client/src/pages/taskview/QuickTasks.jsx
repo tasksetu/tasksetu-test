@@ -7,6 +7,15 @@ import { quickTasksAPI } from "../../services/quickTasksAPI";
 import SearchableSelect from "../SearchableSelect";
 import { useShowToast } from "@/utils/ToastMessage";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useTaskStatuses } from "../../hooks/useTaskStatuses";
 import { useTaskPriorities } from "../../hooks/useTaskPriorities";
 import {
@@ -40,6 +49,7 @@ import {
   RotateCw,
   AlertTriangle,
   Loader,
+  ListTodo,
 } from "lucide-react";
 import CommonLoader from "@/components/common/CommonLoader";
 
@@ -77,6 +87,8 @@ export default function QuickTasks() {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState("");
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [showInlineForm, setShowInlineForm] = useState(false);
 
   // API States
@@ -112,14 +124,21 @@ export default function QuickTasks() {
   const { data: taskPriorities = [] } = useTaskPriorities();
 
   const activePriorities = useMemo(() => {
-    return getPriorityOptions(taskPriorities);
+    const options = getPriorityOptions(taskPriorities);
+    return options.filter((p) => {
+      const val = (p.value || p.code || p.label || "").toLowerCase();
+      return val !== "critical" && val !== "urgent";
+    });
   }, [taskPriorities]);
 
   // Set default priority when taskPriorities load
   useEffect(() => {
     if (taskPriorities.length > 0 && !newTaskPriority) {
       const defaultCode = getDefaultPriorityCode(taskPriorities);
-      setNewTaskPriority(defaultCode);
+      const isExcluded = ["critical", "urgent"].includes(
+        (defaultCode || "").toLowerCase()
+      );
+      setNewTaskPriority(isExcluded ? "medium" : defaultCode);
     }
   }, [taskPriorities, newTaskPriority]);
 
@@ -141,7 +160,11 @@ export default function QuickTasks() {
   }, [taskStatuses]);
 
   const quickTaskPriorityOptions = useMemo(() => {
-    return getPriorityOptions(taskPriorities, true); // true = include "All" option
+    const options = getPriorityOptions(taskPriorities, true); // true = include "All" option
+    return options.filter((p) => {
+      const val = (p.value || p.code || p.label || "").toLowerCase();
+      return val !== "critical" && val !== "urgent";
+    });
   }, [taskPriorities]);
 
   // Auth guard: redirect to login if no token
@@ -230,12 +253,13 @@ export default function QuickTasks() {
 
   // Handle quick task creation
   const handleCreateQuickTask = async () => {
-    if (!newTaskTitle.trim()) {
-      showErrorToast("Task title is required");
+    if (!newTaskTitle.trim() || isCreating) {
+      if (!newTaskTitle.trim()) showErrorToast("Task title is required");
       return;
     }
 
     try {
+      setIsCreating(true);
       console.log("🚀 Creating Quick Task...");
       const taskData = {
         title: newTaskTitle.trim(),
@@ -284,6 +308,8 @@ export default function QuickTasks() {
       }
 
       showErrorToast(error.message || "Failed to create quick task");
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -375,12 +401,13 @@ export default function QuickTasks() {
   };
 
   const handleEditModalSave = async () => {
-    if (!editTaskTitle.trim()) {
-      showErrorToast("Task title is required");
+    if (!editTaskTitle.trim() || isUpdating) {
+      if (!editTaskTitle.trim()) showErrorToast("Task title is required");
       return;
     }
 
     try {
+      setIsUpdating(true);
       const response = await quickTasksAPI.updateQuickTask(editModalTask.id, {
         title: editTaskTitle.trim(),
         priority: editTaskPriority,
@@ -407,6 +434,8 @@ export default function QuickTasks() {
     } catch (error) {
       console.error("Error updating quick task:", error);
       showErrorToast("Failed to update task");
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -644,319 +673,285 @@ export default function QuickTasks() {
       </div>
 
       {/* Create Quick Task Modal */}
-      {showCreateModal && (
-        <div
-          className="modal-overlay"
-          onClick={() => {
+      <Dialog
+        open={showCreateModal}
+        onOpenChange={(open) => {
+          if (!open && !isCreating) {
             setShowCreateModal(false);
             setNewTaskTitle("");
-            setNewTaskPriority("medium");
+            setNewTaskPriority(getDefaultPriorityCode(taskPriorities));
             setNewTaskDueDate("");
-          }}
-        >
-          <div
-            className="modal-container max-w-2xl"
-            onClick={(e) => e.stopPropagation()}
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col bg-white text-gray-900 border-gray-200 shadow-xl p-0 overflow-hidden rounded-md">
+          <DialogHeader className="px-6 pt-3.5 pb-2 border-b border-gray-200 bg-gray-50/80">
+            <DialogTitle
+              className="text-xl font-normal text-gray-800 flex items-center gap-2"
+              style={{ color: "#676a6c" }}
+            >
+              <ListTodo className="w-5 h-5 text-indigo-600" />
+              Add Quick Task
+            </DialogTitle>
+          </DialogHeader>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateQuickTask();
+            }}
+            className="flex-1 overflow-y-auto px-6 pt-3 pb-4 space-y-3.5"
           >
-            {/* Header */}
-            <div className="modal-header" style={{ background: "#4f46e5" }}>
-              <div className="modal-title-section">
-                <div className="modal-icon">
-                  <Plus size={20} />
-                </div>
-                <div>
-                  <h3>Add Quick Task</h3>
-                  <p>Create a personal quick task</p>
-                </div>
+            {/* Task Title */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor="newTaskTitle"
+                  className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
+                >
+                  Task Title <span className="text-red-500">*</span>
+                </Label>
+                <span className="text-xs text-gray-400">
+                  {newTaskTitle.length}/200
+                </span>
               </div>
+              <Input
+                id="newTaskTitle"
+                type="text"
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                placeholder="What needs to be done?"
+                className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500 text-sm !h-8"
+                style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
+                maxLength={200}
+                autoFocus
+              />
+            </div>
+
+            {/* Row: Priority & Due Date */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="newTaskPriority"
+                  className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
+                >
+                  Priority <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  id="newTaskPriority"
+                  value={newTaskPriority}
+                  onChange={(e) => setNewTaskPriority(e.target.value)}
+                  className="flex h-8 w-full rounded-sm border border-gray-300 bg-white px-3 py-1 text-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900"
+                  style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
+                >
+                  {(activePriorities.length
+                    ? activePriorities
+                    : [
+                        { value: "low", label: "Low" },
+                        { value: "medium", label: "Medium" },
+                        { value: "high", label: "High" },
+                      ]
+                  ).map((p) => (
+                    <option
+                      key={p._id || p.value || p.code}
+                      value={p.value || p.code}
+                    >
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="newTaskDueDate"
+                  className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
+                >
+                  Due Date
+                </Label>
+                <Input
+                  id="newTaskDueDate"
+                  type="date"
+                  value={newTaskDueDate}
+                  onChange={(e) => setNewTaskDueDate(e.target.value)}
+                  className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500 text-sm !h-8"
+                  style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
+                  min={new Date().toISOString().split("T")[0]}
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="p-4 px-6 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-2.5">
               <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-sm text-white hover:bg-white/10 hover:text-black"
+                type="button"
+                variant="outline"
                 onClick={() => {
                   setShowCreateModal(false);
                   setNewTaskTitle("");
-                  setNewTaskPriority("medium");
+                  setNewTaskPriority(
+                    getDefaultPriorityCode(taskPriorities),
+                  );
                   setNewTaskDueDate("");
                 }}
+                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium h-8 px-4 rounded-sm"
+                style={{ height: "32px", minHeight: "32px" }}
               >
-                <Plus size={20} style={{ transform: "rotate(45deg)" }} />
+                Cancel
               </Button>
-            </div>
-
-            {/* Form */}
-            <div className="modal-body">
-              <div className="form-card">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleCreateQuickTask();
-                  }}
-                  className="space-y-3"
-                >
-                  {/* Task Title */}
-                  <div className="form-group">
-                    <label className="form-label flex justify-between">
-                      <div className="flex">
-                        <Plus size={16} /> <span>Task Title</span>
-                      </div>
-                      <span className="text-gray-500">
-                        {newTaskTitle.length}/200
-                      </span>
-                    </label>
-                    <input
-                      type="text"
-                      value={newTaskTitle}
-                      onChange={(e) => setNewTaskTitle(e.target.value)}
-                      placeholder="What needs to be done?"
-                      className="form-input h-8 min-h-8 max-h-8 box-border py-0 rounded-sm leading-none"
-                      maxLength={200}
-                      onKeyPress={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          // Form onSubmit will handle the API call
-                        }
-                      }}
-                      autoFocus
-                    />
-                  </div>
-
-                  {/* Row: Priority & Due Date */}
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label className="form-label">
-                        <AlertTriangle size={16} />
-                        Priority
-                      </label>
-                      <select
-                        value={newTaskPriority}
-                        onChange={(e) => setNewTaskPriority(e.target.value)}
-                        className="form-select h-8 min-h-8 max-h-8 box-border py-0 rounded-sm leading-none"
-                      >
-                        {(activePriorities.length
-                          ? activePriorities
-                          : [
-                              { value: "low", label: "Low" },
-                              { value: "medium", label: "Medium" },
-                              { value: "high", label: "High" },
-                            ]
-                        ).map((p) => (
-                          <option
-                            key={p._id || p.value || p.code}
-                            value={p.value || p.code}
-                          >
-                            {p.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">
-                        <Calendar size={16} />
-                        Due Date
-                      </label>
-                      <input
-                        type="date"
-                        value={newTaskDueDate}
-                        onChange={(e) => setNewTaskDueDate(e.target.value)}
-                        className="form-input h-8 min-h-8 max-h-8 box-border py-0 rounded-sm leading-none"
-                        min={new Date().toISOString().split("T")[0]}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="form-actions flex justify-between">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-8 rounded-sm"
-                      onClick={() => {
-                        setShowCreateModal(false);
-                        setNewTaskTitle("");
-                        setNewTaskPriority(
-                          getDefaultPriorityCode(taskPriorities),
-                        );
-                        setNewTaskDueDate("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      className="h-8 rounded-sm"
-                      disabled={!newTaskTitle.trim()}
-                    >
-                      Create Quick Task
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+              <Button
+                type="submit"
+                disabled={!newTaskTitle.trim() || isCreating}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium h-8 px-4 rounded-sm shadow-sm disabled:opacity-50"
+                style={{ height: "32px", minHeight: "32px" }}
+              >
+                {isCreating ? "Creating..." : "Create Quick Task"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Quick Task Modal */}
-      {showEditModal && editModalTask && (
-        <div
-          className="modal-overlay"
-          onClick={() => {
+      <Dialog
+        open={showEditModal && !!editModalTask}
+        onOpenChange={(open) => {
+          if (!open && !isUpdating) {
             setShowEditModal(false);
             setEditModalTask(null);
             setEditTaskTitle("");
             setEditTaskPriority(getDefaultPriorityCode(taskPriorities));
             setEditTaskDueDate("");
-          }}
-        >
-          <div
-            className="modal-container max-w-2xl"
-            onClick={(e) => e.stopPropagation()}
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col bg-white text-gray-900 border-gray-200 shadow-xl p-0 overflow-hidden rounded-md">
+          <DialogHeader className="px-6 pt-3.5 pb-2 border-b border-gray-200 bg-gray-50/80">
+            <DialogTitle
+              className="text-xl font-normal text-gray-800 flex items-center gap-2"
+              style={{ color: "#676a6c" }}
+            >
+              <Edit3 className="w-5 h-5 text-indigo-600" />
+              Edit Quick Task
+            </DialogTitle>
+          </DialogHeader>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleEditModalSave();
+            }}
+            className="flex-1 overflow-y-auto px-6 pt-3 pb-4 space-y-3.5"
           >
-            {/* Header */}
-            <div className="modal-header" style={{ background: "#4f46d6" }}>
-              <div className="modal-title-section">
-                <div className="modal-icon">
-                  <Edit3 size={20} />
-                </div>
-                <div>
-                  <h3>Edit Quick Task</h3>
-                  <p>Update your quick task details</p>
-                </div>
+            {/* Task Title */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor="editTaskTitle"
+                  className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
+                >
+                  Task Title <span className="text-red-500">*</span>
+                </Label>
+                <span className="text-xs text-gray-400">
+                  {editTaskTitle.length}/200
+                </span>
               </div>
+              <Input
+                id="editTaskTitle"
+                type="text"
+                value={editTaskTitle}
+                onChange={(e) => setEditTaskTitle(e.target.value)}
+                placeholder="What needs to be done?"
+                className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500 text-sm !h-8"
+                style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
+                maxLength={200}
+                autoFocus
+              />
+            </div>
+
+            {/* Row: Priority & Due Date */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="editTaskPriority"
+                  className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
+                >
+                  Priority <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  id="editTaskPriority"
+                  value={editTaskPriority}
+                  onChange={(e) => setEditTaskPriority(e.target.value)}
+                  className="flex h-8 w-full rounded-sm border border-gray-300 bg-white px-3 py-1 text-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900"
+                  style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
+                >
+                  {(activePriorities.length
+                    ? activePriorities
+                    : [
+                        { value: "low", label: "Low" },
+                        { value: "medium", label: "Medium" },
+                        { value: "high", label: "High" },
+                      ]
+                  ).map((p) => (
+                    <option
+                      key={p._id || p.value || p.code}
+                      value={p.value || p.code}
+                    >
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="editTaskDueDate"
+                  className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
+                >
+                  Due Date
+                </Label>
+                <Input
+                  id="editTaskDueDate"
+                  type="date"
+                  value={editTaskDueDate}
+                  onChange={(e) => setEditTaskDueDate(e.target.value)}
+                  className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500 text-sm !h-8"
+                  style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
+                  min={new Date().toISOString().split("T")[0]}
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="p-4 px-6 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-2.5">
               <Button
-                variant="ghost"
-                size="icon"
+                type="button"
+                variant="outline"
+                disabled={isUpdating}
                 onClick={() => {
                   setShowEditModal(false);
                   setEditModalTask(null);
                   setEditTaskTitle("");
-                  setEditTaskPriority(getDefaultPriorityCode(taskPriorities));
+                  setEditTaskPriority(
+                    getDefaultPriorityCode(taskPriorities)
+                  );
                   setEditTaskDueDate("");
                 }}
+                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium h-8 px-4 rounded-sm"
+                style={{ height: "32px", minHeight: "32px" }}
               >
-                <Plus size={20} style={{ transform: "rotate(45deg)" }} />
+                Cancel
               </Button>
-            </div>
-
-            {/* Form */}
-            <div className="modal-body">
-              <div className="form-card">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleEditModalSave();
-                  }}
-                  className="space-y-3"
-                >
-                  {/* Task Title */}
-                  <div className="form-group">
-                    <label className="form-label flex justify-between">
-                      <div className="flex ">
-                        <Edit3 size={16} />
-                        Task Title
-                      </div>
-                      <span className="text-gray-500">
-                        {editTaskTitle.length}/200
-                      </span>
-                    </label>
-                    <input
-                      type="text"
-                      value={editTaskTitle}
-                      onChange={(e) => setEditTaskTitle(e.target.value)}
-                      placeholder="What needs to be done?"
-                      className="form-input h-8 min-h-8 max-h-8 box-border py-0 rounded-sm leading-none"
-                      maxLength={200}
-                      onKeyPress={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          // Form onSubmit will handle the API call
-                        }
-                      }}
-                      autoFocus
-                    />
-                  </div>
-
-                  {/* Row: Priority & Due Date */}
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label className="form-label">
-                        <AlertTriangle size={16} />
-                        Priority
-                      </label>
-                      <select
-                        value={editTaskPriority}
-                        onChange={(e) => setEditTaskPriority(e.target.value)}
-                        className="form-select h-8 min-h-8 max-h-8 box-border py-0 rounded-sm leading-none"
-                      >
-                        {(activePriorities.length
-                          ? activePriorities
-                          : [
-                              { value: "low", label: "Low" },
-                              { value: "medium", label: "Medium" },
-                              { value: "high", label: "High" },
-                            ]
-                        ).map((p) => (
-                          <option
-                            key={p._id || p.value || p.code}
-                            value={p.value || p.code}
-                          >
-                            {p.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">
-                        <Calendar size={16} />
-                        Due Date
-                      </label>
-                      <input
-                        type="date"
-                        value={editTaskDueDate}
-                        onChange={(e) => setEditTaskDueDate(e.target.value)}
-                        className="form-input h-8 min-h-8 max-h-8 box-border py-0 rounded-sm leading-none"
-                        min={new Date().toISOString().split("T")[0]}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="form-actions flex justify-between">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-8 rounded-sm"
-                      onClick={() => {
-                        setShowEditModal(false);
-                        setEditModalTask(null);
-                        setEditTaskTitle("");
-                        setEditTaskPriority(
-                          getDefaultPriorityCode(taskPriorities),
-                        );
-                        setEditTaskDueDate("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      className="h-8 rounded-sm"
-                      disabled={!editTaskTitle.trim()}
-                    >
-                      Save Changes
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+              <Button
+                type="submit"
+                disabled={!editTaskTitle.trim() || isUpdating}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium h-8 px-4 rounded-sm shadow-sm disabled:opacity-50"
+                style={{ height: "32px", minHeight: "32px" }}
+              >
+                {isUpdating ? "Updating..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Search and Filters */}
       <div className="shrink-0 flex flex-wrap bg-white rounded-sm shadow-sm border border-gray-200 p-1.5 mb-3 gap-2">
