@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { storage } from "../mongodb-storage.js";
-const JWT_SECRET = process.env.JWT_SECRET;
+
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
 // Role hierarchy: super_admin > org_admin > employee > individual
 const ROLE_HIERARCHY = {
@@ -22,33 +23,12 @@ export const authenticateToken = async (req, res, next) => {
 
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    console.log("🔐 Token decoded, user ID:", decoded.id);
-
-    // Get fresh user data to ensure role/organization info is current
     const user = await storage.getUser(decoded.id);
 
     if (!user || !user.isActive) {
       console.log("Auth middleware - User invalid or inactive");
       return res.status(401).json({ error: "Invalid or inactive user" });
     }
-
-    console.log("🔍 Auth middleware - User from DB:", {
-      _id: user._id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-    });
-
-    console.log("✅ User authenticated:", {
-      id: user._id,
-      _id: user._id,
-      email: user.email,
-      firstName: user.firstName || '',
-      lastName: user.lastName || '',
-      role: user.role,
-      orgId: user.organization_id
-    });
 
     req.user = {
       id: user._id,
@@ -67,8 +47,6 @@ export const authenticateToken = async (req, res, next) => {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
-
-    console.log("✅ Auth middleware - req.user:", req.user);
 
     next();
   } catch (error) {
@@ -114,7 +92,7 @@ export const requireRole = (allowedRoles) => {
 
     const userRole = req.user.role;
 
-    console.log('allowed role', userRole, allowedRoles)
+    // console.log('allowed role', userRole, allowedRoles)
     if (userRole.some(role => allowedRoles.includes(role))) {
       return next();
     }

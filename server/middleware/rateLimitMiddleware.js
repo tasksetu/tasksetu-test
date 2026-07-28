@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 /**
  * Rate Limiting Middleware for API Protection
@@ -37,12 +37,11 @@ export const formSubmitLimiter = rateLimit({
   // Key by IP + form_id to prevent abuse of specific forms
   keyGenerator: (req) => {
     const formId = req.params.form_id || 'unknown';
-    const clientIp = req.ip || 'unknown'; // Use standard Express req.ip
-    return `${clientIp}:${formId}`;
+    const ip = ipKeyGenerator(req); // Use helper for IPv6 support
+    return `${ip}:${formId}`;
   },
   // Don't count successful submissions towards the limit (only errors)
   skipSuccessfulRequests: true,
-  validate: { keyGeneratorIpFallback: false },
 });
 
 // Moderate limiter for form creation/updates
@@ -74,9 +73,8 @@ export const formPublishLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     // Key by user ID (if authenticated) or IP
-    return req.user?.id || req.ip || 'unknown'; // Fallback to IP if unauthenticated
+    return req.user?.id || ipKeyGenerator(req); // Use helper for IPv6 support
   },
-  validate: { keyGeneratorIpFallback: false },
 });
 
 // Moderate limiter for delete operations

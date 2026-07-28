@@ -671,7 +671,7 @@ export default function TeamMembers() {
                   <SelectItem value="org_admin">
                     <div className="flex items-center gap-2">
                       <Crown className="h-3 w-3 text-yellow-600" />
-                      Org_admin
+                      Org Admin
                     </div>
                   </SelectItem>
                   <SelectItem value="employee">

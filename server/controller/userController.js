@@ -18,7 +18,6 @@ export const getEmployeesByOrganization = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(organizationId)) {
       return res.status(400).json({ message: "Invalid organization ID" });
     }
-    console.log("?????odaata", organizationId);
     const data = await User.aggregate([
       {
         $match: {
@@ -137,9 +136,6 @@ export const removeUser = async (req, res) => {
 
       // Method 1: Find by user's license_instance_id field
       if (user.license_instance_id) {
-        console.log(
-          `🔑 Finding license instance by user.license_instance_id: ${user.license_instance_id}`,
-        );
         licenseInstance = await LicenseInstance.findById(
           user.license_instance_id,
         );
@@ -147,9 +143,6 @@ export const removeUser = async (req, res) => {
 
       // Method 2: Fallback - find by assigned_to field in LicenseInstance
       if (!licenseInstance) {
-        console.log(
-          `🔍 Searching for license instance assigned to user ${user._id}`,
-        );
         licenseInstance = await LicenseInstance.findOne({
           assigned_to: user._id,
           status: "ASSIGNED",
@@ -157,16 +150,13 @@ export const removeUser = async (req, res) => {
       }
 
       if (licenseInstance) {
-        console.log(
-          `🔑 Releasing license instance ${licenseInstance._id} (${licenseInstance.license_code}) from user ${user.email}`,
-        );
         licenseInstance.assigned_to = null;
         licenseInstance.status = "AVAILABLE";
         licenseInstance.released_at = new Date();
         await licenseInstance.save();
-        console.log(`✅ License instance released back to pool`);
+        // console.log(`✅ License instance released back to pool`);
       } else {
-        console.log("ℹ️ User has no license instance assigned");
+        // console.log("ℹ️ User has no license instance assigned");
       }
     } catch (licenseError) {
       console.error(
@@ -178,9 +168,6 @@ export const removeUser = async (req, res) => {
 
     // Release seat if user has one assigned (legacy support)
     if (user.seat_assigned === true) {
-      console.log(
-        `🎫 Releasing seat #${user.seat_number} from user ${user.email}`,
-      );
 
       try {
         await seatManagementService.releaseSeatFromUser(
@@ -189,7 +176,7 @@ export const removeUser = async (req, res) => {
           req.user.id,
           "User removed from organization",
         );
-        console.log(`✅ Seat released successfully`);
+        // console.log(`✅ Seat released successfully`);
       } catch (seatError) {
         console.error("❌ Error releasing seat:", seatError.message);
         // Continue with user deletion even if seat release fails
@@ -286,7 +273,7 @@ export const getUsersByOrg = async (req, res) => {
     const baseQuery = {
       organization_id: orgId,
     };
-    console.log("Base Query:", baseQuery);
+    // console.log("Base Query:", baseQuery);
     // If searching, extend with OR conditions
     const searchQuery = search
       ? {
@@ -395,17 +382,6 @@ export const updateUser = async (req, res) => {
       license_code,
     } = req.body;
 
-    console.log(`📝 updateUser called for userId: ${userId}`);
-    console.log(`📦 Request body:`, {
-      firstName,
-      lastName,
-      role,
-      designation,
-      department,
-      location,
-      license_code,
-    });
-
     // Find user first to check current license
     const user = await User.findById(userId);
     if (!user) {
@@ -415,33 +391,12 @@ export const updateUser = async (req, res) => {
       });
     }
 
-    console.log(
-      `👤 Found user: ${user.email}, isPrimaryAdmin: ${user.isPrimaryAdmin}`,
-    );
-    console.log(`📋 User license info:`, {
-      assigned_license: user.assigned_license,
-      license_code: user.license_code,
-      license_instance_id: user.license_instance_id,
-    });
-
     const organizationId = user.organizationId || user.organization_id;
     const currentLicenseCode = user.license_code;
     const isPrimaryAdmin = user.isPrimaryAdmin === true;
 
-    console.log(
-      `🔐 isPrimaryAdmin check: user.isPrimaryAdmin = ${user.isPrimaryAdmin}, evaluated as: ${isPrimaryAdmin}`,
-    );
-    console.log(
-      `📊 License comparison: requested "${license_code}" vs current "${currentLicenseCode}", same? ${license_code === currentLicenseCode}`,
-    );
-
     // Handle license change if provided and different (license_code is optional)
     if (license_code !== undefined && license_code !== currentLicenseCode) {
-      console.log(
-        `🔄 License change requested: ${currentLicenseCode} -> ${license_code}`,
-      );
-      console.log(`👤 User isPrimaryAdmin: ${isPrimaryAdmin}`);
-
       const { default: LicenseInstance } =
         await import("../modals/licenseInstanceModal.js");
       const { default: OrganizationLicensePurchase } =
@@ -478,10 +433,6 @@ export const updateUser = async (req, res) => {
               { $inc: { seats_used: -1 } },
             );
           }
-
-          console.log(
-            `✅ Released ${currentLicenseCode} instance and decremented seats_used`,
-          );
         }
       }
 
@@ -494,13 +445,8 @@ export const updateUser = async (req, res) => {
         }).sort({ created_at: 1 });
 
         if (!availableInstance) {
-          // 🆕 PRIMARY ADMIN SPECIAL HANDLING:
           // Primary admin can assign any license to themselves even if no pool licenses are available
           if (isPrimaryAdmin) {
-            console.log(
-              `🔑 Primary Admin bypass: Assigning ${license_code} without pool instance`,
-            );
-
             // Update user with the license directly
             user.assigned_license = {
               license_code: license_code,
@@ -511,10 +457,6 @@ export const updateUser = async (req, res) => {
             user.license_instance_id = null;
             user.seat_assigned = true;
             user.seat_number = null;
-
-            console.log(
-              `✅ Primary Admin: Assigned ${license_code} directly to user ${userId}`,
-            );
           } else {
             return res.status(400).json({
               status: 400,
@@ -546,14 +488,8 @@ export const updateUser = async (req, res) => {
           user.license_instance_id = availableInstance._id;
           user.seat_assigned = true;
           user.seat_number = availableInstance.seat_number;
-
-          console.log(`✅ Assigned ${license_code} instance to user ${userId}`);
         }
       } else {
-        // Clear assignment - back to EXPLORE or no license
-        console.log(
-          `🔄 Clearing license assignment for user (Setting to ${license_code || "EXPLORE"})`,
-        );
         user.assigned_license = null;
         user.license_instance_id = null;
         user.license_code = license_code || "EXPLORE";
@@ -624,10 +560,6 @@ export const updateUserStatus = async (req, res) => {
 
     // Release seat if user is being deactivated and has a seat assigned
     if (status === "inactive" && user.seat_assigned === true) {
-      console.log(
-        `🎫 Releasing seat #${user.seat_number} from deactivated user ${user.email}`,
-      );
-
       try {
         await seatManagementService.releaseSeatFromUser(
           user.organization_id.toString(),
@@ -635,7 +567,7 @@ export const updateUserStatus = async (req, res) => {
           req.user.id,
           "User deactivated",
         );
-        console.log(`✅ Seat released successfully`);
+        // console.log(`✅ Seat released successfully`);
       } catch (seatError) {
         console.error("❌ Error releasing seat:", seatError.message);
         // Continue with status update even if seat release fails
@@ -814,7 +746,7 @@ export const sendInvite = async (req, res) => {
     }
 
     // Send invite email with extended parameters
-    console.log(`📧 [INVITE] Attempting to send email to ${user.email}`);
+    // console.log(`📧 [INVITE] Attempting to send email to ${user.email}`);
 
     let emailResult = { success: false, reason: "Unknown failure" };
     try {
@@ -896,14 +828,6 @@ export const searchAssignableUsers = async (req, res) => {
         message: "Unauthorized - user not authenticated",
       });
     }
-
-    console.log("🔍 Search Assignable Users - Current User:", {
-      id: currentUser.id,
-      role: currentUser.role,
-      activeRole: activeRole,
-      organizationId: currentUser.organizationId,
-    });
-
     // Build base query
     let query = {
       status: "active",
@@ -934,11 +858,11 @@ export const searchAssignableUsers = async (req, res) => {
       .limit(parseInt(limit) * 2)
       .lean();
 
-    console.log("📋 users details fetched before filtering:", users);
+    // console.log("📋 users details fetched before filtering:", users);
 
     // Get hierarchy relationships where current user is manager
     const { OrganizationHierarchy } = await import("../models.js");
-    console.log("📊 Current User OrganizationId:", currentUser.organizationId);
+    // console.log("📊 Current User OrganizationId:", currentUser.organizationId);
     const hierarchyRelations = await OrganizationHierarchy.find({
       organization_id: currentUser.organizationId,
       status: "active",
@@ -946,7 +870,7 @@ export const searchAssignableUsers = async (req, res) => {
       .select("manager reporty organization_id")
       .lean();
 
-    console.log("📊 Hierarchy Relations:", hierarchyRelations);
+    // console.log("📊 Hierarchy Relations:", hierarchyRelations);
 
     // Build a map: managerId -> Set of employeeIds who report to them
     const managerToEmployees = new Map();
@@ -960,16 +884,6 @@ export const searchAssignableUsers = async (req, res) => {
     });
 
     const currentUserId = String(currentUser.id);
-    console.log(
-      "📊 Manager to Employees Map:",
-      JSON.stringify(
-        Array.from(managerToEmployees.entries()).map(([k, v]) => ({
-          manager: k,
-          employees: Array.from(v),
-        })),
-      ),
-    );
-    console.log("📊 Current User ID (string):", currentUserId);
 
     // Get current user's roles (could be array)
     const userRoles = Array.isArray(currentUser.role)
@@ -977,21 +891,10 @@ export const searchAssignableUsers = async (req, res) => {
       : [currentUser.role];
 
     // Determine the effective role to apply restrictions
-    // Priority: activeRole from query > highest role from user's roles
     let effectiveRole =
       activeRole && userRoles.includes(activeRole)
         ? activeRole
         : getHighestRole(userRoles);
-
-    console.log("👤 Current User Roles Analysis:", {
-      allRoles: userRoles,
-      activeRoleFromQuery: activeRole,
-      effectiveRole: effectiveRole,
-      roleSource:
-        activeRole && userRoles.includes(activeRole)
-          ? "Active Role (from RoleSwitcher)"
-          : "Highest Role (auto-detected)",
-    });
 
     // Check effective role type for filtering
     const isOrgAdminRole =
@@ -1002,31 +905,12 @@ export const searchAssignableUsers = async (req, res) => {
     const isEmployeeRole =
       effectiveRole === "employee" || effectiveRole === "individual";
 
-    console.log("🎯 Effective Role Type:", {
-      isOrgAdminRole,
-      isManagerRole,
-      isEmployeeRole,
-    });
-
     // Filter users based on assignment rules
     let filteredUsers = users;
 
-    // ROLE-BASED FILTERING based on EFFECTIVE ROLE (Active Role from RoleSwitcher)
-    // This respects the currently active role selected by the user
-
     if (isOrgAdminRole) {
-      // ORG ADMIN / ADMIN / SUPERADMIN RULES:
-      // Can assign to anyone - no restrictions
-      console.log("✅ Acting as Org Admin - No assignment restrictions");
       filteredUsers = users;
     } else if (isManagerRole) {
-      // MANAGER RULES:
-      // 1. Can assign to employees in their reporting hierarchy (from OrganizationHierarchy)
-      // 2. Can assign to managers that this manager reports to (their own manager)
-      // 3. CANNOT assign to org_admin or admin (blocked by default)
-
-      console.log("🔍 Acting as Manager - Applying assignment restrictions...");
-
       const currentUserId = String(currentUser.id);
       const employeesUnderManager =
         managerToEmployees.get(currentUserId) || new Set();
@@ -1040,15 +924,6 @@ export const searchAssignableUsers = async (req, res) => {
         }
       });
 
-      console.log(
-        `📊 Employees under current manager (${currentUserId}):`,
-        Array.from(employeesUnderManager),
-      );
-      console.log(
-        `📊 Managers of current manager (${currentUserId}):`,
-        Array.from(myManagers),
-      );
-
       filteredUsers = users.filter((user) => {
         const userId = String(user._id);
         const targetRoles = Array.isArray(user.role) ? user.role : [user.role];
@@ -1057,40 +932,20 @@ export const searchAssignableUsers = async (req, res) => {
           targetRoles.includes("admin") ||
           targetRoles.includes("super_admin");
 
-        console.log(`   Checking user: ${user.email}`, {
-          userId: userId,
-          roles: targetRoles,
-          isInEmployees: employeesUnderManager.has(userId),
-          isMyManager: myManagers.has(userId),
-        });
-
         // Block assignment to users with org_admin/admin role
         if (targetHasOrgAdmin) {
-          console.log(
-            `   ❌ Manager cannot assign to: ${user.email} (has Org Admin role)`,
-          );
           return false;
         }
 
         // Allow employees who report to this manager
         if (employeesUnderManager.has(userId)) {
-          console.log(
-            `   ✅ Manager can assign to: ${user.email} (reports to this manager)`,
-          );
           return true;
         }
 
         // Allow managers that this manager reports to
         if (myManagers.has(userId)) {
-          console.log(
-            `   ✅ Manager can assign to: ${user.email} (this user's manager)`,
-          );
           return true;
         }
-
-        console.log(
-          `   ❌ Manager cannot assign to: ${user.email} (not in hierarchy)`,
-        );
         return false;
       });
     } else if (isEmployeeRole) {
@@ -1098,20 +953,10 @@ export const searchAssignableUsers = async (req, res) => {
       const isIndividualRole = effectiveRole === "individual";
 
       if (isIndividualRole) {
-        // INDIVIDUAL RULES: Can only assign to self
-        console.log("🔍 Acting as Individual - Can ONLY assign to self");
-        filteredUsers = []; // No other users can be assigned to
+        filteredUsers = [];
       } else {
-        // EMPLOYEE RULES: Can only assign to self and peer employees in same reporting hierarchy
-        console.log(
-          "🔍 Acting as Employee - Applying assignment restrictions...",
-        );
-
-        // Get employees who share the same manager (based on hierarchy)
         const currentUserId = currentUser.id;
         const employeesUnderSameManager = new Set();
-
-        // Find all hierarchy entries where current user is the reporty (employee under a manager)
         hierarchyRelations.forEach((rel) => {
           const reportyId = rel.reporty.toString();
           const managerId = rel.manager.toString();
@@ -1125,11 +970,6 @@ export const searchAssignableUsers = async (req, res) => {
             }
           }
         });
-
-        console.log(
-          `📊 Employees under same manager as current user:`,
-          Array.from(employeesUnderSameManager),
-        );
 
         filteredUsers = users.filter((user) => {
           const userId = user._id.toString();
@@ -1150,32 +990,18 @@ export const searchAssignableUsers = async (req, res) => {
             // Check if this employee shares the same manager
             const sharesSameManager = employeesUnderSameManager.has(userId);
             if (sharesSameManager) {
-              console.log(
-                `   ✅ Employee can assign to: ${user.email} (Peer employee - same manager)`,
-              );
               return true;
             } else {
-              console.log(
-                `   ❌ Employee cannot assign to: ${user.email} (Different manager hierarchy)`,
-              );
               return false;
             }
           }
-
-          console.log(
-            `   ❌ Employee cannot assign to: ${user.email} (Has manager/admin role)`,
-          );
           return false;
         });
       }
     }
 
-    console.log("✅ Filtered users count:", filteredUsers.length);
-
-    // Limit results
     filteredUsers = filteredUsers.slice(0, parseInt(limit));
 
-    // Format users for react-select
     const formattedUsers = filteredUsers.map((user) => ({
       value: user._id.toString(),
       label:
@@ -1199,6 +1025,7 @@ export const searchAssignableUsers = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: allOptions,
+      users: allOptions,
       total: allOptions.length,
       message: `Found ${allOptions.length} assignable users`,
     });
@@ -1248,7 +1075,7 @@ function getHighestRole(roles) {
 //  */
 export const bulkUploadUsers = async (req, res) => {
   try {
-    console.log("📤 Bulk upload request received");
+    // console.log("📤 Bulk upload request received");
 
     // Check if file is uploaded
     if (!req.file) {
@@ -1261,7 +1088,7 @@ export const bulkUploadUsers = async (req, res) => {
     const file = req.file;
     const organizationId = req.user.organizationId;
 
-    console.log("📄 File received:", file.originalname, file.mimetype);
+    // console.log("📄 File received:", file.originalname, file.mimetype);
 
     // Parse CSV/Excel file
     let users = [];
@@ -1314,7 +1141,7 @@ export const bulkUploadUsers = async (req, res) => {
       });
     }
 
-    console.log(`📊 Parsed ${users.length} users from file`);
+    // console.log(`📊 Parsed ${users.length} users from file`);
 
     // Process and insert users
     const results = {
@@ -1416,10 +1243,6 @@ export const bulkUploadUsers = async (req, res) => {
       }
     }
 
-    console.log(
-      `✅ Bulk upload completed: ${results.successful} successful, ${results.failed} failed`,
-    );
-
     return res.status(200).json({
       success: true,
       message: `Bulk upload completed: ${results.successful} users added, ${results.failed} failed`,
@@ -1445,7 +1268,7 @@ export const resetUserPassword = async (req, res) => {
     const { newPassword } = req.body;
     const adminUser = req.user;
 
-    console.log(`🔑 Password reset request for user: ${userId}`);
+    // console.log(`🔑 Password reset request for user: ${userId}`);
 
     // Validate inputs
     if (!newPassword) {
@@ -1498,7 +1321,7 @@ export const resetUserPassword = async (req, res) => {
     user.passwordResetRequired = true; // Flag to force password change on next login
     await user.save();
 
-    console.log(`✅ Password reset successful for ${user.email}`);
+    // console.log(`✅ Password reset successful for ${user.email}`);
 
     // Send email notification
     try {
@@ -1596,18 +1419,9 @@ export const sendWhatsAppOtp = async (req, res) => {
     const userId = req.user.id;
 
     if (!phone) {
-      return res.status(400).json({ success: false, error: "Phone number is required" });
-    }
-
-    const { getUserLicense } = await import("../utils/licenseEnforcement.js");
-    const license = await getUserLicense(userId);
-    const licenseCode = (license?.license_code || "").toUpperCase();
-    if (licenseCode !== "OPTIMIZE") {
-      console.log("License Code are", licenseCode);
-      return res.status(403).json({
-        success: false,
-        error: "You do not have a top plan, Please upgrade you plan"
-      });
+      return res
+        .status(400)
+        .json({ success: false, error: "Phone number is required" });
     }
 
     // Generate 5-digit random OTP
@@ -1623,7 +1437,7 @@ export const sendWhatsAppOtp = async (req, res) => {
         phoneVerificationOtpExpires: expiry,
         phoneVerified: false,
       },
-      { new: true }
+      { new: true },
     );
 
     const userName = updatedUser?.firstName || "User";
@@ -1631,39 +1445,37 @@ export const sendWhatsAppOtp = async (req, res) => {
     const { sendWhatsApp } = await import("../services/whatsappService.js");
 
     // Send using utility verification template
-    await sendWhatsApp(
-      phone,
-      "verifyphone",
-      "en_US",
-      [
-        {
-          type: "body",
-          parameters: [
-            {
-              type: "text",
-              text: otp,
-            },
-            {
-              type: "text",
-              text: "TS Verification",
-            },
-          ],
-        },
-        {
-          type: "button",
-          sub_type: "url",
-          index: "0",
-          parameters: [
-            {
-              type: "text",
-              text: otp,
-            },
-          ],
-        },
-      ]
-    );
+    await sendWhatsApp(phone, "verifyphone", "en_US", [
+      {
+        type: "body",
+        parameters: [
+          {
+            type: "text",
+            text: otp,
+          },
+          {
+            type: "text",
+            text: "TS Verification",
+          },
+        ],
+      },
+      {
+        type: "button",
+        sub_type: "url",
+        index: "0",
+        parameters: [
+          {
+            type: "text",
+            text: otp,
+          },
+        ],
+      },
+    ]);
 
-    res.json({ success: true, message: "Verification OTP sent successfully via WhatsApp" });
+    res.json({
+      success: true,
+      message: "Verification OTP sent successfully via WhatsApp",
+    });
   } catch (error) {
     console.error("Send WhatsApp OTP error:", error);
     res.status(500).json({ success: false, error: error.message });
@@ -1687,12 +1499,21 @@ export const verifyWhatsAppOtp = async (req, res) => {
       return res.status(404).json({ success: false, error: "User not found" });
     }
 
-    if (!user.phoneVerificationOtp || user.phoneVerificationOtp !== otp.trim()) {
-      return res.status(400).json({ success: false, error: "You entered a wrong OTP. Please try again." });
+    if (
+      !user.phoneVerificationOtp ||
+      user.phoneVerificationOtp !== otp.trim()
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: "You entered a wrong OTP. Please try again.",
+      });
     }
 
     if (new Date() > user.phoneVerificationOtpExpires) {
-      return res.status(400).json({ success: false, error: "OTP has expired. Please request a new one." });
+      return res.status(400).json({
+        success: false,
+        error: "OTP has expired. Please request a new one.",
+      });
     }
 
     user.phoneVerified = true;
@@ -1706,4 +1527,3 @@ export const verifyWhatsAppOtp = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
-

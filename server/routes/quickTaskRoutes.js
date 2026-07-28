@@ -22,22 +22,12 @@ import { checkFeatureAccess } from '../middleware/licenseMiddleware.js';
 
 // All routes require authentication
 router.use((req, res, next) => {
-  console.log('🔍 Quick Task Route - Before Auth:', {
-    path: req.path,
-    method: req.method,
-    headers: Object.keys(req.headers),
-    hasAuth: !!req.headers.authorization
-  });
   next();
 });
 
 router.use(authenticateToken);
 
 router.use((req, res, next) => {
-  console.log('✅ Quick Task Route - After Auth:', {
-    path: req.path,
-    user: req.user ? { id: req.user.id, email: req.user.email } : 'NO USER'
-  });
   next();
 });
 

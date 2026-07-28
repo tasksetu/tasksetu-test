@@ -152,8 +152,8 @@ input[type="week"]::-webkit-calendar-picker-indicator {
 }
 
 .react-select__control {
-  min-height: 36px !important;
-  height: auto !important;
+  min-height: 32px !important;
+  height: 32px !important;
   border-color: #d1d5db !important;
   box-shadow: none !important;
 }
@@ -173,8 +173,8 @@ input[type="week"]::-webkit-calendar-picker-indicator {
 
 .react-select__value-container {
   padding: 0 8px !important;
-  min-height: 34px !important;
-  height: auto !important;
+  min-height: 30px !important;
+  height: 30px !important;
 }
 
 .react-select__input-container {
@@ -193,8 +193,8 @@ input[type="week"]::-webkit-calendar-picker-indicator {
 }
 
 .react-select__indicators {
-  min-height: 34px !important;
-  height: auto !important;
+  min-height: 30px !important;
+  height: 30px !important;
 }
 
 .react-select__indicator {
@@ -207,22 +207,23 @@ input[type="week"]::-webkit-calendar-picker-indicator {
 
 /* Compact variant used by toolbar filters (h-8) */
 .react-select--small {
-  min-height: var(--toolbar-control-height) !important;
-  height: auto !important;
+  min-height: 32px !important;
+  height: 32px !important;
   margin: 0 !important;
 }
 
 .react-select--small .react-select__control {
-  min-height: 100% !important;
-  height: auto !important;
+  min-height: 32px !important;
+  height: 32px !important;
+  max-height: 32px !important;
   margin: 0 !important;
   box-sizing: border-box !important;
 }
 
 .react-select--small .react-select__control--is-focused,
 .react-select--small .react-select__control--menu-is-open {
-  min-height: 100% !important;
-  height: auto !important;
+  min-height: 32px !important;
+  height: 32px !important;
 }
 
 .react-select--small .react-select__value-container {
@@ -303,31 +304,60 @@ input[type="week"]::-webkit-calendar-picker-indicator {
   height: 32px !important;
   display: flex !important;
   align-items: center !important;
+  justify-content: space-between !important;
+  box-sizing: border-box !important;
 }
 .h-8-select .react-select__value-container {
   min-height: 30px !important;
-  height: 100% !important;
+  height: 30px !important;
   padding: 0 8px !important;
   display: flex !important;
   align-items: center !important;
   align-content: center !important;
-  flex-wrap: wrap !important;
+  flex-wrap: nowrap !important;
+  overflow: hidden !important;
+  flex: 1 1 auto !important;
+  position: relative !important;
 }
 .h-8-select .react-select__indicators {
-  min-height: 30px !important;
-  height: 100% !important;
+  height: 30px !important;
+  display: flex !important;
+  align-items: center !important;
+  flex-shrink: 0 !important;
+}
+.h-8-select .react-select__indicator {
+  padding: 2px 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.h-8-select .react-select__dropdown-indicator {
+  display: flex !important;
+  align-items: center !important;
+  padding: 4px 6px !important;
+}
+.h-8-select .react-select__dropdown-indicator svg {
+  display: block !important;
+  width: 16px !important;
+  height: 16px !important;
 }
 .h-8-select .react-select__single-value,
 .h-8-select .react-select__placeholder {
   position: absolute !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+  color: #9ca3af !important;
+  pointer-events: none !important;
 }
 .h-8-select .react-select__multi-value {
   display: inline-flex !important;
   align-items: center !important;
   margin: 0 4px 0 0 !important;
-  background-color: #f3f4f6 !important;
+  background-color: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
   border-radius: 4px !important;
   height: 24px !important;
 }
@@ -335,7 +365,7 @@ input[type="week"]::-webkit-calendar-picker-indicator {
   display: flex !important;
   align-items: center !important;
   padding: 0 6px !important;
-  color: #1f2937 !important;
+  color: #1e40af !important;
   font-size: 13px !important;
   height: 100% !important;
 }
@@ -348,47 +378,89 @@ input[type="week"]::-webkit-calendar-picker-indicator {
   cursor: pointer !important;
 }
 
-/* Custom dynamic height helper for multi-select (h-8-select-dynamic) */
+/* Custom height helper for multi-select (h-8-select-dynamic) */
 .h-8-select-dynamic .react-select__control {
-  min-height: 32px !important;
-  height: auto !important;
+  min-height: 38px !important;
+  height: 38px !important;
+  max-height: 38px !important;
   display: flex !important;
+  flex-wrap: nowrap !important;
   align-items: center !important;
+  justify-content: space-between !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
 }
 .h-8-select-dynamic .react-select__value-container {
-  min-height: 30px !important;
-  height: auto !important;
+  min-height: 34px !important;
+  height: 34px !important;
+  max-height: 34px !important;
   padding: 0 8px !important;
   display: flex !important;
   align-items: center !important;
   align-content: center !important;
-  flex-wrap: wrap !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  position: relative !important;
+  scrollbar-width: thin !important;
 }
 .h-8-select-dynamic .react-select__indicators {
-  min-height: 30px !important;
-  height: auto !important;
+  align-self: center !important;
+  height: 34px !important;
+  display: flex !important;
+  align-items: center !important;
+  flex-shrink: 0 !important;
+  margin-left: auto !important;
+}
+.h-8-select-dynamic .react-select__indicator {
+  padding: 2px 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.h-8-select-dynamic .react-select__dropdown-indicator {
+  display: flex !important;
+  align-items: center !important;
+  padding: 4px 6px !important;
+}
+.h-8-select-dynamic .react-select__dropdown-indicator svg {
+  display: block !important;
+  width: 16px !important;
+  height: 16px !important;
 }
 .h-8-select-dynamic .react-select__single-value,
 .h-8-select-dynamic .react-select__placeholder {
   position: absolute !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+  color: #9ca3af !important;
+  pointer-events: none !important;
 }
 .h-8-select-dynamic .react-select__multi-value {
   display: inline-flex !important;
   align-items: center !important;
-  margin: 3px 4px 3px 0 !important;
-  background-color: #f3f4f6 !important;
+  margin: 2px 4px 2px 0 !important;
+  background-color: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
   border-radius: 4px !important;
   height: 24px !important;
+  max-width: calc(100% - 6px) !important;
 }
 .h-8-select-dynamic .react-select__multi-value__label {
   display: flex !important;
   align-items: center !important;
   padding: 0 6px !important;
-  color: #1f2937 !important;
+  color: #1e40af !important;
   font-size: 13px !important;
   height: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 .h-8-select-dynamic .react-select__multi-value__remove {
   display: flex !important;
@@ -397,6 +469,7 @@ input[type="week"]::-webkit-calendar-picker-indicator {
   height: 100% !important;
   padding: 0 4px !important;
   cursor: pointer !important;
+  flex-shrink: 0 !important;
 }
 
 /* React-Quill / Rich Text Editor Normalization */

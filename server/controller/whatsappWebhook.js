@@ -83,7 +83,7 @@ export const handleWebhook = async (req, res) => {
       if (settings && settings.channels?.whatsapp?.enabled === false) {
         await sendWhatsAppText(
           from,
-          "Please enable WhatsApp notification from Your Notification Settings"
+          "Please enable WhatsApp notification from Your Notification settings"
         );
         return;
       }

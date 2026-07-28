@@ -160,8 +160,6 @@ export const getTaskCompletionStatusReport = async (req, res) => {
  */
 export const getMyProductivityReport = async (req, res) => {
   try {
-    console.log('=== My Productivity Report Debug ===');
-    console.log('req.user:', req.user);
 
     if (!req.user) {
       return res.status(401).json({
@@ -180,12 +178,6 @@ export const getMyProductivityReport = async (req, res) => {
     const userId = req.user.id || req.user._id;
     const { dateRange = '30', startDate, endDate, status, priority } = req.query;
 
-    console.log('User ID:', userId);
-    console.log('User ID Type:', typeof userId);
-    console.log('User object:', JSON.stringify(req.user, null, 2));
-    console.log('Date Range:', dateRange);
-    console.log('Start Date:', startDate);
-    console.log('End Date:', endDate);
 
     // Get user's timezone for accurate date filtering
     const userTimezone = await TimezoneHelper.getUserTimezone(userId);
@@ -195,11 +187,9 @@ export const getMyProductivityReport = async (req, res) => {
 
     // Try without ANY filters first
     const allUserTasks = await Task.find({ assignedTo: userId }).countDocuments();
-    console.log('Total tasks for user (no filters):', allUserTasks);
 
     // Try with string conversion
     const allUserTasksString = await Task.find({ assignedTo: userId.toString() }).countDocuments();
-    console.log('Total tasks for user (string ID):', allUserTasksString);
 
     // Build query filter
     const queryFilter = {
@@ -215,20 +205,13 @@ export const getMyProductivityReport = async (req, res) => {
     if (status) queryFilter.status = status;
     if (priority) queryFilter.priority = priority;
 
-    console.log('Query Filter:', JSON.stringify(queryFilter));
 
     // Fetch all tasks for the user
     const tasks = await Task.find(queryFilter)
       .select('status priority dueDate createdAt completedAt assignedTo isRisk')
       .lean();
 
-    console.log('Tasks found with full filter:', tasks.length);
     if (tasks.length > 0) {
-      console.log('First task sample:', {
-        status: tasks[0].status,
-        priority: tasks[0].priority,
-        assignedTo: tasks[0].assignedTo
-      });
     }
 
     // Calculate KPIs
@@ -268,7 +251,6 @@ export const getMyProductivityReport = async (req, res) => {
     // 📊 License consumption
     try {
       await licenseService.consumeFeature(userId, 'REPORT_TASK_STATUS', 1);
-      console.log(`[ReportsController] 📊 REPORT_TASK_STATUS usage tracked for user ${userId}`);
     } catch (usageError) {
       console.error('[ReportsController] ⚠️ Failed to track REPORT_TASK_STATUS usage:', usageError.message);
     }
@@ -319,20 +301,12 @@ export const getTeamAnalyticsReport = async (req, res) => {
       : allowedRoles.includes(userRole);
 
     if (!hasAccess) {
-      console.log('Access denied for role:', userRole);
       return res.status(403).json({
         success: false,
         message: 'Access denied. Manager role required.'
       });
     }
 
-    console.log('=== Team Analytics Report Debug ===');
-    console.log('User ID:', userId);
-    console.log('User Role:', userRole);
-    console.log('Organization ID:', orgId);
-    console.log('Date Range:', dateRange);
-    console.log('Start Date:', startDate);
-    console.log('End Date:', endDate);
 
     // Fetch team members (users in same organization)
     // Try multiple organization field names
@@ -355,10 +329,7 @@ export const getTeamAnalyticsReport = async (req, res) => {
     }).select('_id firstName lastName email role organizationId organization_id orgId');
 
     const teamMemberIds = teamMembers.map(m => m._id);
-    console.log('Team Members Found:', teamMembers.length);
-    console.log('Team Member IDs:', teamMemberIds);
     if (teamMembers.length > 0) {
-      console.log('Sample Team Member:', JSON.stringify(teamMembers[0], null, 2));
     }
 
     // Get user's timezone
@@ -382,11 +353,9 @@ export const getTeamAnalyticsReport = async (req, res) => {
     if (status) queryFilter.status = status;
     if (priority) queryFilter.priority = priority;
 
-    console.log('Query Filter:', JSON.stringify(queryFilter));
 
     // Check total tasks for team without filters
     const allTeamTasks = await Task.find({ assignedTo: { $in: teamMemberIds } }).countDocuments();
-    console.log('Total tasks for team (no filters):', allTeamTasks);
 
     // Check with only date filter
     if (Object.keys(dateFilter).length > 0) {
@@ -394,7 +363,6 @@ export const getTeamAnalyticsReport = async (req, res) => {
         assignedTo: { $in: teamMemberIds },
         ...dateFilter
       }).countDocuments();
-      console.log('Tasks with date filter only:', tasksWithDateOnly);
     }
 
     // Fetch all team tasks
@@ -403,9 +371,7 @@ export const getTeamAnalyticsReport = async (req, res) => {
       .populate('assignedTo', 'name')
       .lean();
 
-    console.log('Tasks found with full filter:', tasks.length);
     if (tasks.length > 0) {
-      console.log('Sample Task:', JSON.stringify(tasks[0], null, 2));
     }
 
     // Calculate Team KPIs
@@ -467,7 +433,6 @@ export const getTeamAnalyticsReport = async (req, res) => {
     // 📊 License consumption
     try {
       await licenseService.consumeFeature(userId, 'REPORT_ADV', 1);
-      console.log(`[ReportsController] 📊 REPORT_ADV usage tracked for user ${userId}`);
     } catch (usageError) {
       console.error('[ReportsController] ⚠️ Failed to track REPORT_ADV usage:', usageError.message);
     }
@@ -510,13 +475,6 @@ export const getOrganizationAnalyticsReport = async (req, res) => {
     const userRole = req.user.role;
     const { dateRange = '30', startDate, endDate, status, priority } = req.query;
 
-    console.log('=== Organization Analytics Report Debug ===');
-    console.log('User ID:', userId);
-    console.log('User Role:', userRole);
-    console.log('Organization ID:', orgId);
-    console.log('Date Range:', dateRange);
-    console.log('Start Date:', startDate);
-    console.log('End Date:', endDate);
 
     // Verify user is org admin or super admin
     // Support both string and array roles
@@ -526,7 +484,6 @@ export const getOrganizationAnalyticsReport = async (req, res) => {
       : allowedRoles.includes(userRole);
 
     if (!hasAccess) {
-      console.log('Access denied for role:', userRole);
       return res.status(403).json({
         success: false,
         message: 'Access denied. Organization admin role required.'
@@ -554,15 +511,12 @@ export const getOrganizationAnalyticsReport = async (req, res) => {
     if (status) queryFilter.status = status;
     if (priority) queryFilter.priority = priority;
 
-    console.log('Query Filter:', JSON.stringify(queryFilter));
 
     // Check total tasks for organization without filters
     const allOrgTasks = await Task.find({ organization: new ObjectId(orgId) }).countDocuments();
-    console.log('Total tasks for organization (no filters):', allOrgTasks);
 
     // Check tasks without isDeleted filter
     const tasksWithoutDeletedFilter = await Task.find({ organization: new ObjectId(orgId), ...dateFilter }).countDocuments();
-    console.log('Tasks without isDeleted filter:', tasksWithoutDeletedFilter);
 
     // Fetch all organization tasks
     const tasks = await Task.find(queryFilter)
@@ -570,7 +524,6 @@ export const getOrganizationAnalyticsReport = async (req, res) => {
       .populate('assignedTo', 'name department')
       .lean();
 
-    console.log('Tasks found with full filter:', tasks.length);
 
     // Get active teams count
     const activeTeams = await User.distinct('department', {
@@ -711,7 +664,6 @@ export const getOrganizationAnalyticsReport = async (req, res) => {
     // 📊 License consumption
     try {
       await licenseService.consumeFeature(userId, 'REPORT_ADV', 1);
-      console.log(`[ReportsController] 📊 REPORT_ADV usage tracked for user ${userId}`);
     } catch (usageError) {
       console.error('[ReportsController] ⚠️ Failed to track REPORT_ADV usage:', usageError.message);
     }
@@ -734,15 +686,6 @@ export const getOrganizationAnalyticsReport = async (req, res) => {
       }
     };
 
-    console.log('📊 Organization Analytics Response Summary:', {
-      totalTasks: totalOrgTasks,
-      completed,
-      activeTeams: activeTeams.length,
-      riskTasks,
-      completionTrendPoints: completionTrend.length,
-      departmentCount: tasksByDepartment.length,
-      responseDataSize: JSON.stringify(responseData).length
-    });
 
     res.json(responseData);
   } catch (error) {
@@ -769,10 +712,6 @@ export const getMilestoneAchievementReport = async (req, res) => {
     const userRole = req.user.role;
     const orgId = req.user.organizationId || req.user.organization_id;
 
-    console.log('=== Milestone Achievement Report Debug ===');
-    console.log('User ID:', userId);
-    console.log('User Role:', userRole);
-    console.log('Organization ID:', orgId);
 
     // Define role hierarchy and access levels
     const roleHierarchy = {
@@ -791,11 +730,9 @@ export const getMilestoneAchievementReport = async (req, res) => {
       accessLevel = 'manager';
     }
 
-    console.log('Access Level Determined:', accessLevel);
 
     const { dateRange = '30', startDate, endDate, team } = req.query;
 
-    console.log('Date Range:', dateRange);
 
     // Get user's timezone
     const userTimezone = await TimezoneHelper.getUserTimezone(userId);
@@ -806,13 +743,11 @@ export const getMilestoneAchievementReport = async (req, res) => {
     // Optional team/department filter (for \"team\" scope)
     let teamMemberIds = null;
     if (team) {
-      console.log('Team filter provided:', team);
       const teamMembers = await User.find(
         { organization_id: new ObjectId(orgId), department: team },
         { _id: 1 }
       ).lean();
       teamMemberIds = teamMembers.map((m) => m._id);
-      console.log('Team members for department filter:', teamMemberIds.length);
     }
 
     // Build base query for milestone tasks
@@ -846,7 +781,6 @@ export const getMilestoneAchievementReport = async (req, res) => {
       .populate('createdBy', 'name email')
       .lean();
 
-    console.log('Milestone tasks found:', milestoneTasks.length);
 
     // Calculate metrics
     const now = new Date();
@@ -898,17 +832,10 @@ export const getMilestoneAchievementReport = async (req, res) => {
       recentMilestones
     };
 
-    console.log('📊 Milestone Report Response:', {
-      totalMilestones: milestoneTasks.length,
-      achieved,
-      missed,
-      responseDataSize: JSON.stringify(responseData).length
-    });
 
     // 📊 License consumption
     try {
       await licenseService.consumeFeature(userId, 'REPORT_MILESTONE', 1);
-      console.log(`[ReportsController] 📊 REPORT_MILESTONE usage tracked for user ${userId}`);
     } catch (usageError) {
       console.error('[ReportsController] ⚠️ Failed to track REPORT_MILESTONE usage:', usageError.message);
     }
@@ -941,10 +868,6 @@ export const getRecurringTaskAdherenceReport = async (req, res) => {
     const userRole = req.user.role;
     const orgId = req.user.organizationId || req.user.organization_id;
 
-    console.log('=== Recurring Task Adherence Report Debug ===');
-    console.log('User ID:', userId);
-    console.log('User Role:', userRole);
-    console.log('Organization ID:', orgId);
 
     // Define role hierarchy and access levels
     const roleHierarchy = {
@@ -963,11 +886,9 @@ export const getRecurringTaskAdherenceReport = async (req, res) => {
       accessLevel = 'manager';
     }
 
-    console.log('Access Level Determined:', accessLevel);
 
     const { dateRange = '30', startDate, endDate, team } = req.query;
 
-    console.log('Date Range:', dateRange);
 
     // Get user's timezone
     const userTimezone = await TimezoneHelper.getUserTimezone(userId);
@@ -978,13 +899,11 @@ export const getRecurringTaskAdherenceReport = async (req, res) => {
     // Optional team/department filter (Org Analytics filter bar)
     let teamMemberIds = null;
     if (team) {
-      console.log('Team filter provided:', team);
       const teamMembers = await User.find(
         { organization_id: new ObjectId(orgId), department: team },
         { _id: 1 }
       ).lean();
       teamMemberIds = teamMembers.map((m) => m._id);
-      console.log('Team members for department filter:', teamMemberIds.length);
     }
 
     const recurringQuery = {
@@ -1015,7 +934,6 @@ export const getRecurringTaskAdherenceReport = async (req, res) => {
       .populate('assignedTo', 'name email department')
       .lean();
 
-    console.log('Recurring tasks found:', recurringTasks.length);
 
     // Calculate metrics
     const now = new Date();
@@ -1126,17 +1044,10 @@ export const getRecurringTaskAdherenceReport = async (req, res) => {
       recentMissedRecurring
     };
 
-    console.log('📊 Recurring Report Response:', {
-      totalRecurring: recurringTasks.length,
-      completed,
-      onTime,
-      responseDataSize: JSON.stringify(responseData).length
-    });
 
     // 📊 License consumption
     try {
       await licenseService.consumeFeature(userId, 'REPORT_RECURRING', 1);
-      console.log(`[ReportsController] 📊 REPORT_RECURRING usage tracked for user ${userId}`);
     } catch (usageError) {
       console.error('[ReportsController] ⚠️ Failed to track REPORT_RECURRING usage:', usageError.message);
     }
@@ -1170,11 +1081,6 @@ export const getQuickTaskConversionReport = async (req, res) => {
     const orgId = req.user.organizationId || req.user.organization_id;
     const { dateRange = '30', startDate, endDate, team } = req.query;
 
-    console.log('=== Quick Task Conversion Report Debug ===');
-    console.log('User ID:', userId);
-    console.log('User Role:', userRole);
-    console.log('Organization ID:', orgId);
-    console.log('Date Range:', dateRange);
 
     // Define role hierarchy and access levels
     const roleHierarchy = {
@@ -1193,7 +1099,6 @@ export const getQuickTaskConversionReport = async (req, res) => {
       accessLevel = 'manager';
     }
 
-    console.log('Access Level Determined:', accessLevel);
 
     // Get user's timezone
     const userTimezone = await TimezoneHelper.getUserTimezone(userId);
@@ -1206,7 +1111,6 @@ export const getQuickTaskConversionReport = async (req, res) => {
 
     if (accessLevel === 'individual') {
       scopedUserIds = [new ObjectId(userId)];
-      console.log('QuickTask scope: individual user');
     } else if (accessLevel === 'manager') {
       // Manager scope: direct reports (plus self)
       const directReports = await User.find(
@@ -1214,7 +1118,6 @@ export const getQuickTaskConversionReport = async (req, res) => {
         { _id: 1 }
       ).lean();
       scopedUserIds = [new ObjectId(userId), ...directReports.map((u) => u._id)];
-      console.log('QuickTask scope: manager direct reports:', directReports.length);
     } else {
       // Admin scope: all users in organization
       const orgUsers = await User.find(
@@ -1222,7 +1125,6 @@ export const getQuickTaskConversionReport = async (req, res) => {
         { _id: 1 }
       ).lean();
       scopedUserIds = orgUsers.map((u) => u._id);
-      console.log('QuickTask scope: org users:', scopedUserIds.length);
     }
 
     // Optional team/department filter (narrows scopedUserIds)
@@ -1233,7 +1135,6 @@ export const getQuickTaskConversionReport = async (req, res) => {
       ).lean();
       const teamIds = new Set(teamMembers.map((m) => String(m._id)));
       scopedUserIds = scopedUserIds.filter((id) => teamIds.has(String(id)));
-      console.log('QuickTask scope after team filter:', scopedUserIds.length);
     }
 
     // Query quick tasks created in timeframe (adoption)
@@ -1246,7 +1147,6 @@ export const getQuickTaskConversionReport = async (req, res) => {
       .populate('user', 'name email department')
       .lean();
 
-    console.log('Quick tasks found:', quickTasks.length);
 
     const isConverted = (qt) =>
       qt?.convertedToTask?.isConverted === true ||
@@ -1317,16 +1217,10 @@ export const getQuickTaskConversionReport = async (req, res) => {
       recentConversions
     };
 
-    console.log('📊 Quick Task Report Response:', {
-      totalQuickTasks: quickTasks.length,
-      convertedTasks: convertedQuickTasks.length,
-      responseDataSize: JSON.stringify(responseData).length
-    });
 
     // 📊 License consumption
     try {
       await licenseService.consumeFeature(userId, 'REPORT_QUICK_CONVERSION', 1);
-      console.log(`[ReportsController] 📊 REPORT_QUICK_CONVERSION usage tracked for user ${userId}`);
     } catch (usageError) {
       console.error('[ReportsController] ⚠️ Failed to track REPORT_QUICK_CONVERSION usage:', usageError.message);
     }
@@ -1360,10 +1254,6 @@ export const getOverdueTasksReport = async (req, res) => {
     const orgId = req.user.organizationId || req.user.organization_id;
     const { user, priority, sortBy = 'overdueDays' } = req.query;
 
-    console.log('=== Overdue Tasks Report Debug ===');
-    console.log('User ID:', userId);
-    console.log('User Role:', userRole);
-    console.log('Organization ID:', orgId);
 
     // Define role hierarchy and access levels
     const roleHierarchy = {
@@ -1382,7 +1272,6 @@ export const getOverdueTasksReport = async (req, res) => {
       accessLevel = 'manager';
     }
 
-    console.log('Access Level Determined:', accessLevel);
 
     // Build base query filter
     const now = new Date();
@@ -1401,7 +1290,6 @@ export const getOverdueTasksReport = async (req, res) => {
       case 'individual':
         // Individual users: Only their own overdue tasks
         queryFilter.assignedTo = new ObjectId(userId);
-        console.log('Individual access: filtering by assignedTo =', userId);
         break;
 
       case 'manager':
@@ -1426,26 +1314,22 @@ export const getOverdueTasksReport = async (req, res) => {
 
         const teamMemberIds = teamMembers.map(m => m._id);
         queryFilter.assignedTo = { $in: teamMemberIds };
-        console.log('Manager access: filtering by team members =', teamMemberIds.length, 'users');
         break;
 
       case 'admin':
         // Admins: Full organization overdue tasks
         queryFilter.organization = new ObjectId(orgId);
-        console.log('Admin access: filtering by organization =', orgId);
         break;
 
       default:
         // Default to individual access
         queryFilter.assignedTo = new ObjectId(userId);
-        console.log('Default access: filtering by assignedTo =', userId);
         break;
     }
 
     // Additional filters
     if (priority) queryFilter.priority = priority;
 
-    console.log('Query Filter:', JSON.stringify(queryFilter));
 
     // Fetch overdue tasks
     const overdueTasks = await Task.find(queryFilter)
@@ -1453,7 +1337,6 @@ export const getOverdueTasksReport = async (req, res) => {
       .populate('assignedTo', 'firstName lastName email')
       .lean();
 
-    console.log('Overdue tasks found:', overdueTasks.length);
 
     // Calculate overdue days and sort
     const tasksWithOverdueDays = overdueTasks.map(task => {
@@ -1500,7 +1383,6 @@ export const getOverdueTasksReport = async (req, res) => {
     // 📊 License consumption
     try {
       await licenseService.consumeFeature(userId, 'REPORT_OVERDUE', 1);
-      console.log(`[ReportsController] 📊 REPORT_OVERDUE usage tracked for user ${userId}`);
     } catch (usageError) {
       console.error('[ReportsController] ⚠️ Failed to track REPORT_OVERDUE usage:', usageError.message);
     }
@@ -1542,10 +1424,6 @@ export const getProductivityEfficiencyReport = async (req, res) => {
     const orgId = req.user.organizationId || req.user.organization_id;
     const { dateRange = '30', startDate, endDate, user, department } = req.query;
 
-    console.log('=== Productivity & Efficiency Report Debug ===');
-    console.log('User ID:', userId);
-    console.log('User Role:', userRole);
-    console.log('Organization ID:', orgId);
 
     // Define role hierarchy and access levels
     const roleHierarchy = {
@@ -1564,7 +1442,6 @@ export const getProductivityEfficiencyReport = async (req, res) => {
       accessLevel = 'manager';
     }
 
-    console.log('Access Level Determined:', accessLevel);
 
     // Get user's timezone
     const userTimezone = await TimezoneHelper.getUserTimezone(userId);
@@ -1622,7 +1499,6 @@ export const getProductivityEfficiencyReport = async (req, res) => {
       queryFilter.$and.push(dateFilter);
     }
 
-    console.log('📊 Productivity Query Filter:', JSON.stringify(queryFilter, null, 2));
 
     // Fetch completed tasks - get all DONE tasks first, then filter for those with dates
     // Note: Some tasks use completedAt, others use completedDate - check both
@@ -1631,7 +1507,6 @@ export const getProductivityEfficiencyReport = async (req, res) => {
       .populate('assignedTo', 'firstName lastName department')
       .lean();
 
-    console.log('📊 All completed tasks found (before date filter):', allCompletedTasks.length);
 
     // Filter for tasks that have a completion date (either completedAt or completedDate)
     // For efficiency calculation, we need completion date. Due date is optional.
@@ -1646,14 +1521,6 @@ export const getProductivityEfficiencyReport = async (req, res) => {
       })
       .filter(task => task.completionDate !== null); // Must have a completion date
 
-    console.log('📊 Completed tasks with completion date:', completedTasks.length);
-    console.log('📊 Tasks with due date:', completedTasks.filter(t => t.dueDate).length);
-    console.log('📊 Sample tasks:', completedTasks.slice(0, 3).map(t => ({
-      title: t.title,
-      completionDate: t.completionDate,
-      dueDate: t.dueDate,
-      hasDueDate: !!t.dueDate
-    })));
 
     // Analyze completion timing
     // Only tasks with both completion date AND due date can be classified as on-time/late
@@ -1675,13 +1542,6 @@ export const getProductivityEfficiencyReport = async (req, res) => {
     const onTimePercentage = totalCompleted > 0 ? Math.round((onTime.length / totalCompleted) * 100) : 0;
     const latePercentage = totalCompleted > 0 ? Math.round((late.length / totalCompleted) * 100) : 0;
 
-    console.log('📊 Productivity Report Summary:', {
-      totalCompleted,
-      onTime: onTime.length,
-      late: late.length,
-      onTimePercentage,
-      latePercentage
-    });
 
     // Efficiency by priority
     const efficiencyByPriority = ['urgent', 'high', 'medium', 'low'].map(priority => {
@@ -1753,7 +1613,6 @@ export const getProductivityEfficiencyReport = async (req, res) => {
     // 📊 License consumption
     try {
       await licenseService.consumeFeature(userId, 'REPORT_PRODUCTIVITY', 1);
-      console.log(`[ReportsController] 📊 REPORT_PRODUCTIVITY usage tracked for user ${userId}`);
     } catch (usageError) {
       console.error('[ReportsController] ⚠️ Failed to track REPORT_PRODUCTIVITY usage:', usageError.message);
     }
@@ -1776,12 +1635,6 @@ export const getProductivityEfficiencyReport = async (req, res) => {
       }
     };
 
-    console.log('📊 Productivity Report Response:', {
-      summary: response.data.summary,
-      efficiencyByPriorityCount: response.data.efficiencyByPriority.length,
-      weeklyEfficiencyCount: response.data.weeklyEfficiency.length,
-      userEfficiencyCount: response.data.userEfficiency.length
-    });
 
     res.json(response);
   } catch (error) {
@@ -1809,10 +1662,6 @@ export const getWorkloadDistributionReport = async (req, res) => {
     const orgId = req.user.organizationId || req.user.organization_id;
     const { dateRange = '30', startDate, endDate, status, department } = req.query;
 
-    console.log('=== Workload Distribution Report Debug ===');
-    console.log('User ID:', userId);
-    console.log('User Role:', userRole);
-    console.log('Organization ID:', orgId);
 
     // Define role hierarchy and access levels
     const roleHierarchy = {
@@ -1831,7 +1680,6 @@ export const getWorkloadDistributionReport = async (req, res) => {
       accessLevel = 'manager';
     }
 
-    console.log('Access Level Determined:', accessLevel);
 
     // Get user's timezone
     const userTimezone = await TimezoneHelper.getUserTimezone(userId);
@@ -1869,7 +1717,6 @@ export const getWorkloadDistributionReport = async (req, res) => {
     const allUsers = await User.find(userQuery).select('_id firstName lastName department email role').lean();
     const userIds = allUsers.map(u => u._id);
 
-    console.log(`Scoped users found (${accessLevel}):`, allUsers.length);
 
     // Build query filter
     let queryFilter = {
@@ -1895,7 +1742,6 @@ export const getWorkloadDistributionReport = async (req, res) => {
       .populate('assignedTo', 'firstName lastName department email')
       .lean();
 
-    console.log('Scoped tasks found for workload analysis:', tasks.length);
 
     // Calculate workload per user
     const workloadMap = {};
@@ -1996,7 +1842,6 @@ export const getWorkloadDistributionReport = async (req, res) => {
     // 📊 License consumption
     try {
       await licenseService.consumeFeature(userId, 'REPORT_WORKLOAD', 1);
-      console.log(`[ReportsController] 📊 REPORT_WORKLOAD usage tracked for user ${userId}`);
     } catch (usageError) {
       console.error('[ReportsController] ⚠️ Failed to track REPORT_WORKLOAD usage:', usageError.message);
     }
@@ -2044,11 +1889,6 @@ export const getActivityEngagementReport = async (req, res) => {
     const userRole = req.user.role;
     const { dateRange = '30', startDate, endDate, team } = req.query;
 
-    console.log('=== Activity/Engagement Report Debug ===');
-    console.log('User ID:', userId);
-    console.log('User Role:', userRole);
-    console.log('Organization ID:', orgId);
-    console.log('Date Range:', dateRange);
 
     // 🔐 Determine access level (consistent with other reports)
     const roleHierarchy = {
@@ -2064,7 +1904,6 @@ export const getActivityEngagementReport = async (req, res) => {
     } else if (normalizedRole.some(role => roleHierarchy.manager.includes(role))) {
       accessLevel = 'manager';
     }
-    console.log('Access Level Determined:', accessLevel);
 
     // Get user's timezone
     const userTimezone = await TimezoneHelper.getUserTimezone(userId);
@@ -2182,7 +2021,6 @@ export const getActivityEngagementReport = async (req, res) => {
       }
     }
 
-    console.log('Users found for engagement analysis:', users.length);
 
     // If we have users, narrow tasks to that scope (so summary cards match scoped users)
     const scopeUserIds = (users || []).map(u => u._id);
@@ -2195,7 +2033,6 @@ export const getActivityEngagementReport = async (req, res) => {
         return createdByMatch || assignedToMatch || commentMatch;
       });
 
-    console.log('Tasks with activity found:', scopedTasks.length);
 
     // Initialize engagement metrics
     const userEngagement = {};
@@ -2366,18 +2203,10 @@ export const getActivityEngagementReport = async (req, res) => {
       engagementTrend
     };
 
-    console.log('📊 Activity Report Response:', {
-      totalUsers: users.length,
-      activeUsers,
-      totalComments,
-      totalUpdates,
-      responseDataSize: JSON.stringify(responseData).length
-    });
 
     // 📊 License consumption
     try {
       await licenseService.consumeFeature(userId, 'REPORT_ACTIVITY', 1);
-      console.log(`[ReportsController] 📊 REPORT_ACTIVITY usage tracked for user ${userId}`);
     } catch (usageError) {
       console.error('[ReportsController] ⚠️ Failed to track REPORT_ACTIVITY usage:', usageError.message);
     }
@@ -2507,11 +2336,6 @@ export const exportReport = async (req, res) => {
       priority
     } = req.query;
 
-    console.log('=== Export Report Request ===');
-    console.log('User ID:', userId);
-    console.log('Report Type:', reportType);
-    console.log('Format:', format);
-    console.log('Date Range:', dateRange);
 
     // Determine report scope based on role and reportType
     let reportData;
@@ -2572,7 +2396,6 @@ export const exportReport = async (req, res) => {
     // 📊 Track REPORT_ADV usage for export (exports count as report generation)
     try {
       await licenseService.consumeFeature(userId, 'REPORT_ADV', 1);
-      console.log(`[ReportsController] 📊 REPORT_ADV usage tracked for export by user ${userId}`);
     } catch (usageError) {
       console.error('[ReportsController] ⚠️ Failed to track REPORT_ADV usage:', usageError.message);
     }

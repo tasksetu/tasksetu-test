@@ -40,8 +40,7 @@ import {
   getAvailableTaskTypesForUI,
 } from "../../utils/taskPermissions";
 
-// ✅ HELPER FUNCTION: Validate and sanitize priority
-// Ensures only valid, organization-scoped priorities are accepted
+
 const validateAndSanitizePriority = (priority, validPriorities = []) => {
   if (!priority) return null;
 

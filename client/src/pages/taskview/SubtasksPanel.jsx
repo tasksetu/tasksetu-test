@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Target, ShieldCheck, CheckCircle, XCircle, Check, Flag } from "lucide-react";
 import { useSubtask } from "../../contexts/SubtaskContext";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
@@ -355,6 +356,47 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
     }
   };
 
+  const handleSubtaskApproval = async (subtask, action) => {
+    try {
+      const token = localStorage.getItem("token") || localStorage.getItem("auth_token");
+      const targetId = subtask.id || subtask._id;
+      const res = await fetch(`/api/tasks/${targetId}/approve`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action }),
+      });
+
+      if (res.ok) {
+        showSuccessToast(`Subtask ${action === "approve" ? "approved" : "rejected"} successfully`);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        const newStatus = action === "approve" ? "DONE" : "CANCELLED";
+        const updateRes = await fetch(`/api/tasks/${parentTask?._id || parentTask?.id}/subtasks/${targetId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        if (updateRes.ok) {
+          showSuccessToast(`Subtask status updated to ${newStatus}`);
+        } else {
+          throw new Error(errorData.message || `Failed to ${action} subtask`);
+        }
+      }
+      if (typeof refreshTask === "function") {
+        await refreshTask();
+      }
+      queryClient.invalidateQueries({ queryKey: ["allTasks"] });
+    } catch (err) {
+      showErrorToast(err.message || `Failed to ${action} subtask`);
+    }
+  };
+
   // Helper to get ID from various formats
   const getIdString = (value) => {
     if (!value) return null;
@@ -673,14 +715,35 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
                     }}
                   >
                     <div className="flex items-center justify-between px-3 py-3">
-                      {/* Left side - Name */}
-                      <div className="flex-1 min-w-0">
+                      {/* Left side - Name & Type Badges */}
+                      <div className="flex-1 min-w-0 flex items-center gap-2">
+                        {subtask.taskType === "approval" || subtask.isApprovalTask ? (
+                          <span className="inline-flex items-center justify-center w-4.5 h-4.5 rounded-[4px] bg-gradient-to-b from-emerald-400 to-emerald-600 text-white shadow-sm flex-shrink-0" title="Approval Subtask">
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          </span>
+                        ) : subtask.taskType === "milestone" || subtask.isMilestone ? (
+                          <span className="inline-flex items-center justify-center text-base flex-shrink-0 leading-none" title="Milestone Subtask">
+                            🎯
+                          </span>
+                        ) : (
+                          <span className="text-blue-500 font-bold">↳</span>
+                        )}
                         <div
                           className={`text-sm font-medium truncate text-gray-900`}
                           title={subtask.title}
                         >
                           {subtask.title}
                         </div>
+                        {(subtask.taskType === "milestone" || subtask.isMilestone) && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+                            <Target size={12} /> Milestone
+                          </span>
+                        )}
+                        {(subtask.taskType === "approval" || subtask.isApprovalTask) && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                            <ShieldCheck size={12} /> Approval
+                          </span>
+                        )}
                       </div>
 
                       {/* Center - Due Date */}
@@ -729,7 +792,51 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
                               Status:
                             </span>
                             <span className="ml-2">
-                              {getStatusLabel(subtask.status)}
+                              {(() => {
+                                const normStatus = String(subtask.status || "").toLowerCase();
+                                const normApprovalStatus = String(subtask.approvalStatus || "").toLowerCase();
+                                const titleLower = String(subtask.title || "").toLowerCase();
+
+                                const isApproval =
+                                  subtask.taskType === "approval" ||
+                                  subtask.isApprovalTask ||
+                                  (Array.isArray(subtask.approvers) && subtask.approvers.length > 0) ||
+                                  (!!subtask.approvalStatus && subtask.approvalStatus !== "none") ||
+                                  titleLower.includes("approval");
+
+                                const isApproved =
+                                  normApprovalStatus === "approved" ||
+                                  normStatus === "done" ||
+                                  normStatus === "completed" ||
+                                  normStatus === "approved";
+
+                                const isRejected =
+                                  normApprovalStatus === "rejected" ||
+                                  normStatus === "cancelled" ||
+                                  normStatus === "canceled" ||
+                                  normStatus === "rejected";
+
+                                if (isApproval) {
+                                  return (
+                                    <span
+                                      className={`font-semibold ${
+                                        isApproved
+                                          ? "text-emerald-600"
+                                          : isRejected
+                                            ? "text-rose-600"
+                                            : "text-amber-600"
+                                      }`}
+                                    >
+                                      {isApproved
+                                        ? "Approved"
+                                        : isRejected
+                                          ? "Rejected"
+                                          : "Pending"}
+                                    </span>
+                                  );
+                                }
+                                return getStatusLabel(subtask.status);
+                              })()}
                             </span>
                           </div>
                           <div>
@@ -777,9 +884,61 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
                       </div>
 
                       {/* Action buttons */}
-                      <div className="flex gap-2 mt-3">
+                      <div className="flex items-center gap-2 mt-3">
+                        {(() => {
+                          const normStatus = String(subtask.status || "").toLowerCase();
+                          const normApprovalStatus = String(subtask.approvalStatus || "").toLowerCase();
+                          const titleLower = String(subtask.title || "").toLowerCase();
+
+                          const isApproval =
+                            subtask.taskType === "approval" ||
+                            subtask.isApprovalTask ||
+                            (Array.isArray(subtask.approvers) && subtask.approvers.length > 0) ||
+                            (!!subtask.approvalStatus && subtask.approvalStatus !== "none") ||
+                            titleLower.includes("approval");
+
+                          const isApprovedOrRejected =
+                            normApprovalStatus === "approved" ||
+                            normApprovalStatus === "rejected" ||
+                            normStatus === "done" ||
+                            normStatus === "completed" ||
+                            normStatus === "cancelled" ||
+                            normStatus === "canceled" ||
+                            normStatus === "rejected" ||
+                            normStatus === "approved";
+
+                          if (isApproval && !isApprovedOrRejected) {
+                            return (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  className="h-8 text-xs bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 flex items-center gap-1 font-semibold"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSubtaskApproval(subtask, "approve");
+                                  }}
+                                >
+                                  <CheckCircle size={13} /> Approve
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  className="h-8 text-xs bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100 flex items-center gap-1 font-semibold"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSubtaskApproval(subtask, "reject");
+                                  }}
+                                >
+                                  <XCircle size={13} /> Reject
+                                </Button>
+                              </>
+                            );
+                          }
+                          return null;
+                        })()}
                         {canEditSubtask(subtask) &&
-                          parentTask?.status !== "DONE" && (
+                          parentTask?.status !== "DONE" &&
+                          !["done", "completed", "cancelled", "canceled", "rejected", "approved"].includes(String(subtask?.status || "").toLowerCase()) &&
+                          !["approved", "rejected", "auto_approved"].includes(String(subtask?.approvalStatus || "").toLowerCase()) && (
                             <Button
                               variant="primary"
                               className="h-9 text-xs"
@@ -803,16 +962,33 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
                             </Button>
                           )}
                         {(() => {
+                          const normStatus = String(subtask.status || "").toLowerCase();
+                          const normApprovalStatus = String(subtask.approvalStatus || "").toLowerCase();
+
+                          const isApprovedOrRejected =
+                            normApprovalStatus === "approved" ||
+                            normApprovalStatus === "rejected" ||
+                            normStatus === "done" ||
+                            normStatus === "completed" ||
+                            normStatus === "cancelled" ||
+                            normStatus === "canceled" ||
+                            normStatus === "rejected" ||
+                            normStatus === "approved";
+
+                          // Hide delete button for completed, cancelled, approved, or rejected subtasks
+                          if (isApprovedOrRejected) {
+                            return null;
+                          }
+
                           const canDeleteByPermission =
                             canDeleteSubtask(subtask);
                           const DELETABLE_STATUSES = [
-                            "OPEN",
-                            "ONHOLD",
-                            "CANCELLED",
+                            "open",
+                            "onhold",
+                            "pending",
+                            "to-do",
                           ];
-                          const canDeleteByStatus = DELETABLE_STATUSES.includes(
-                            subtask?.status,
-                          );
+                          const canDeleteByStatus = DELETABLE_STATUSES.includes(normStatus);
                           const canDelete =
                             canDeleteByPermission && canDeleteByStatus;
 
@@ -820,7 +996,7 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
                             if (!canDeleteByPermission)
                               return "You do not have permission to delete this subtask";
                             if (!canDeleteByStatus)
-                              return `Cannot delete subtask with status ${subtask?.status}. Only OPEN, ONHOLD or CANCELLED subtasks can be deleted.`;
+                              return `Cannot delete subtask with status ${subtask?.status}. Only open subtasks can be deleted.`;
                             return "";
                           };
 

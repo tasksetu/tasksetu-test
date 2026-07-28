@@ -27,12 +27,24 @@
 }
 
 /* React Select Custom Styles */
-.react-select-container .react-select__control {
-  border-radius: 8px;
+.react-select-container:not(.h-8-select-dynamic) .react-select__control {
+  border-radius: 6px;
   border-color: #d1d5db;
-  min-height: 36px;
-  height: 36px;
+  min-height: 32px !important;
+  height: 32px !important;
+  max-height: 32px !important;
   box-shadow: none;
+  transition: all 0.2s ease;
+}
+
+.react-select-container.h-8-select-dynamic .react-select__control {
+  border-radius: 6px;
+  border-color: #d1d5db;
+  min-height: 38px !important;
+  height: 38px !important;
+  max-height: 38px !important;
+  box-shadow: none;
+  overflow: hidden !important;
   transition: all 0.2s ease;
 }
 

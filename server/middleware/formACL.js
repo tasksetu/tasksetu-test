@@ -42,10 +42,6 @@ export const checkFormPermission = (requiredPermission = 'VIEW') => {
       const isTasksetuAdmin = userRoles.includes('super_admin');
 
       if (isTasksetuAdmin) {
-        // Platform admin bypass - log for audit trail
-        console.log(`⚠️  PLATFORM ADMIN OVERRIDE: ${req.user.email || userId} accessed form ${formId} (${requiredPermission})`);
-
-        // Still fetch the form for controller use - try _id first (URL param), then form_id field
         let form = await FormTemplate.findById(formId);
         if (!form) {
           form = await FormTemplate.findOne({ form_id: formId });
@@ -69,7 +65,6 @@ export const checkFormPermission = (requiredPermission = 'VIEW') => {
       // Find the form - try _id first (matches URL param), then form_id field
       let form = await FormTemplate.findById(formId).populate('owner_user_id', 'organizationId organization_id');
       if (!form) {
-        console.log(`🔍 Form not found by _id (${formId}), trying form_id field...`);
         form = await FormTemplate.findOne({ form_id: formId }).populate('owner_user_id', 'organizationId organization_id');
       }
 
@@ -111,7 +106,6 @@ export const checkFormPermission = (requiredPermission = 'VIEW') => {
 
           // Log if Company Admin is overriding
           if (isCompanyAdminWithOrgAccess && !isOwner) {
-            console.log(`⚠️  COMPANY ADMIN OVERRIDE: ${req.user.email || userId} modified form ${formId} (${requiredPermission})`);
             req.adminOverride = true;
             req.overrideReason = 'Company Admin Override';
           }
@@ -133,7 +127,7 @@ export const checkFormPermission = (requiredPermission = 'VIEW') => {
 
           // Log if Company Admin is overriding
           if (isCompanyAdminWithOrgAccess && !isOwner) {
-            console.log(`⚠️  COMPANY ADMIN OVERRIDE: ${req.user.email || userId} editing form ${formId}`);
+            
             req.adminOverride = true;
             req.overrideReason = 'Company Admin Override';
           }
@@ -168,7 +162,6 @@ export const checkFormPermission = (requiredPermission = 'VIEW') => {
           }
           // Log if Company Admin is publishing
           if (isCompanyAdminWithOrgAccess && !isOwner) {
-            console.log(`⚠️  COMPANY ADMIN OVERRIDE: ${req.user.email || userId} publishing form ${formId}`);
             req.adminOverride = true;
             req.overrideReason = 'Company Admin Override';
           }
@@ -187,16 +180,6 @@ export const checkFormPermission = (requiredPermission = 'VIEW') => {
               success: false,
               message: 'You do not have permission to view this form'
             });
-          }
-
-          // Log if Company Admin is viewing
-          if (isCompanyAdminWithOrgAccess && !isOwner && !form.hasAccess(userId, 'VIEW')) {
-            console.log(`ℹ️  COMPANY ADMIN ACCESS: ${req.user.email || userId} viewing form ${formId}`);
-          }
-
-          // Log if ORG visibility is granting access
-          if (hasOrgAccess && !isOwner && !isCompanyAdminWithOrgAccess) {
-            console.log(`ℹ️  ORG VISIBILITY ACCESS: ${req.user.email || userId} viewing org-wide form ${formId}`);
           }
           break;
 
@@ -256,7 +239,6 @@ export const checkOrgFormAccess = async (req, res, next) => {
     // Platform Admin has access to all forms
     const isTasksetuAdmin = userRoles.includes('super_admin');
     if (isTasksetuAdmin) {
-      console.log(`⚠️  PLATFORM ADMIN: ${req.user.email || userId} accessing org form ${formId}`);
       req.form = form;
       req.userRole = 'SUPER_ADMIN';
       req.adminOverride = true;
@@ -266,7 +248,6 @@ export const checkOrgFormAccess = async (req, res, next) => {
     // Company Admin has access to all org forms
     const isCompanyAdmin = userRoles.includes('org_admin');
     if (isCompanyAdmin) {
-      console.log(`ℹ️  COMPANY ADMIN: ${req.user.email || userId} accessing org form ${formId}`);
       req.form = form;
       req.userRole = 'ORG_ADMIN';
       return next();
@@ -331,7 +312,6 @@ export const checkFormSubmitPermission = async (req, res, next) => {
     const isCompanyAdmin = userRoles.includes('org_admin');
 
     if (isTasksetuAdmin || isCompanyAdmin) {
-      console.log(`ℹ️  ADMIN SUBMIT: ${req.user.email || userId} submitting to form ${formId}`);
       req.form = form;
       req.userRole = isTasksetuAdmin ? 'SUPER_ADMIN' : 'ORG_ADMIN';
       req.adminOverride = true;

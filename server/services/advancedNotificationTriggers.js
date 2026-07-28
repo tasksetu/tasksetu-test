@@ -482,6 +482,10 @@ export class AdvancedNotificationTriggers {
                 .populate('createdBy', 'firstName lastName email');
 
             for (const approverId of approvers) {
+                const approverIdStr = approverId?._id?.toString() || approverId?.toString();
+                const creatorIdStr = taskDoc?.createdBy?._id?.toString() || taskDoc?.createdBy?.toString();
+                if (creatorIdStr && approverIdStr === creatorIdStr) continue;
+
                 await NotificationService.createNotification({
                     user_id: approverId,
                     trigger_event: TriggerEvent.APPROVAL_REQUESTED,

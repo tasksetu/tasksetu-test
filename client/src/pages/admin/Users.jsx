@@ -700,7 +700,7 @@ export default function Users() {
           <Button
             onClick={() => setIsAddUserModalOpen(true)}
             className="bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
-            disabled={licensePool.length === 0}
+            // disabled={licensePool.length === 0}
           >
             <UserPlus className="h-4 w-4" />
             Add User
@@ -1035,7 +1035,7 @@ export default function Users() {
                       <div className="flex flex-wrap items-center space-x-1">
                         {user.isPrimaryAdmin ? (
                           <Badge className="bg-green-500 text-white mx-2">
-                            Primary Admin
+                            Org Admin
                           </Badge>
                         ) : (
                           renderRoles(user.role)

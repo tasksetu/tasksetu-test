@@ -178,7 +178,6 @@ userFeatureUsageSchema.statics.consumeUsage = async function (
     const periodKey = this.getPeriodKey(limitType);
     const featureCodeUpper = featureCode.toUpperCase();
 
-    console.log(`\n📊 [UserFeatureUsage.consumeUsage] START - user: ${userId}, feature: ${featureCodeUpper}, limitType: ${limitType}, periodKey: ${periodKey}, amount: ${amount}`);
 
     const query = {
         user_id: userId,
@@ -192,7 +191,6 @@ userFeatureUsageSchema.statics.consumeUsage = async function (
         : await this.findOne(query);
 
     const currentPeriodUsage = existingRecord?.used_count || 0;
-    console.log(`📊 [UserFeatureUsage.consumeUsage] Existing record with periodKey=${periodKey}:`, existingRecord ? `found (used_count: ${currentPeriodUsage})` : 'NOT FOUND');
 
     // ✅ FIX: ALWAYS check ALL period_keys to find the maximum usage
     // This ensures we're incrementing from the highest usage value
@@ -206,7 +204,6 @@ userFeatureUsageSchema.statics.consumeUsage = async function (
             : await this.findOne({ user_id: userId, feature_code: featureCodeUpper, period_key: 'TOTAL' });
 
         if (totalRecord && totalRecord.used_count > maxUsageAcrossPeriods) {
-            console.log(`📊 [UserFeatureUsage.consumeUsage] Found higher TOTAL usage: ${totalRecord.used_count} > current ${maxUsageAcrossPeriods}`);
             maxUsageAcrossPeriods = totalRecord.used_count;
         }
     }
@@ -219,14 +216,12 @@ userFeatureUsageSchema.statics.consumeUsage = async function (
             : await this.findOne({ user_id: userId, feature_code: featureCodeUpper, period_key: monthlyPeriodKey });
 
         if (monthlyRecord && monthlyRecord.used_count > maxUsageAcrossPeriods) {
-            console.log(`📊 [UserFeatureUsage.consumeUsage] Found higher MONTHLY (${monthlyPeriodKey}) usage: ${monthlyRecord.used_count} > current ${maxUsageAcrossPeriods}`);
             maxUsageAcrossPeriods = monthlyRecord.used_count;
         }
     }
 
     // Calculate the new usage value
     const newUsageValue = maxUsageAcrossPeriods + amount;
-    console.log(`📊 [UserFeatureUsage.consumeUsage] Max usage across periods: ${maxUsageAcrossPeriods}, New value will be: ${newUsageValue}`);
 
     // Use findOneAndUpdate with upsert for atomic operation
     // Always use $set with the calculated value to ensure consistency
@@ -250,7 +245,6 @@ userFeatureUsageSchema.statics.consumeUsage = async function (
     };
 
     const result = await this.findOneAndUpdate(query, update, options);
-    console.log(`📊 [UserFeatureUsage.consumeUsage] END - Result: periodKey=${result.period_key}, used_count=${result.used_count}\n`);
 
     return result;
 };
@@ -293,7 +287,6 @@ userFeatureUsageSchema.statics.getCurrentUsage = async function (
         }).lean();
         if (totalUsage && totalUsage.used_count > used) {
             used = totalUsage.used_count;
-            console.log(`📊 [UserFeatureUsage.getCurrentUsage] Found higher TOTAL usage for ${featureCodeUpper}: ${used}`);
         }
     }
 
@@ -307,7 +300,6 @@ userFeatureUsageSchema.statics.getCurrentUsage = async function (
         }).lean();
         if (monthlyUsage && monthlyUsage.used_count > used) {
             used = monthlyUsage.used_count;
-            console.log(`📊 [UserFeatureUsage.getCurrentUsage] Found higher MONTHLY usage for ${featureCodeUpper}: ${used}`);
         }
     }
 
@@ -326,7 +318,6 @@ userFeatureUsageSchema.statics.getCurrentUsage = async function (
 
             if (legacyUsage && legacyUsage.usage_count > 0) {
                 used = legacyUsage.usage_count;
-                console.log(`📊 [UserFeatureUsage.getCurrentUsage] Fallback to legacy: user=${userId}, feature=${featureCode}, used=${used}`);
             }
 
             // ✅ FIX: Also check legacy TOTAL if current limit_type is MONTHLY
@@ -339,7 +330,6 @@ userFeatureUsageSchema.statics.getCurrentUsage = async function (
 
                 if (legacyTotalUsage && legacyTotalUsage.usage_count > 0) {
                     used = legacyTotalUsage.usage_count;
-                    console.log(`📊 [UserFeatureUsage.getCurrentUsage] Fallback to legacy TOTAL: user=${userId}, feature=${featureCode}, used=${used}`);
                 }
             }
         } catch (err) {
@@ -405,7 +395,6 @@ userFeatureUsageSchema.statics.getUserCurrentUsage = async function (
             }).lean();
             if (totalUsage && totalUsage.used_count > used) {
                 used = totalUsage.used_count;
-                console.log(`📊 [UserFeatureUsage] Found higher TOTAL usage for ${featureCodeUpper}: ${used}`);
             }
         }
 
@@ -419,7 +408,6 @@ userFeatureUsageSchema.statics.getUserCurrentUsage = async function (
             }).lean();
             if (monthlyUsage && monthlyUsage.used_count > used) {
                 used = monthlyUsage.used_count;
-                console.log(`📊 [UserFeatureUsage] Found higher MONTHLY usage for ${featureCodeUpper}: ${used}`);
             }
         }
 
@@ -438,7 +426,6 @@ userFeatureUsageSchema.statics.getUserCurrentUsage = async function (
 
                 if (legacyUsage && legacyUsage.usage_count > 0) {
                     used = legacyUsage.usage_count;
-                    console.log(`📊 [UserFeatureUsage] Fallback to legacy: user=${userId}, feature=${mapping.feature_code}, used=${used}`);
                 }
 
                 // ✅ FIX: Also check legacy TOTAL if current limit_type is MONTHLY
@@ -451,12 +438,10 @@ userFeatureUsageSchema.statics.getUserCurrentUsage = async function (
 
                     if (legacyTotalUsage && legacyTotalUsage.usage_count > 0) {
                         used = legacyTotalUsage.usage_count;
-                        console.log(`📊 [UserFeatureUsage] Fallback to legacy TOTAL: user=${userId}, feature=${mapping.feature_code}, used=${used}`);
                     }
                 }
             } catch (err) {
                 // Ignore errors from legacy model - it might not exist
-                console.log(`📊 [UserFeatureUsage] Legacy model check failed: ${err.message}`);
             }
         }
 
@@ -524,7 +509,6 @@ userFeatureUsageSchema.statics.validateDowngrade = async function (
 
             if (totalUsage && totalUsage.used_count > 0) {
                 used = totalUsage.used_count;
-                console.log(`📊 [validateDowngrade] Found TOTAL period usage for ${featureCodeUpper}: ${used}`);
             }
         }
 
@@ -555,7 +539,6 @@ userFeatureUsageSchema.statics.validateDowngrade = async function (
 
                     if (legacyTotalUsage && legacyTotalUsage.usage_count > 0) {
                         used = legacyTotalUsage.usage_count;
-                        console.log(`📊 [validateDowngrade] Fallback to legacy TOTAL: ${featureCodeUpper}, used=${used}`);
                     }
                 }
             } catch (err) {

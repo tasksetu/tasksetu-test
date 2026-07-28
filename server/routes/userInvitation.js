@@ -135,41 +135,6 @@ async function getOrgFreeUserQuota(organizationId) {
     },
   };
 }
-/**
- * @swagger
- * /api/organization/check-email-exists:
- *   post:
- *     summary: Check if an email is already a member of your organization
- *     tags: [Organization - User Invitation]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *                 example: user@example.com
- *     responses:
- *       200:
- *         description: Email check result
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 exists:
- *                   type: boolean
- *                 message:
- *                   type: string
- *       400:
- *         description: Email is required
- *       500:
- *         description: Failed to check email
- */
 // Check if email exists
 router.post("/check-email-exists", authenticateToken, async (req, res) => {
   try {
@@ -202,8 +167,6 @@ router.get("/free-user-quota", authenticateToken, requireOrgAdminOrAbove, async 
   try {
     const quota = await getOrgFreeUserQuota(req.user.organizationId);
 
-    console.log(`📊 Free user quota for org ${req.user.organizationId}:`, quota);
-
     res.json({
       success: true,
       data: quota,
@@ -214,89 +177,6 @@ router.get("/free-user-quota", authenticateToken, requireOrgAdminOrAbove, async 
   }
 });
 
-/**
- * @swagger
- * /api/organization/invite-users:
-
- *   post:
- *     summary: Invite users to your organization
- *     tags: [Organization - User Invitation]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               invites:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     name:
- *                       type: string
- *                     email:
- *                       type: string
- *                     role:
- *                       type: array
- *                       items:
- *                         type: string
- *                       example: ["employee"]
- *                     licenseId:
- *                       type: string
- *                     department:
- *                       type: string
- *                     designation:
- *                       type: string
- *                     location:
- *                       type: string
- *                     phone:
- *                       type: string
- *                     sendEmail:
- *                       type: boolean
- *               adminUser:
- *                 type: object
- *                 description: (Usually injected by backend, not required in request)
- *     responses:
- *       200:
- *         description: Invitations processed
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 results:
- *                   type: object
- *                   properties:
- *                     success:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           email:
- *                             type: string
- *                           message:
- *                             type: string
- *                           userId:
- *                             type: string
- *                     errors:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           email:
- *                             type: string
- *                           error:
- *                             type: string
- *       400:
- *         description: Invalid invitation data
- *       500:
- *         description: Failed to process invitations
- */
 // Send user invitation - requires manager role or above  
 router.post(
   "/invite-users",
@@ -311,14 +191,7 @@ router.post(
         return res.status(400).json({ message: "Invalid invitation data" });
       }
 
-      console.log("🚀 Processing invitation for:", invites);
-      console.log("👤 Admin user:", {
-        id: adminUser.userId || adminUser.id,
-        email: adminUser.email,
-        orgId: adminUser.organizationId
-      });
-
-      // ✅ NEW: Check license pool availability using LicenseInstance model
+      // Check license pool availability using LicenseInstance model
       // Group invites by license type to check availability
       const licenseRequests = {};
       for (const invite of invites) {
@@ -329,8 +202,6 @@ router.post(
         }
       }
 
-      console.log('📦 License requests by type:', licenseRequests);
-
       // Check availability for each license type requested
       for (const [licenseCode, count] of Object.entries(licenseRequests)) {
 
@@ -339,8 +210,6 @@ router.post(
           license_code: licenseCode,
           status: 'AVAILABLE',
         });
-
-        console.log(`📊 ${licenseCode}: ${count} requested, ${availableCount} available`);
 
         if (count > availableCount) {
           return res.status(403).json({
@@ -368,8 +237,6 @@ router.post(
 
       if (freeInvitesInBatch > 0) {
         const quota = await getOrgFreeUserQuota(adminUser.organizationId);
-
-        console.log(`📊 Free user quota check: entitled=${quota.entitled}, used=${quota.used}, batch=${freeInvitesInBatch}`);
 
         if (quota.used + freeInvitesInBatch > quota.entitled) {
           const remaining = quota.remaining;
@@ -466,8 +333,6 @@ router.post(
             continue;
           }
 
-          console.log(`📧 Processing invite for ${invite.email}`);
-
           // ✅ Get organization details
           const organization = await storage.getOrganization(
             adminUser.organizationId
@@ -477,8 +342,6 @@ router.post(
           // Get admin user details
           const adminUserId = adminUser.userId || adminUser.id || adminUser._id;
           const adminName = adminUser.name || adminUser.email || "Admin";
-
-          console.log(`📦 Preparing invitation data for ${invite.email}`);
 
           // ✅ Pass full inviteData with company account type
           const invitationResult = await storage.inviteUserToOrganization({
@@ -513,8 +376,6 @@ router.post(
 
             if (licenseAssignment.success) {
               seatsAssigned++;
-
-              console.log(`✅ Successfully invited ${invite.email}, User ID: ${invitationResult._id}, License: ${licenseCode}`);
 
               results.success.push({
                 email: invite.email,
@@ -566,9 +427,6 @@ router.post(
       }
 
       // ✅ LICENSE ASSIGNMENT COMPLETED
-      // Note: License counts are now managed by LicenseInstance model automatically
-      console.log(`\n📤 Final results: ${results.success.length} success, ${results.errors.length} errors`);
-      console.log(`🔑 Successfully assigned ${seatsAssigned} license(s)`);
 
       res.json({
         message: "Invitations processed",
@@ -587,6 +445,5 @@ router.post(
 
 // Export router and registration function
 export function registerUserInvitationRoutes(app) {
-  console.log('Registering user invitation routes');
   app.use('/api/organization', router);
 }

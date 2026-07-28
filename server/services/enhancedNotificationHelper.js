@@ -62,7 +62,8 @@ export class EnhancedNotificationHelper {
             // STEP 1: Notify Assignee (if different from creator)
             // ============================================
             const taskAssigneeId = EnhancedNotificationHelper._extractId(task.assignedTo);
-            if (taskAssigneeId && taskAssigneeId !== createdBy.toString()) {
+            const creatorIdStr = EnhancedNotificationHelper._extractId(createdBy);
+            if (taskAssigneeId && creatorIdStr && taskAssigneeId !== creatorIdStr) {
                 try {
                     NotificationLogger.logTaskCreation('NOTIFY_ASSIGNEE_START', {
                         assigneeId: taskAssigneeId,

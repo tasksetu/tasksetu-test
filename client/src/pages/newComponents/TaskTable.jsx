@@ -17,7 +17,7 @@ import {
   canEditTaskStatus,
   canMarkAsCompleted,
 } from "../../utils/taskHelpers";
-import { ClockAlert, ClockAlertIcon, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ClockAlert, ClockAlertIcon, ArrowUpDown, ArrowUp, ArrowDown, Check, Flag, Target, ShieldCheck, CheckSquare } from "lucide-react";
 
 const TaskTable = React.memo(function TaskTable({
   paginatedTasks,
@@ -458,23 +458,45 @@ const TaskTable = React.memo(function TaskTable({
 
                   {/* Progress Cell */}
                   <TableCell className="px-6 py-1.5 text-nowrap">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-300 ${
-                            task.approvalStatus === "rejected"
-                              ? "bg-red-600"
-                              : task.approvalStatus === "approved"
-                                ? "bg-green-600"
-                                : "bg-blue-600"
-                          }`}
-                          style={{ width: `${task.progress || 0}%` }}
-                        />
-                      </div>
-                      <span className="text-[10px] text-gray-500 min-w-[24px]">
-                        {task.progress || 0}%
-                      </span>
-                    </div>
+                    {(() => {
+                      let effectiveProgress = task.progress || 0;
+                      if (task.subtasks && task.subtasks.length > 0) {
+                        const total = task.subtasks.reduce((sum, st) => {
+                          const isApprovedOrDone =
+                            st.approvalStatus === "approved" ||
+                            st.status === "DONE" ||
+                            st.status === "completed";
+                          const isRejectedOrCancelled =
+                            st.approvalStatus === "rejected" ||
+                            st.status === "CANCELLED";
+
+                          if (isApprovedOrDone || isRejectedOrCancelled) return sum + 100;
+                          if (typeof st.progress === "number" && st.progress > 0) return sum + st.progress;
+                          if (st.status === "INPROGRESS" || st.status === "IN_PROGRESS") return sum + 50;
+                          return sum;
+                        }, 0);
+                        effectiveProgress = Math.round(total / task.subtasks.length);
+                      }
+                      return (
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full transition-all duration-300 ${
+                                task.approvalStatus === "rejected"
+                                  ? "bg-red-600"
+                                  : task.approvalStatus === "approved"
+                                    ? "bg-green-600"
+                                    : "bg-blue-600"
+                              }`}
+                              style={{ width: `${effectiveProgress}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-gray-500 min-w-[24px]">
+                            {effectiveProgress}%
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </TableCell>
 
                   {/* Tags Cell */}
@@ -576,7 +598,17 @@ const TaskTable = React.memo(function TaskTable({
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="flex items-center gap-2 pl-8">
-                            <span className="text-blue-500">↳</span>
+                            {subtask.taskType === "approval" || subtask.isApprovalTask ? (
+                              <span className="inline-flex items-center justify-center w-4.5 h-4.5 rounded-[4px] bg-gradient-to-b from-emerald-400 to-emerald-600 text-white shadow-sm flex-shrink-0" title="Approval Subtask">
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              </span>
+                            ) : subtask.taskType === "milestone" || subtask.isMilestone ? (
+                              <span className="inline-flex items-center justify-center text-base flex-shrink-0 leading-none" title="Milestone Subtask">
+                                🎯
+                              </span>
+                            ) : (
+                              <span className="text-blue-500 font-bold">↳</span>
+                            )}
                             {editingSubtaskId ===
                             (subtask._id || subtask.id) ? (
                               <input
@@ -660,23 +692,41 @@ const TaskTable = React.memo(function TaskTable({
 
                         <TableCell className="px-6 py-1.5 text-left">
                           <div onClick={(e) => e.stopPropagation()}>
-                            <TaskStatusDropdown
-                              task={subtask}
-                              currentStatus={subtask.status}
-                              statuses={companyStatuses}
-                              onStatusChange={(newStatus) =>
-                                handleSubtaskStatusChange(
-                                  task.id,
-                                  subtask.id,
-                                  newStatus,
-                                )
-                              }
-                              canEdit={canEditTaskStatusFn(
-                                subtask,
-                                currentUser,
-                              )}
-                              canMarkCompleted={true}
-                            />
+                            {subtask.isApprovalTask || subtask.taskType === "approval" ? (
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium text-white ${
+                                  subtask.status === "CANCELLED" || subtask.approvalStatus === "rejected"
+                                    ? "bg-red-600"
+                                    : subtask.approvalStatus === "approved" || subtask.status === "DONE" || subtask.status === "completed"
+                                      ? "bg-green-600"
+                                      : "bg-yellow-600"
+                                }`}
+                              >
+                                {subtask.status === "CANCELLED" || subtask.approvalStatus === "rejected"
+                                  ? "Rejected"
+                                  : subtask.approvalStatus === "approved" || subtask.status === "DONE" || subtask.status === "completed"
+                                    ? "Approved"
+                                    : "Pending"}
+                              </span>
+                            ) : (
+                              <TaskStatusDropdown
+                                task={subtask}
+                                currentStatus={subtask.status}
+                                statuses={companyStatuses}
+                                onStatusChange={(newStatus) =>
+                                  handleSubtaskStatusChange(
+                                    task.id,
+                                    subtask.id,
+                                    newStatus,
+                                  )
+                                }
+                                canEdit={canEditTaskStatusFn(
+                                  subtask,
+                                  currentUser,
+                                )}
+                                canMarkCompleted={true}
+                              />
+                            )}
                           </div>
                         </TableCell>
 
@@ -699,17 +749,26 @@ const TaskTable = React.memo(function TaskTable({
                         </TableCell>
 
                         <TableCell className="px-6 py-1.5">
-                          <div className="flex items-center gap-2">
-                            <div className="w-12 bg-gray-100 h-1 rounded-full overflow-hidden">
-                              <div
-                                className="bg-blue-500 h-full transition-all duration-300"
-                                style={{ width: `${subtask.progress || 0}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] text-gray-500 min-w-[24px]">
-                              {subtask.progress || 0}%
-                            </span>
-                          </div>
+                          {(() => {
+                            const isRejected = subtask.approvalStatus === "rejected" || subtask.status === "CANCELLED";
+                            const isApprovedOrDone = subtask.approvalStatus === "approved" || subtask.status === "DONE" || subtask.status === "completed";
+                            const subtaskProgress = (subtask.isApprovalTask || subtask.taskType === "approval")
+                              ? (isApprovedOrDone || isRejected ? 100 : (subtask.progress || 0))
+                              : (isApprovedOrDone ? 100 : (subtask.progress || 0));
+                            return (
+                              <div className="flex items-center gap-2">
+                                <div className="w-12 bg-gray-100 h-1 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full transition-all duration-300 ${isRejected ? "bg-red-500" : "bg-emerald-500"}`}
+                                    style={{ width: `${subtaskProgress}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] text-gray-500 min-w-[24px]">
+                                  {subtaskProgress}%
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </TableCell>
 
                         <TableCell className="px-6 py-1.5">
@@ -759,6 +818,16 @@ const TaskTable = React.memo(function TaskTable({
                                 handleDeleteSubtask(
                                   task._id || task.id,
                                   subtask._id || subtask.id,
+                                )
+                              }
+                              onSnooze={(snoozeData) =>
+                                handleSnoozeTask(subtask._id || subtask.id, snoozeData)
+                              }
+                              onStatusChange={(newStatus) =>
+                                handleSubtaskStatusChange(
+                                  task._id || task.id,
+                                  subtask._id || subtask.id,
+                                  newStatus,
                                 )
                               }
                             />

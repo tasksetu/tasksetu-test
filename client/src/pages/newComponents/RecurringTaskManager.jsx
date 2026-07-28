@@ -275,7 +275,7 @@ const RecurringTaskManager = () => {
       return response;
     },
     retry: 1,
-    staleTime: 0,
+    staleTime: 0
   });
 
   // Transform API data to match component expectations

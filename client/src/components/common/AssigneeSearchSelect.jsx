@@ -108,11 +108,38 @@ const AssigneeSearchSelect = ({
   const customStyles = {
     control: (provided, state) => ({
       ...provided,
+      minHeight: '32px',
+      height: '32px',
+      maxHeight: '32px',
       borderColor: state.isFocused ? '#3B82F6' : '#D1D5DB',
       boxShadow: state.isFocused ? '0 0 0 2px rgba(59, 130, 246, 0.1)' : 'none',
       '&:hover': {
         borderColor: '#3B82F6'
       }
+    }),
+    valueContainer: (provided) => ({
+      ...provided,
+      height: '32px',
+      minHeight: '32px',
+      maxHeight: '32px',
+      padding: '0 8px',
+      display: 'flex',
+      alignItems: 'center',
+    }),
+    input: (provided) => ({
+      ...provided,
+      margin: '0px',
+      padding: '0px',
+    }),
+    indicatorsContainer: (provided) => ({
+      ...provided,
+      height: '32px',
+      minHeight: '32px',
+      maxHeight: '32px',
+    }),
+    dropdownIndicator: (provided) => ({
+      ...provided,
+      padding: '2px 6px',
     }),
     menu: (provided) => ({
       ...provided,

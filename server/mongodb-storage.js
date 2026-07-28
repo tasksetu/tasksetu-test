@@ -27,12 +27,12 @@ import {
   EntityType,
   NotificationPriority,
   ChannelType,
-  ChannelStatus
-} from './modals/notificationModal.js';
+  ChannelStatus,
+} from "./modals/notificationModal.js";
 export class MongoStorage {
   // Token generation methods
   generateToken(user) {
-    const JWT_SECRET = process.env.JWT_SECRET;
+    const JWT_SECRET = process.env.JWT_SECRET || "your-jwt-secret-key";
     return jwt.sign(
       {
         id: user.id || user._id,
@@ -43,7 +43,7 @@ export class MongoStorage {
         role: user.role,
       },
       JWT_SECRET,
-      { expiresIn: "30d" } // Extended to 30 days
+      { expiresIn: "30d" }, // Extended to 30 days
     );
   }
 
@@ -87,13 +87,13 @@ export class MongoStorage {
     const users = await User.find({ organization_id: orgId })
       .select("-passwordHash")
       .populate({
-        path: 'license_id',
-        select: 'license_type license_id status assigned_at'
+        path: "license_id",
+        select: "license_type license_id status assigned_at",
       })
       .sort({ firstName: 1, lastName: 1 });
 
     // Add license_code field for backward compatibility
-    return users.map(user => {
+    return users.map((user) => {
       const userObj = user.toObject();
       if (user.license_id) {
         userObj.license_code = user.license_id.license_type;
@@ -112,21 +112,10 @@ export class MongoStorage {
 
   async getUserByEmail(email) {
     const user = await User.findOne({ email: email.toLowerCase() });
-    if (user) {
-      console.log("getUserByEmail found user:", {
-        id: user._id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        hasFirstName: !!user.firstName,
-        hasLastName: !!user.lastName,
-      });
-    }
     return user;
   }
 
   async createUser(userData) {
-    console.log("Creating user with data:", userData);
     // For invited users, set default values for required fields
     if (userData.status === "invited" && !userData.passwordHash) {
       userData.firstName = userData.firstName || "";
@@ -137,7 +126,7 @@ export class MongoStorage {
       userData.emailVerified = false;
       userData.inviteToken = this.generateEmailVerificationToken();
       userData.inviteTokenExpiry = new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000
+        Date.now() + 7 * 24 * 60 * 60 * 1000,
       ); // 7 days
       userData.invitedAt = new Date();
     }
@@ -155,22 +144,24 @@ export class MongoStorage {
     // 🆕 NEW: Set default license fields for user-level licensing
     // All new users get EXPLORE license with trial_days from License model
     if (!userData.license_code) {
-      userData.license_code = 'EXPLORE';
+      userData.license_code = "EXPLORE";
     }
-    if (userData.license_code === 'EXPLORE') {
+    if (userData.license_code === "EXPLORE") {
       userData.license_expiry = null;
     }
-    console.log("user created....", userData);
     const user = new User(userData);
     const savedUser = await user.save();
 
     // Create default notification settings for the new user
     try {
-      const { NotificationSettings } = await import('./modals/notificationSettingsModal.js');
+      const { NotificationSettings } =
+        await import("./modals/notificationSettingsModal.js");
       await NotificationSettings.createDefaultSettings(savedUser._id);
-      console.log('Default notification settings created for user:', savedUser._id);
     } catch (settingsError) {
-      console.error('Failed to create notification settings for user:', settingsError);
+      console.error(
+        "Failed to create notification settings for user:",
+        settingsError,
+      );
       // Don't fail user creation if notification settings fail
     }
 
@@ -283,7 +274,7 @@ export class MongoStorage {
           changes: ActivityHelper.createComparisonData(
             oldProject.toObject(),
             projectData,
-            ["name", "description", "status"]
+            ["name", "description", "status"],
           ),
         },
       });
@@ -399,12 +390,7 @@ export class MongoStorage {
           googleCalendarConnected: true,
           googleCalendarEmail: tokens.email || null,
         },
-        { new: true }
-      );
-
-      console.log(
-        "Google Calendar tokens stored successfully for user:",
-        userId
+        { new: true },
       );
       return updatedUser;
     } catch (error) {
@@ -416,7 +402,7 @@ export class MongoStorage {
   async getGoogleCalendarTokens(userId) {
     try {
       const user = await User.findById(userId).select(
-        "googleCalendarTokens googleCalendarConnected"
+        "googleCalendarTokens googleCalendarConnected",
       );
       return user?.googleCalendarTokens || null;
     } catch (error) {
@@ -434,7 +420,6 @@ export class MongoStorage {
         },
         googleCalendarConnected: false,
       });
-      console.log("Google Calendar tokens removed for user:", userId);
     } catch (error) {
       console.error("Error removing Google Calendar tokens:", error);
       throw error;
@@ -449,14 +434,10 @@ export class MongoStorage {
 
       // Get assignee's Google Calendar tokens
       const assigneeTokens = await this.getGoogleCalendarTokens(
-        task.assignedTo
+        task.assignedTo,
       );
 
       if (!assigneeTokens || !assigneeTokens.access_token) {
-        console.log(
-          "No Google Calendar tokens found for user:",
-          task.assignedTo
-        );
         return null;
       }
 
@@ -465,9 +446,10 @@ export class MongoStorage {
 
       // Set up OAuth2 client
       const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID || '798343498792-uq3sq26veej0ptj8r9n949mu107m3qap.apps.googleusercontent.com',
+        process.env.GOOGLE_CLIENT_ID ||
+          "798343498792-uq3sq26veej0ptj8r9n949mu107m3qap.apps.googleusercontent.com",
         process.env.GOOGLE_CLIENT_SECRET,
-        process.env.GOOGLE_REDIRECT_URI
+        process.env.GOOGLE_REDIRECT_URI,
       );
 
       oauth2Client.setCredentials(assigneeTokens);
@@ -480,9 +462,11 @@ export class MongoStorage {
 
       const event = {
         summary: `Task: ${task.title}`,
-        description: `${task.description || ""}\n\nTask ID: ${task._id
-          }\nPriority: ${task.priority || "Normal"}\nStatus: ${task.status || "Pending"
-          }`,
+        description: `${task.description || ""}\n\nTask ID: ${
+          task._id
+        }\nPriority: ${task.priority || "Normal"}\nStatus: ${
+          task.status || "Pending"
+        }`,
         start: {
           dateTime: eventStartTime.toISOString(),
           timeZone: "UTC",
@@ -510,8 +494,6 @@ export class MongoStorage {
       await Task.findByIdAndUpdate(task._id, {
         googleCalendarEventId: response.data.id,
       });
-
-      console.log("Google Calendar event created:", response.data.id);
       return response.data;
     } catch (error) {
       console.error("Error creating Google Calendar event:", error);
@@ -538,7 +520,7 @@ export class MongoStorage {
 
       // Get assignee's Google Calendar tokens
       const assigneeTokens = await this.getGoogleCalendarTokens(
-        task.assignedTo
+        task.assignedTo,
       );
 
       if (!assigneeTokens || !assigneeTokens.access_token) {
@@ -552,7 +534,7 @@ export class MongoStorage {
       const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
-        process.env.GOOGLE_REDIRECT_URI
+        process.env.GOOGLE_REDIRECT_URI,
       );
 
       oauth2Client.setCredentials(assigneeTokens);
@@ -565,9 +547,11 @@ export class MongoStorage {
 
       const event = {
         summary: `Task: ${task.title}`,
-        description: `${task.description || ""}\n\nTask ID: ${task._id
-          }\nPriority: ${task.priority || "Normal"}\nStatus: ${task.status || "Pending"
-          }`,
+        description: `${task.description || ""}\n\nTask ID: ${
+          task._id
+        }\nPriority: ${task.priority || "Normal"}\nStatus: ${
+          task.status || "Pending"
+        }`,
         start: {
           dateTime: eventStartTime.toISOString(),
           timeZone: "UTC",
@@ -585,7 +569,6 @@ export class MongoStorage {
         resource: event,
       });
 
-      console.log("Google Calendar event updated:", response.data.id);
       return response.data;
     } catch (error) {
       console.error("Error updating Google Calendar event:", error);
@@ -601,7 +584,7 @@ export class MongoStorage {
 
       // Get assignee's Google Calendar tokens
       const assigneeTokens = await this.getGoogleCalendarTokens(
-        task.assignedTo
+        task.assignedTo,
       );
 
       if (!assigneeTokens || !assigneeTokens.access_token) {
@@ -615,7 +598,7 @@ export class MongoStorage {
       const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
-        process.env.GOOGLE_REDIRECT_URI
+        process.env.GOOGLE_REDIRECT_URI,
       );
 
       oauth2Client.setCredentials(assigneeTokens);
@@ -627,7 +610,6 @@ export class MongoStorage {
         eventId: task.googleCalendarEventId,
       });
 
-      console.log("Google Calendar event deleted:", task.googleCalendarEventId);
       return true;
     } catch (error) {
       console.error("Error deleting Google Calendar event:", error);
@@ -638,70 +620,91 @@ export class MongoStorage {
   // Notification helper methods
   async createNotificationForTask(task, triggerEvent, targetUserId = null) {
     try {
-      const { NotificationService } = await import('./services/notificationService.js');
+      const { NotificationService } =
+        await import("./services/notificationService.js");
 
       // Determine target user
       const userId = targetUserId || task.assignedTo || task.createdBy;
       if (!userId) return null;
 
+      // Don't send notification to self for task creation / assignment
+      const creatorId =
+        task.createdBy?._id?.toString() || task.createdBy?.toString();
+      const targetId = userId?._id?.toString() || userId?.toString();
+      if (
+        (triggerEvent === TriggerEvent.TASK_CREATED ||
+          triggerEvent === TriggerEvent.TASK_ASSIGNED) &&
+        creatorId &&
+        targetId &&
+        creatorId === targetId
+      ) {
+        return null;
+      }
+
       // Get task creator info for message context
-      const creator = await User.findById(task.createdBy).select('firstName lastName');
-      const creatorName = creator ? `${creator.firstName} ${creator.lastName}`.trim() : 'Someone';
+      const creator = await User.findById(task.createdBy).select(
+        "firstName lastName",
+      );
+      const creatorName = creator
+        ? `${creator.firstName} ${creator.lastName}`.trim()
+        : "Someone";
 
       // Generate appropriate message based on trigger event
-      let title, message, priority = NotificationPriority.NORMAL;
+      let title,
+        message,
+        priority = NotificationPriority.NORMAL;
       const channels = [ChannelType.IN_APP];
 
       switch (triggerEvent) {
         case TriggerEvent.TASK_CREATED:
-          title = 'New Task Assigned';
+          title = "New Task Assigned";
           message = `${creatorName} assigned you a new task: "${task.title}"`;
-          if (task.priority === 'urgent' || task.priority === 'high') {
+          if (task.priority === "urgent" || task.priority === "high") {
             priority = NotificationPriority.URGENT;
             channels.push(ChannelType.EMAIL);
           }
           break;
 
         case TriggerEvent.TASK_UPDATED:
-          title = 'Task Updated';
+          title = "Task Updated";
           message = `Task "${task.title}" has been updated`;
           break;
 
         case TriggerEvent.TASK_COMPLETED:
-          title = 'Task Completed';
+          title = "Task Completed";
           message = `Task "${task.title}" has been marked as completed`;
           break;
 
         case TriggerEvent.TASK_OVERDUE:
-          title = 'Task Overdue';
+          title = "Task Overdue";
           message = `Task "${task.title}" is now overdue`;
           priority = NotificationPriority.URGENT;
           channels.push(ChannelType.EMAIL);
           break;
 
         case TriggerEvent.TASK_DUE_TODAY:
-          title = 'Task Due Today';
+          title = "Task Due Today";
           message = `Task "${task.title}" is due today`;
           priority = NotificationPriority.URGENT;
           channels.push(ChannelType.EMAIL);
           break;
 
         case TriggerEvent.TASK_DUE_SOON:
-          title = 'Task Due Soon';
+          title = "Task Due Soon";
           message = `Task "${task.title}" is due soon`;
           break;
 
         case TriggerEvent.TASK_REASSIGNED:
-          title = 'Task Reassigned';
+          title = "Task Reassigned";
           message = `You have been assigned to task: "${task.title}"`;
-          if (task.priority === 'urgent' || task.priority === 'high') {
+          if (task.priority === "urgent" || task.priority === "high") {
             priority = NotificationPriority.URGENT;
             channels.push(ChannelType.EMAIL);
           }
           break;
 
         default:
-          title = 'Task Notification';
+          title = "Task Notification";
           message = `Update on task: "${task.title}"`;
       }
 
@@ -710,7 +713,7 @@ export class MongoStorage {
         trigger_event: triggerEvent,
         related_entity: {
           entity_type: EntityType.TASK,
-          entity_id: task._id
+          entity_id: task._id,
         },
         title,
         message,
@@ -723,31 +726,37 @@ export class MongoStorage {
           task_status: task.status,
           task_due_date: task.dueDate,
           creator_id: task.createdBy,
-          creator_name: creatorName
-        }
+          creator_name: creatorName,
+        },
       };
 
-      const notification = await NotificationService.createNotification(notificationData);
-      console.log('Notification created for task:', task.title, 'Event:', triggerEvent);
+      const notification =
+        await NotificationService.createNotification(notificationData);
       return notification;
-
     } catch (error) {
-      console.error('Error creating notification for task:', error);
+      console.error("Error creating notification for task:", error);
       // Don't throw error to prevent task operations from failing
       return null;
     }
   }
 
-  async createNotificationForUser(userId, triggerEvent, title, message, options = {}) {
+  async createNotificationForUser(
+    userId,
+    triggerEvent,
+    title,
+    message,
+    options = {},
+  ) {
     try {
-      const { NotificationService } = await import('./services/notificationService.js');
+      const { NotificationService } =
+        await import("./services/notificationService.js");
 
       const {
         priority = NotificationPriority.NORMAL,
         channels = [ChannelType.IN_APP],
         relatedEntity = null,
         metadata = {},
-        expiresAt = null
+        expiresAt = null,
       } = options;
 
       const notificationData = {
@@ -755,66 +764,64 @@ export class MongoStorage {
         trigger_event: triggerEvent,
         related_entity: relatedEntity || {
           entity_type: EntityType.TASK,
-          entity_id: userId // Fallback to user ID
+          entity_id: userId, // Fallback to user ID
         },
         title,
         message,
         priority,
         channels,
         metadata,
-        expires_at: expiresAt
+        expires_at: expiresAt,
       };
 
-      const notification = await NotificationService.createNotification(notificationData);
-      console.log('General notification created for user:', userId, 'Event:', triggerEvent);
+      const notification =
+        await NotificationService.createNotification(notificationData);
       return notification;
-
     } catch (error) {
-      console.error('Error creating general notification:', error);
+      console.error("Error creating general notification:", error);
       return null;
     }
   }
 
   async updateTask(id, taskData, userId) {
-    console.log('🔄 [STORAGE UPDATE TASK] Step 1: Starting Task Update');
-    console.log('📊 [STORAGE UPDATE TASK] Step 2: Update Parameters:', {
-      taskId: id,
-      userId,
-      hasComments: !!taskData.comments,
-      commentsCount: taskData.comments?.length,
-      updateKeys: Object.keys(taskData)
-    });
-
     try {
-      console.log('🔍 [STORAGE UPDATE TASK] Step 3: Fetching Old Task...');
       const oldTask = await Task.findById(id);
       if (!oldTask) {
-        console.log('❌ [STORAGE UPDATE TASK] Step 3: Task Not Found');
-        throw new Error('Task not found');
+        throw new Error("Task not found");
       }
-      console.log('✅ [STORAGE UPDATE TASK] Step 3: Old Task Retrieved');
-
-      console.log('💾 [STORAGE UPDATE TASK] Step 4: Updating Task...');
       const task = await Task.findByIdAndUpdate(
         id,
         { $set: taskData },
-        { new: true, strict: false, runValidators: false }
+        { new: true, strict: false, runValidators: false },
       );
-      console.log('✅ [STORAGE UPDATE TASK] Step 4: Task Updated Successfully');
 
       if (userId && oldTask) {
         // Check if any meaningful changes were made (ignore updatedAt, __v, etc.)
         const oldObj = oldTask.toObject();
 
         // Track specific changes that have dedicated activity types
-        const statusChanged = oldTask.status !== taskData.status && taskData.status;
-        const priorityChanged = oldTask.priority !== taskData.priority && taskData.priority;
-        const dueDateChanged = oldTask.dueDate?.getTime() !== taskData.dueDate?.getTime() && taskData.dueDate;
+        const statusChanged =
+          oldTask.status !== taskData.status && taskData.status;
+        const priorityChanged =
+          oldTask.priority !== taskData.priority && taskData.priority;
+        const dueDateChanged =
+          oldTask.dueDate?.getTime() !== taskData.dueDate?.getTime() &&
+          taskData.dueDate;
 
         // Check for other meaningful changes (excluding specific tracked fields)
-        const hasOtherChanges = Object.keys(taskData).some(key => {
+        const hasOtherChanges = Object.keys(taskData).some((key) => {
           // Ignore auto-update fields and specifically tracked fields
-          if (['updatedAt', '__v', 'comments', 'status', 'priority', 'dueDate'].includes(key)) return false;
+          if (
+            [
+              "updatedAt",
+              "__v",
+              "comments",
+              "status",
+              "priority",
+              "dueDate",
+            ].includes(key)
+          )
+            return false;
 
           // Compare values
           const oldValue = oldObj[key];
@@ -826,7 +833,7 @@ export class MongoStorage {
           }
 
           // Handle object/array comparison
-          if (typeof oldValue === 'object' && typeof newValue === 'object') {
+          if (typeof oldValue === "object" && typeof newValue === "object") {
             return JSON.stringify(oldValue) !== JSON.stringify(newValue);
           }
 
@@ -846,7 +853,7 @@ export class MongoStorage {
               changes: ActivityHelper.createComparisonData(
                 oldTask.toObject(),
                 taskData,
-                ["title", "description", "assignedTo", "collaborators"]
+                ["title", "description", "assignedTo", "collaborators"],
               ),
             },
           });
@@ -914,32 +921,38 @@ export class MongoStorage {
 
         // Create notifications for significant changes
         // Only notify if assignedTo actually changed (check if it exists in taskData updates)
-        const assigneeChanged = taskData.assignedTo !== undefined &&
+        const assigneeChanged =
+          taskData.assignedTo !== undefined &&
           oldTask.assignedTo?.toString() !== taskData.assignedTo?.toString();
-
-        console.log('DEBUG - storage.updateTask notification check:', {
-          hasAssignedToInUpdate: taskData.assignedTo !== undefined,
-          oldAssignee: oldTask.assignedTo?.toString(),
-          newAssignee: taskData.assignedTo?.toString(),
-          assigneeChanged,
-          updateKeys: Object.keys(taskData)
-        });
-
         if (assigneeChanged && task.assignedTo) {
-          console.log('DEBUG - Creating TASK_REASSIGNED notification');
           // Task reassigned
-          await this.createNotificationForTask(task, TriggerEvent.TASK_REASSIGNED, task.assignedTo);
+          await this.createNotificationForTask(
+            task,
+            TriggerEvent.TASK_REASSIGNED,
+            task.assignedTo,
+          );
         }
 
-        if (oldTask.status !== task.status && task.status === 'completed') {
+        if (oldTask.status !== task.status && task.status === "completed") {
           // Task completed - notify creator if different from completer
           if (task.createdBy && task.createdBy !== userId) {
-            await this.createNotificationForTask(task, TriggerEvent.TASK_COMPLETED, task.createdBy);
+            await this.createNotificationForTask(
+              task,
+              TriggerEvent.TASK_COMPLETED,
+              task.createdBy,
+            );
           }
-        } else if (oldTask.status !== task.status || oldTask.priority !== task.priority) {
+        } else if (
+          oldTask.status !== task.status ||
+          oldTask.priority !== task.priority
+        ) {
           // Task updated - notify assigned user if different from updater
           if (task.assignedTo && task.assignedTo !== userId) {
-            await this.createNotificationForTask(task, TriggerEvent.TASK_UPDATED, task.assignedTo);
+            await this.createNotificationForTask(
+              task,
+              TriggerEvent.TASK_UPDATED,
+              task.assignedTo,
+            );
           }
         }
 
@@ -956,14 +969,12 @@ export class MongoStorage {
           await this.updateGoogleCalendarEventForTask(task);
         }
       }
-
-      console.log('✅ [STORAGE UPDATE TASK] Step 5: Task Update Complete');
       return task;
     } catch (error) {
-      console.error('💥 [STORAGE UPDATE TASK] FATAL ERROR:', {
+      console.error("💥 [STORAGE UPDATE TASK] FATAL ERROR:", {
         message: error.message,
         stack: error.stack,
-        taskId: id
+        taskId: id,
       });
       throw error;
     }
@@ -1004,18 +1015,14 @@ export class MongoStorage {
   // Activity operations
   async createActivity(activityData) {
     try {
-      console.log('💾 [CREATE ACTIVITY] Saving to database:', JSON.stringify(activityData, null, 2));
-
       const Activity = mongoose.model("Activity");
       const activity = new Activity(activityData);
       const savedActivity = await activity.save();
 
-      console.log('✅ [CREATE ACTIVITY] Saved successfully with ID:', savedActivity._id);
-
       return savedActivity;
     } catch (error) {
-      console.error('❌ [CREATE ACTIVITY] Database save error:', error);
-      console.error('Stack:', error.stack);
+      console.error("❌ [CREATE ACTIVITY] Database save error:", error);
+      console.error("Stack:", error.stack);
       throw error;
     }
   }
@@ -1032,15 +1039,6 @@ export class MongoStorage {
     data = {},
   }) {
     try {
-      console.log('🎯 [TRACK ACTIVITY] Input params:', {
-        activityType,
-        userId,
-        organizationId,
-        relatedId,
-        relatedType,
-        data
-      });
-
       const activityData = ActivityHelper.createActivityData({
         activityType,
         userId,
@@ -1049,18 +1047,11 @@ export class MongoStorage {
         relatedType,
         data,
       });
-
-      console.log('📋 [TRACK ACTIVITY] Created activity data:', JSON.stringify(activityData, null, 2));
-
       const result = await this.createActivity(activityData);
-
-      console.log('✅ [TRACK ACTIVITY] Activity saved with ID:', result?._id);
-
       return result;
     } catch (error) {
       console.error("❌ [TRACK ACTIVITY] Error tracking activity:", error);
       console.error("Stack:", error.stack);
-      // Don't throw error to prevent breaking main operations
       return null;
     }
   }
@@ -1081,17 +1072,19 @@ export class MongoStorage {
     // Get all subtasks of this parent task
     const subtasks = await Task.find({
       parentTaskId: taskId,
-      isDeleted: false
-    }).select('_id').lean();
+      isDeleted: false,
+    })
+      .select("_id")
+      .lean();
 
-    const subtaskIds = subtasks.map(st => st._id);
+    const subtaskIds = subtasks.map((st) => st._id);
 
     // Get activities for main task AND all its subtasks
     return await Activity.find({
       $or: [
         { relatedId: taskId, relatedType: "task" },
-        { relatedId: { $in: subtaskIds }, relatedType: "task" }
-      ]
+        { relatedId: { $in: subtaskIds }, relatedType: "task" },
+      ],
     })
       .sort({ createdAt: -1 })
       .limit(limit)
@@ -1147,7 +1140,7 @@ export class MongoStorage {
   async getFormByAccessLink(accessLink) {
     return await Form.findOne({ accessLink, isPublished: true }).populate(
       "organization",
-      "name slug"
+      "name slug",
     );
   }
 
@@ -1174,7 +1167,7 @@ export class MongoStorage {
     return await Form.findByIdAndUpdate(
       id,
       { isPublished: true },
-      { new: true }
+      { new: true },
     );
   }
 
@@ -1182,7 +1175,7 @@ export class MongoStorage {
     return await Form.findByIdAndUpdate(
       id,
       { isPublished: false },
-      { new: true }
+      { new: true },
     );
   }
 
@@ -1354,7 +1347,7 @@ export class MongoStorage {
 
   async getFormIdsByOrganization(organizationId) {
     const forms = await Form.find({ organization: organizationId }).select(
-      "_id"
+      "_id",
     );
     return forms.map((f) => f._id);
   }
@@ -1516,7 +1509,7 @@ export class MongoStorage {
       // For now, return a success response since we're using predefined roles
       // In a full implementation, this would create custom roles in the database
       throw new Error(
-        "Creating custom roles is not yet implemented. Please use predefined roles: admin, member, viewer"
+        "Creating custom roles is not yet implemented. Please use predefined roles: admin, member, viewer",
       );
     } catch (error) {
       console.error("Create role error:", error);
@@ -1529,7 +1522,7 @@ export class MongoStorage {
       // For now, return a success response since we're using predefined roles
       // In a full implementation, this would update custom roles in the database
       throw new Error(
-        "Updating system roles is not allowed. Only custom roles can be modified."
+        "Updating system roles is not allowed. Only custom roles can be modified.",
       );
     } catch (error) {
       console.error("Update role error:", error);
@@ -1542,7 +1535,7 @@ export class MongoStorage {
       // For now, return a success response since we're using predefined roles
       // In a full implementation, this would delete custom roles from the database
       throw new Error(
-        "Deleting system roles is not allowed. Only custom roles can be deleted."
+        "Deleting system roles is not allowed. Only custom roles can be deleted.",
       );
     } catch (error) {
       console.error("Delete role error:", error);
@@ -1610,14 +1603,14 @@ export class MongoStorage {
           (task) =>
             task.dueDate &&
             new Date(task.dueDate) < new Date() &&
-            task.status !== "DONE"
+            task.status !== "DONE",
         ).length,
       };
 
       // Generate user performance data
       const userPerformance = await this.generateUserPerformanceData(
         filteredTasks,
-        organizationId
+        organizationId,
       );
 
       // Generate user task data for charts
@@ -1671,27 +1664,27 @@ export class MongoStorage {
     try {
       // Get all users in the organization
       const users = await User.find({ organization: organizationId }).select(
-        "_id firstName lastName email department"
+        "_id firstName lastName email department",
       );
 
       const userStats = users.map((user) => {
         const userTasks = tasks.filter(
           (task) =>
             task.assignedTo &&
-            task.assignedTo._id.toString() === user._id.toString()
+            task.assignedTo._id.toString() === user._id.toString(),
         );
 
         const completedTasks = userTasks.filter(
-          (task) => task.status === "DONE"
+          (task) => task.status === "DONE",
         ).length;
         const inProgressTasks = userTasks.filter(
-          (task) => task.status === "INPROGRESS"
+          (task) => task.status === "INPROGRESS",
         ).length;
         const overdueTasks = userTasks.filter(
           (task) =>
             task.dueDate &&
             new Date(task.dueDate) < new Date() &&
-            task.status !== "DONE"
+            task.status !== "DONE",
         ).length;
 
         const progressPercentage =
@@ -1819,10 +1812,7 @@ export class MongoStorage {
 
   // Super Admin Methods
   async getAllCompanies() {
-    console.log("Fetching all companies from database...");
     const companies = await Organization.find({}).sort({ createdAt: -1 });
-
-    console.log("Raw companies found:", companies.length);
 
     // Get stats for each company
     const companiesWithStats = await Promise.all(
@@ -1853,15 +1843,9 @@ export class MongoStorage {
             forms: formCount,
           },
         };
-
-        console.log(
-          `Company ${company.name}: ${userCount} users, ${projectCount} projects`
-        );
         return companyData;
-      })
+      }),
     );
-
-    console.log("Companies with stats prepared:", companiesWithStats.length);
     return companiesWithStats;
   }
 
@@ -1890,15 +1874,11 @@ export class MongoStorage {
   }
 
   async getAllUsersAcrossCompanies() {
-    console.log("Fetching all users across companies...");
-
     // Get all users with organization info
     const users = await User.find({})
       .populate("organizationId", "name slug")
       .populate("organization", "name slug")
       .sort({ createdAt: -1 });
-
-    console.log("Raw users found:", users.length);
 
     // Transform users to include organization name consistently
     const transformedUsers = users.map((user) => {
@@ -1919,8 +1899,6 @@ export class MongoStorage {
         status: userObj.status || (userObj.isActive ? "active" : "inactive"),
       };
     });
-
-    console.log("Transformed users prepared:", transformedUsers.length);
     return transformedUsers;
   }
 
@@ -1977,7 +1955,7 @@ export class MongoStorage {
     return await Organization.findByIdAndUpdate(
       companyId,
       { isActive: status },
-      { new: true }
+      { new: true },
     );
   }
 
@@ -1988,7 +1966,7 @@ export class MongoStorage {
         role: "admin",
         organizationId: companyId,
       },
-      { new: true }
+      { new: true },
     );
   }
 
@@ -2020,7 +1998,8 @@ export class MongoStorage {
       superAdminData.emailVerificationToken = userData.emailVerificationToken;
     }
     if (userData.emailVerificationExpires) {
-      superAdminData.emailVerificationExpires = userData.emailVerificationExpires;
+      superAdminData.emailVerificationExpires =
+        userData.emailVerificationExpires;
     }
 
     const superAdmin = new User(superAdminData);
@@ -2062,13 +2041,6 @@ export class MongoStorage {
   // User Invitation and Management Methods
   async inviteUserToOrganization(inviteData) {
     try {
-      console.log("📧 Starting inviteUserToOrganization with data:", {
-        email: inviteData.email,
-        organizationId: inviteData.organizationId,
-        roles: inviteData.roles,
-        license_type: inviteData.license_type, // 🆕 NEW
-      });
-
       const {
         email,
         organizationId,
@@ -2084,7 +2056,7 @@ export class MongoStorage {
         location,
         phone,
         sendEmail = true,
-        accountType = 'company', // Default to company for organization invites
+        accountType = "company", // Default to company for organization invites
       } = inviteData;
 
       // ✅ Correct field for organization check
@@ -2098,8 +2070,6 @@ export class MongoStorage {
         throw new Error(`${email} is already invited to your organization.`);
       }
 
-      console.log("✅ No existing user found, proceeding with invitation");
-
       // ✅ Generate token
       const inviteToken = crypto.randomBytes(32).toString("hex");
       const inviteTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
@@ -2108,33 +2078,26 @@ export class MongoStorage {
       const [firstName = "", ...lastParts] = (name || "").trim().split(" ");
       const lastName = lastParts.join(" ");
 
-      console.log("📝 Creating user with:", {
-        email,
-        firstName,
-        lastName,
-        role: roles,
-        organization_id: organizationId,
-        license_type, // 🆕 NEW
-      });
-
       // 🆕 NEW: Handle license assignment during invite
       let assignedLicenseId = null;
       const licenseType = licenseId || license_type; // Support both licenseId and license_type
 
       if (licenseType) {
         // Try to assign license from pool
-        const { CompanyLicense } = await import('./modals/companyLicenseModal.js');
+        const { CompanyLicense } =
+          await import("./modals/companyLicenseModal.js");
         const availableLicenses = await CompanyLicense.getAvailableLicenses(
           organizationId,
-          licenseType.toUpperCase()
+          licenseType.toUpperCase(),
         );
 
         if (availableLicenses.length > 0) {
           const license = availableLicenses[0];
           assignedLicenseId = license._id;
-          console.log(`✅ Reserved ${licenseType.toUpperCase()} license: ${license.license_id} for ${email}`);
         } else {
-          console.warn(`⚠️ No ${licenseType.toUpperCase()} licenses available, user will be created without license`);
+          console.warn(
+            `⚠️ No ${licenseType.toUpperCase()} licenses available, user will be created without license`,
+          );
         }
       }
 
@@ -2161,24 +2124,19 @@ export class MongoStorage {
         account_type: accountType,
       });
 
-      console.log("💾 Attempting to save user...");
       const savedUser = await invitedUser.save();
-      console.log("✅ User saved successfully:", savedUser._id);
 
       // 🆕 NEW: If license was reserved, assign it now
       if (assignedLicenseId) {
-        const { CompanyLicense } = await import('./modals/companyLicenseModal.js');
+        const { CompanyLicense } =
+          await import("./modals/companyLicenseModal.js");
         const license = await CompanyLicense.findById(assignedLicenseId);
         if (license) {
           await license.assignToUser(savedUser._id, invitedBy);
           savedUser.license_id = assignedLicenseId;
           await savedUser.save();
-          console.log(`✅ License ${license.license_type} (ID: ${license.license_id}) assigned to user ${email}`);
         }
-      } else {
-        console.log(`ℹ️ User ${email} created without license assignment`);
       }
-
       // ✅ Send email if allowed (but don't fail if email service is not configured)
       if (sendEmail) {
         try {
@@ -2188,11 +2146,13 @@ export class MongoStorage {
             organizationName,
             roles,
             invitedByName,
-            name
+            name,
           );
-          console.log(`✅ Invitation email sent to ${email}`);
         } catch (emailError) {
-          console.warn(`⚠️ Failed to send invitation email to ${email}:`, emailError.message);
+          console.warn(
+            `⚠️ Failed to send invitation email to ${email}:`,
+            emailError.message,
+          );
           // Don't throw error - user is still created, just email failed
         }
       }
@@ -2283,7 +2243,7 @@ export class MongoStorage {
           inviteTokenExpiry: null,
           completedAt: new Date(),
         },
-        { new: true }
+        { new: true },
       );
 
       if (!updatedUser) {
@@ -2310,8 +2270,6 @@ export class MongoStorage {
   // Organization License Management
   async getOrganizationLicenseInfo(organizationId) {
     try {
-      console.log('🔍 Getting organization license info for:', organizationId);
-
       const organization = await Organization.findById(organizationId);
       if (!organization) {
         throw new Error("Organization not found");
@@ -2320,12 +2278,10 @@ export class MongoStorage {
       // Get subscription data from our seat management system
       const subscription = await OrganizationSubscription.findOne({
         organization_id: new mongoose.Types.ObjectId(organizationId),
-        status: 'ACTIVE'
+        status: "ACTIVE",
       });
 
       if (!subscription) {
-        console.log('⚠️ No active subscription found, using default values');
-        // Fallback to old method if no subscription exists
         const activeUsers = await User.countDocuments({
           organization: organizationId,
           isActive: true,
@@ -2347,14 +2303,7 @@ export class MongoStorage {
       const totalLicenses = subscription.seats_purchased || 10;
       const usedLicenses = subscription.seats_used || 0;
       const availableSlots = Math.max(0, totalLicenses - usedLicenses);
-      const licenseType = subscription.license_code || 'EXPLORE';
-
-      console.log('✅ License info from subscription:', {
-        totalLicenses,
-        usedLicenses,
-        availableSlots,
-        licenseType
-      });
+      const licenseType = subscription.license_code || "EXPLORE";
 
       return {
         totalLicenses,
@@ -2370,7 +2319,7 @@ export class MongoStorage {
         autoRenew: subscription.auto_renew,
       };
     } catch (error) {
-      console.error('❌ Error getting organization license info:', error);
+      console.error("❌ Error getting organization license info:", error);
       throw error;
     }
   }
@@ -2382,7 +2331,7 @@ export class MongoStorage {
     organizationName,
     roles,
     invitedByName,
-    name
+    name,
   ) {
     return await emailService.sendInvitationEmail(
       email,
@@ -2390,7 +2339,7 @@ export class MongoStorage {
       organizationName,
       roles,
       invitedByName,
-      name
+      name,
     );
   }
 
@@ -2416,7 +2365,10 @@ export class MongoStorage {
 
   // Find invited user by email (case-insensitive), regardless of expiry
   async getInvitedUserByEmail(email) {
-    return await User.findOne({ email: email.toLowerCase(), status: "invited" });
+    return await User.findOne({
+      email: email.toLowerCase(),
+      status: "invited",
+    });
   }
 
   // Get user by email verification token
@@ -2431,7 +2383,7 @@ export class MongoStorage {
   async getOrganizationUsersDetailed(organizationId) {
     return await User.find({ organization_id: organizationId })
       .select(
-        "firstName lastName email role roles status isActive emailVerified inviteToken inviteTokenExpiry lastLoginAt createdAt invitedBy invitedAt department designation location assignedTasks completedTasks"
+        "firstName lastName email role roles status isActive emailVerified inviteToken inviteTokenExpiry lastLoginAt createdAt invitedBy invitedAt department designation location assignedTasks completedTasks",
       )
       .populate("invitedBy", "firstName lastName email")
       .sort({ createdAt: -1 });
@@ -2444,7 +2396,6 @@ export class MongoStorage {
   // }
 
   async getTaskById(id) {
-    console.log("DEBUG - getTaskById called with id:", id);
     const task = await Task.findById(id)
       .populate("assignedTo", "firstName lastName email avatar")
       .populate("createdBy", "firstName lastName email avatar")
@@ -2453,84 +2404,95 @@ export class MongoStorage {
       .populate("parentTaskId", "title")
       .populate("project", "name")
       .populate("organization", "name")
-      .populate("approvers", "firstName lastName email avatar role roles department designation")
-      .populate("approverOrder.approverId", "firstName lastName email avatar role roles department designation")
-      .populate("approvalDecisions.approverId", "firstName lastName email avatar role roles department designation")
+      .populate(
+        "approvers",
+        "firstName lastName email avatar role roles department designation",
+      )
+      .populate(
+        "approverOrder.approverId",
+        "firstName lastName email avatar role roles department designation",
+      )
+      .populate(
+        "approvalDecisions.approverId",
+        "firstName lastName email avatar role roles department designation",
+      )
       .populate({
-        path: 'attached_form_version_id',
-        model: 'FormVersion',
-        select: 'version_number snapshot_data published_at form_id form_template_id'
+        path: "attached_form_version_id",
+        model: "FormVersion",
+        select:
+          "version_number snapshot_data published_at form_id form_template_id",
       })
       .populate({
-        path: 'comments.author',
-        model: 'User',
-        select: 'firstName lastName email'
+        path: "comments.author",
+        model: "User",
+        select: "firstName lastName email",
       })
       .populate({
-        path: 'comments.mentions',
-        model: 'User',
-        select: 'firstName lastName email role department designation'
+        path: "comments.mentions",
+        model: "User",
+        select: "firstName lastName email role department designation",
       })
       .lean(); // ✅ Add lean() to preserve all embedded fields including attachments
 
-    console.log("DEBUG - Found task:", task ? "Yes" : "No");
-
     if (task) {
-      console.log('DEBUG - Looking for subtasks with parentTaskId:', id);
-      // Get subtasks for this task with populated comments
       const subtasks = await Task.find({
         parentTaskId: id,
-        isDeleted: { $ne: true }
+        isDeleted: { $ne: true },
       })
         .populate("assignedTo", "firstName lastName email")
         .populate("createdBy", "firstName lastName email")
         .populate("collaborators", "firstName lastName email avatar")
         .populate("contributors", "firstName lastName email avatar")
         .populate({
-          path: 'attached_form_version_id',
-          model: 'FormVersion',
-          select: 'version_number snapshot_data published_at form_id form_template_id'
+          path: "attached_form_version_id",
+          model: "FormVersion",
+          select:
+            "version_number snapshot_data published_at form_id form_template_id",
         })
         .populate({
-          path: 'comments.author',
-          model: 'User',
-          select: 'firstName lastName email'
+          path: "comments.author",
+          model: "User",
+          select: "firstName lastName email",
         })
         .populate({
-          path: 'comments.mentions',
-          model: 'User',
-          select: 'firstName lastName email role department designation'
+          path: "comments.mentions",
+          model: "User",
+          select: "firstName lastName email role department designation",
         })
         .lean() // ✅ Add lean() for subtasks too
         .sort({ createdAt: 1 });
-
-      console.log('DEBUG - Found subtasks count:', subtasks.length);
-      console.log('DEBUG - Subtasks details:', subtasks.map(s => ({ id: s._id, title: s.title, parentTaskId: s.parentTaskId })));
 
       // Since we're using lean(), task is already a plain object
       const taskObj = task;
 
       // Format task comments
       if (taskObj.comments && Array.isArray(taskObj.comments)) {
-        taskObj.comments = taskObj.comments.map(comment => this.formatCommentMentions(comment));
+        taskObj.comments = taskObj.comments.map((comment) =>
+          this.formatCommentMentions(comment),
+        );
       }
 
       // Format subtask comments
-      const formattedSubtasks = subtasks.map(subtask => {
+      const formattedSubtasks = subtasks.map((subtask) => {
         // Since we're using lean(), subtask is already a plain object
         const subtaskObj = subtask;
         if (subtaskObj.comments && Array.isArray(subtaskObj.comments)) {
-          subtaskObj.comments = subtaskObj.comments.map(comment => this.formatCommentMentions(comment));
+          subtaskObj.comments = subtaskObj.comments.map((comment) =>
+            this.formatCommentMentions(comment),
+          );
         }
         // Ensure collaborators are returned as objects with id and name
-        if (subtaskObj.collaborators && Array.isArray(subtaskObj.collaborators)) {
-          subtaskObj.collaborators = subtaskObj.collaborators.map(c => {
+        if (
+          subtaskObj.collaborators &&
+          Array.isArray(subtaskObj.collaborators)
+        ) {
+          subtaskObj.collaborators = subtaskObj.collaborators.map((c) => {
             if (!c) return c;
             return {
-              id: c._id ? c._id.toString() : (c.id || c),
-              firstName: c.firstName || '',
-              lastName: c.lastName || '',
-              email: c.email || ''
+              id: c._id ? c._id.toString() : c.id || c,
+              firstName: c.firstName || "",
+              lastName: c.lastName || "",
+              email: c.email || "",
             };
           });
         }
@@ -2540,24 +2502,20 @@ export class MongoStorage {
       taskObj.subtasks = formattedSubtasks;
       // Normalize collaborators on the parent task as well (return id + name/email)
       if (taskObj.collaborators && Array.isArray(taskObj.collaborators)) {
-        taskObj.collaborators = taskObj.collaborators.map(c => {
+        taskObj.collaborators = taskObj.collaborators.map((c) => {
           if (!c) return c;
           return {
-            id: c._id ? c._id.toString() : (c.id || c),
-            firstName: c.firstName || '',
-            lastName: c.lastName || '',
-            email: c.email || ''
+            id: c._id ? c._id.toString() : c.id || c,
+            firstName: c.firstName || "",
+            lastName: c.lastName || "",
+            email: c.email || "",
           };
         });
       }
       // If parentTaskId is populated, include a parentTaskTitle field for convenience
-      if (taskObj.parentTaskId && typeof taskObj.parentTaskId === 'object') {
+      if (taskObj.parentTaskId && typeof taskObj.parentTaskId === "object") {
         taskObj.parentTaskTitle = taskObj.parentTaskId.title || null;
       }
-      console.log(
-        "DEBUG - Final taskObj has subtasks:",
-        taskObj.subtasks ? taskObj.subtasks.length : "undefined"
-      );
       return taskObj;
     }
 
@@ -2571,33 +2529,35 @@ export class MongoStorage {
         ...comment,
         mentions: [],
         // ✅ Ensure attachments are always preserved (even if undefined, make it empty array)
-        attachments: comment.attachments || []
+        attachments: comment.attachments || [],
       };
     }
 
-    const formattedMentions = comment.mentions.map(mention => {
-      // Check if mention is already a populated user object
-      if (mention && typeof mention === 'object' && mention.firstName) {
-        return {
-          id: mention._id.toString(),
-          name: `${mention.firstName} ${mention.lastName}`.trim(),
-          firstName: mention.firstName,
-          lastName: mention.lastName,
-          email: mention.email || '',
-          role: mention.role || [],
-          department: mention.department || '',
-          designation: mention.designation || ''
-        };
-      }
-      // If it's just an ID string, return it as is
-      return mention;
-    }).filter(Boolean);
+    const formattedMentions = comment.mentions
+      .map((mention) => {
+        // Check if mention is already a populated user object
+        if (mention && typeof mention === "object" && mention.firstName) {
+          return {
+            id: mention._id.toString(),
+            name: `${mention.firstName} ${mention.lastName}`.trim(),
+            firstName: mention.firstName,
+            lastName: mention.lastName,
+            email: mention.email || "",
+            role: mention.role || [],
+            department: mention.department || "",
+            designation: mention.designation || "",
+          };
+        }
+        // If it's just an ID string, return it as is
+        return mention;
+      })
+      .filter(Boolean);
 
     return {
       ...comment,
       mentions: formattedMentions,
       // ✅ Explicitly preserve attachments field
-      attachments: comment.attachments || []
+      attachments: comment.attachments || [],
     };
   }
 
@@ -2608,21 +2568,27 @@ export class MongoStorage {
     const tasks = await Task.find(filter)
       .populate("assignedTo", "firstName lastName email status")
       .populate("createdBy", "firstName lastName email")
+      .populate(
+        "approvers",
+        "firstName lastName email avatar role roles department designation",
+      )
+      .populate("parentTaskId", "title taskType status createdBy assignedTo")
       .populate("project", "name")
       .populate({
-        path: 'attached_form_version_id',
-        model: 'FormVersion',
-        select: 'version_number snapshot_data published_at form_id form_template_id'
+        path: "attached_form_version_id",
+        model: "FormVersion",
+        select:
+          "version_number snapshot_data published_at form_id form_template_id",
       })
       .populate({
-        path: 'comments.author',
-        model: 'User',
-        select: 'firstName lastName email'
+        path: "comments.author",
+        model: "User",
+        select: "firstName lastName email",
       })
       .populate({
-        path: 'comments.mentions',
-        model: 'User',
-        select: 'firstName lastName email role department designation'
+        path: "comments.mentions",
+        model: "User",
+        select: "firstName lastName email role department designation",
       })
       .sort(sort)
       .skip(skip)
@@ -2636,38 +2602,51 @@ export class MongoStorage {
           parentTaskId: task._id,
           isDeleted: { $ne: true },
         })
-          .populate("assignedTo", "firstName lastName email")
+          .populate("assignedTo", "firstName lastName email status")
           .populate("createdBy", "firstName lastName email")
+          .populate(
+            "approvers",
+            "firstName lastName email avatar role roles department designation",
+          )
           .populate({
-            path: 'attached_form_version_id',
-            model: 'FormVersion',
-            select: 'version_number snapshot_data published_at form_id form_template_id'
+            path: "attached_form_version_id",
+            model: "FormVersion",
+            select:
+              "version_number snapshot_data published_at form_id form_template_id",
           })
           .populate({
-            path: 'comments.author',
-            model: 'User',
-            select: 'firstName lastName email'
+            path: "comments.author",
+            model: "User",
+            select: "firstName lastName email",
           })
           .populate({
-            path: 'comments.mentions',
-            model: 'User',
-            select: 'firstName lastName email role department designation'
+            path: "comments.mentions",
+            model: "User",
+            select: "firstName lastName email role department designation",
           })
           .sort({ createdAt: 1 });
 
         // Convert to plain object and add subtasks with formatted comments
         const taskObj = task.toObject();
 
+        if (taskObj.parentTaskId && typeof taskObj.parentTaskId === "object") {
+          taskObj.parentTask = taskObj.parentTaskId;
+        }
+
         // Format task comments
         if (taskObj.comments && Array.isArray(taskObj.comments)) {
-          taskObj.comments = taskObj.comments.map(comment => this.formatCommentMentions(comment));
+          taskObj.comments = taskObj.comments.map((comment) =>
+            this.formatCommentMentions(comment),
+          );
         }
 
         // Format subtask comments
-        const formattedSubtasks = subtasks.map(subtask => {
+        const formattedSubtasks = subtasks.map((subtask) => {
           const subtaskObj = subtask.toObject();
           if (subtaskObj.comments && Array.isArray(subtaskObj.comments)) {
-            subtaskObj.comments = subtaskObj.comments.map(comment => this.formatCommentMentions(comment));
+            subtaskObj.comments = subtaskObj.comments.map((comment) =>
+              this.formatCommentMentions(comment),
+            );
           }
           return subtaskObj;
         });
@@ -2730,7 +2709,7 @@ export class MongoStorage {
         taskTitle: task.title,
         approvalStatus: approvalData.status,
         comment: approvalData.comment,
-      }
+      },
     });
 
     return approval;
@@ -2744,7 +2723,7 @@ export class MongoStorage {
   async getTaskApprovalByTaskAndUser(taskId, userId) {
     const task = await Task.findById(taskId);
     return task?.approvalRecords?.find(
-      (approval) => approval.approverId.toString() === userId.toString()
+      (approval) => approval.approverId.toString() === userId.toString(),
     );
   }
 
@@ -2998,7 +2977,7 @@ export class MongoStorage {
     const assignedUser = await User.findById(assignedTo);
     const assignedUserName = assignedUser
       ? `${assignedUser.firstName} ${assignedUser.lastName}`.trim() ||
-      assignedUser.email
+        assignedUser.email
       : "Unknown User";
 
     await this.trackActivity({
@@ -3027,7 +3006,7 @@ export class MongoStorage {
       const oldAssignedUser = await User.findById(oldAssignedTo);
       oldAssignedUserName = oldAssignedUser
         ? `${oldAssignedUser.firstName} ${oldAssignedUser.lastName}`.trim() ||
-        oldAssignedUser.email
+          oldAssignedUser.email
         : "Unknown User";
     }
 
@@ -3083,7 +3062,7 @@ export class MongoStorage {
 
     if (task && task.attachments) {
       const fileIndex = task.attachments.findIndex(
-        (file) => file._id.toString() === fileId
+        (file) => file._id.toString() === fileId,
       );
 
       if (fileIndex > -1) {

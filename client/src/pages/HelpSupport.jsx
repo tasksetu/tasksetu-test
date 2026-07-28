@@ -874,7 +874,8 @@ export default function HelpSupport() {
             </div>
           </div>
         </div>
-      </div>      {/* Ticket Details Chat Dialog */}
+      </div>
+      {/* Ticket Details Chat Dialog */}
       {selectedTicket && (
         <Dialog
           open={true}

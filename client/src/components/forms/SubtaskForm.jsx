@@ -10,7 +10,14 @@ import {
   Upload,
   FileText,
   Link2,
+  ListTodo,
+  Trash2,
+  Target,
+  ShieldCheck,
 } from "lucide-react";
+import MilestoneSubtaskForm from "../../forms/MilestoneSubtaskForm";
+import ApprovalSubtaskForm from "../../forms/ApprovalSubtaskForm";
+import { useAuth } from "../../features/shared/hooks/useAuth";
 import CustomEditor from "../common/CustomEditor";
 import SimpleFileUploader from "../common/SimpleFileUploader";
 import FormAttachModal from "./FormAttachModal";
@@ -18,6 +25,16 @@ import ConfirmDialog from "../common/ConfirmDialog";
 import { useShowToast } from "../../utils/ToastMessage";
 import AssigneeSearchSelect from "../common/AssigneeSearchSelect";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -121,22 +138,58 @@ const createSubtask = async (parentTaskId, formData, token) => {
 
   // const isoDate = new Date(formData.dueDate).toISOString();
   // formDataObj.append('dueDate', isoDate);
-  const isoDate = inputDateToLocalIso(formData.dueDate);
+  const isoDate = inputDateTimeToIso(formData.dueDate);
   formDataObj.append("dueDate", isoDate);
+  if (formData.dueDate && formData.dueDate.includes("T")) {
+    const timePart = formData.dueDate.split("T")[1];
+    formDataObj.append("dueTime", timePart);
+  }
 
   console.log("✅ Added dueDate:", formData.dueDate, "-> ISO:", isoDate);
 
-  // Priority is sent as the code value directly (e.g., 'low', 'medium', 'high')
-  formDataObj.append("priority", formData.priority);
-  console.log("✅ Added priority:", formData.priority);
+  // Priority is sent as the code value directly
+  const priorityVal =
+    typeof formData.priority === "object"
+      ? formData.priority?.value
+      : formData.priority || "medium";
+  formDataObj.append("priority", priorityVal);
+  console.log("✅ Added priority:", priorityVal);
 
-  // Status is already in uppercase format from the dropdown (OPEN, INPROGRESS, ONHOLD, DONE)
-  // No mapping needed, send directly
-  formDataObj.append("status", formData.status);
-  console.log("✅ Added status:", formData.status, "-> sent as-is");
+  // Status: default to OPEN if undefined
+  const statusVal =
+    formData.status && formData.status !== "undefined"
+      ? String(formData.status).toUpperCase()
+      : "OPEN";
+  formDataObj.append("status", statusVal);
+  console.log("✅ Added status:", statusVal);
+
+  // Task Type & Subtask Classification
+  const taskTypeVal = formData.taskType || "regular";
+  const mainTaskTypeVal = formData.mainTaskType || "regular";
+  formDataObj.append("taskType", taskTypeVal);
+  formDataObj.append("mainTaskType", mainTaskTypeVal);
+
+  if (taskTypeVal === "milestone" || formData.isMilestone) {
+    formDataObj.append("isMilestone", "true");
+    if (formData.milestoneType) {
+      formDataObj.append("milestoneType", formData.milestoneType);
+    }
+  }
+  if (taskTypeVal === "approval" || formData.isApprovalTask) {
+    formDataObj.append("isApprovalTask", "true");
+    if (formData.approvalMode) {
+      formDataObj.append("approvalMode", formData.approvalMode);
+    }
+    if (formData.approvers && formData.approvers.length > 0) {
+      const approverIds = formData.approvers
+        .map((a) => (typeof a === "object" ? a.value || a.id || a._id : a))
+        .filter(Boolean);
+      formDataObj.append("approverIds", JSON.stringify(approverIds));
+    }
+  }
 
   // Visibility: Send as-is (Private/Public) - backend expects capitalized format
-  formDataObj.append("visibility", formData.visibility);
+  formDataObj.append("visibility", formData.visibility || "Private");
   console.log("✅ Added visibility:", formData.visibility, "-> sent as-is");
 
   // Add tags if any
@@ -237,22 +290,50 @@ const createSubtask = async (parentTaskId, formData, token) => {
   }
 };
 
-// Local YYYY-MM-DD for <input type="date">
-const formatDateToInput = (date) => {
-  if (!date) return "";
-  const d = date instanceof Date ? date : new Date(date);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+// Local YYYY-MM-DDTHH:mm for <input type="datetime-local">
+// Preserves literal hours and minutes from string to prevent timezone offset shifts
+const formatDateTimeToInput = (dateStr) => {
+  if (!dateStr) return "";
+  if (dateStr instanceof Date) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${dateStr.getFullYear()}-${pad(dateStr.getMonth() + 1)}-${pad(dateStr.getDate())}T${pad(dateStr.getHours())}:${pad(dateStr.getMinutes())}`;
+  }
+  if (typeof dateStr === "string") {
+    // If string already has T (e.g. "2026-08-22T13:10:00.000Z"), extract date and time directly without timezone conversion
+    if (dateStr.includes("T")) {
+      const parts = dateStr.split("T");
+      const datePart = parts[0];
+      const timePart = parts[1].slice(0, 5); // HH:mm
+      return `${datePart}T${timePart}`;
+    }
+    // If dateStr is YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return `${dateStr}T17:00`;
+    }
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+  }
+  return "";
 };
 
-// Convert input 'YYYY-MM-DD' → ISO string at local midnight
-const inputDateToLocalIso = (inputDate) => {
-  if (!inputDate) return null;
-  const [y, m, d] = inputDate.split("-").map(Number);
-  const localMidnight = new Date(y, m - 1, d);
-  return localMidnight.toISOString();
+// Current date-time in local format YYYY-MM-DDTHH:mm
+const getCurrentDateTimeLocal = () => {
+  return formatDateTimeToInput(new Date());
+};
+
+// Convert input 'YYYY-MM-DDTHH:mm' → ISO string without shifting local hours/minutes
+const inputDateTimeToIso = (inputDateTime) => {
+  if (!inputDateTime) return null;
+  if (typeof inputDateTime === "string" && inputDateTime.includes("T")) {
+    const [d, t] = inputDateTime.split("T");
+    const timeFull = t.length === 5 ? `${t}:00` : t;
+    return `${d}T${timeFull}.000Z`;
+  }
+  const d = new Date(inputDateTime);
+  return isNaN(d.getTime()) ? null : d.toISOString();
 };
 
 function SubtaskForm({
@@ -269,16 +350,22 @@ function SubtaskForm({
   // ✅ Call useShowToast at component level (not inside utility functions)
   const { showSuccessToast, showErrorToast } = useShowToast();
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
   const { data: taskStatuses = [] } = useTaskStatuses();
 
   const { data: taskPriorities = [] } = useTaskPriorities();
 
   const priorityOptions = getPriorityOptions(taskPriorities);
 
+  // Subtask Type: 'regular' | 'milestone' | 'approval'
+  const [subtaskType, setSubtaskType] = useState(editData?.taskType || "regular");
+
   const [formData, setFormData] = useState({
     title: "",
     assignee: isOrgUser ? null : { value: "self", label: "Self" }, // Object format for AssigneeSearchSelect
-    dueDate: parentTask?.dueDate ? formatDateToInput(parentTask.dueDate) : "",
+    dueDate: parentTask?.dueDate
+      ? formatDateTimeToInput(parentTask.dueDate)
+      : formatDateTimeToInput(new Date()),
     priority: getDefaultPriorityCode(taskPriorities),
     status: "OPEN",
     visibility: parentTask?.visibility || "Private",
@@ -286,6 +373,54 @@ function SubtaskForm({
     attachments: [],
     tags: [], // Tags inherited from parent or edited independently
   });
+
+  const handleSpecialSubtaskSubmit = async (type, formPayload) => {
+    try {
+      setIsLoading(true);
+      const token = localStorage.getItem("token") || localStorage.getItem("auth_token");
+
+      const priorityVal =
+        typeof formPayload.priority === "object"
+          ? formPayload.priority?.value
+          : formPayload.priority || "medium";
+
+      const statusVal =
+        formPayload.status && formPayload.status !== "undefined"
+          ? String(formPayload.status).toUpperCase()
+          : "OPEN";
+
+      const subtaskPayload = {
+        ...formPayload,
+        title: formPayload.taskName || formPayload.title || "Subtask",
+        description: formPayload.description || "",
+        assignee: formPayload.assignedTo || formPayload.assignee || (isOrgUser ? null : { value: "self", label: "Self" }),
+        dueDate: formPayload.dueDate || formPayload.targetDate,
+        priority: priorityVal,
+        status: statusVal,
+        taskType: type,
+        isSubtask: true,
+        isMilestone: type === "milestone",
+        isApprovalTask: type === "approval",
+        parentTaskId: parentTask?._id || parentTask?.id,
+      };
+
+      await createSubtask(parentTask?._id || parentTask?.id, subtaskPayload, token);
+      if (onSubmit) {
+        await onSubmit(subtaskPayload);
+      }
+      showSuccessToast(
+        `${type === "milestone" ? "Milestone" : "Approval"} Subtask created successfully`,
+      );
+      if (typeof refreshTask === "function") {
+        await refreshTask();
+      }
+      onClose();
+    } catch (err) {
+      showErrorToast(err.message || "Failed to create subtask");
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const [tagInput, setTagInput] = useState("");
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -383,6 +518,7 @@ function SubtaskForm({
 
       const suggestedDate = new Date(today);
       suggestedDate.setDate(today.getDate() + daysToAdd);
+      suggestedDate.setHours(17, 0, 0, 0);
 
       // Ensure subtask due date doesn't exceed parent due date
       const finalDate =
@@ -390,15 +526,15 @@ function SubtaskForm({
 
       setFormData((prev) => ({
         ...prev,
-        dueDate: formatDateToInput(finalDate.toISOString()),
+        dueDate: formatDateTimeToInput(finalDate),
       }));
 
       console.log("📅 Auto-adjusted due date:", {
         priority: formData.priority,
         daysToAdd,
-        suggestedDate: formatDateToInput(suggestedDate.toISOString()),
-        parentDueDate: formatDateToInput(parentTask.dueDate),
-        finalDate: formatDateToInput(finalDate.toISOString()),
+        suggestedDate: formatDateTimeToInput(suggestedDate),
+        parentDueDate: formatDateTimeToInput(parentTask.dueDate),
+        finalDate: formatDateTimeToInput(finalDate),
       });
     }
   }, [formData.priority, mode, isDueDateManuallySet, parentTask?.dueDate]);
@@ -564,14 +700,13 @@ function SubtaskForm({
 
       console.log("🔧 [EDIT] Final assigneeValue:", assigneeValue);
 
-      // Format the due date for the input field (YYYY-MM-DD)
+      // Format the due date and time for input field (YYYY-MM-DDTHH:mm)
       const formattedDueDate = editData.dueDate
-        ? formatDateToInput(editData.dueDate)
+        ? formatDateTimeToInput(editData.dueDate)
         : "";
       console.log("📅 [EDIT] Due Date Formatting:", {
         original: editData.dueDate,
-        formatted: formattedDueDate,
-        isEmpty: !formattedDueDate,
+        formattedDate: formattedDueDate,
       });
 
       // Load existing attachments
@@ -632,8 +767,8 @@ function SubtaskForm({
         title: "",
         assignee: isOrgUser ? null : { value: "self", label: "Self" },
         dueDate: parentTask?.dueDate
-          ? formatDateToInput(parentTask.dueDate)
-          : "",
+          ? formatDateTimeToInput(parentTask.dueDate)
+          : formatDateTimeToInput(new Date()),
         priority: getDefaultPriorityCode(taskPriorities),
         status: "OPEN",
         visibility: parentTask?.visibility || "Private",
@@ -1083,7 +1218,13 @@ function SubtaskForm({
             .replace(" priority", "")
             .replace(" ", "-"),
         );
-        updateFormData.append("dueDate", inputDateToLocalIso(formData.dueDate));
+        updateFormData.append(
+          "dueDate",
+          inputDateToLocalIso(formData.dueDate, formData.dueTime),
+        );
+        if (formData.dueTime) {
+          updateFormData.append("dueTime", formData.dueTime);
+        }
         updateFormData.append("visibility", formData.visibility);
         (formData.tags || []).forEach((tag) =>
           updateFormData.append("tags", tag),
@@ -1225,10 +1366,11 @@ function SubtaskForm({
       console.log("✅ Title validation passed");
     }
 
-    // Assignee validation - handle object format from AssigneeSearchSelect
+    // Assignee validation - handle object format from AssigneeSearchSelect (only required for org users)
     if (
-      !formData.assignee ||
-      (typeof formData.assignee === "object" && !formData.assignee.value)
+      isOrgUser &&
+      (!formData.assignee ||
+        (typeof formData.assignee === "object" && !formData.assignee?.value))
     ) {
       console.log("❌ Assignee validation failed: required field");
       newErrors.assignee = "Assignee is required";
@@ -1254,25 +1396,26 @@ function SubtaskForm({
     //   console.log('✅ Due date validation passed (not required)');
     // }
 
-    // ✅ Due date validation (local timezone safe)
+    // ✅ Due date validation (local date-time string comparison)
     if (formData.dueDate) {
-      const [y, m, d] = formData.dueDate.split("-").map(Number);
-      const selected = new Date(y, m - 1, d); // local midnight of selected date
-      const todayLocal = new Date();
-      todayLocal.setHours(0, 0, 0, 0);
+      const selectedIso = inputDateTimeToIso(formData.dueDate);
+      const nowIso = inputDateTimeToIso(getCurrentDateTimeLocal());
 
-      if (selected < todayLocal) {
+      if (selectedIso < nowIso) {
         console.log("❌ Due date validation failed: cannot be in the past");
         newErrors.dueDate = "Due date cannot be in the past";
       } else if (parentTask?.dueDate) {
-        const parentDate = new Date(parentTask.dueDate);
-        parentDate.setHours(0, 0, 0, 0);
-
-        if (selected > parentDate) {
+        const parentIso = inputDateTimeToIso(
+          formatDateTimeToInput(parentTask.dueDate),
+        );
+        if (selectedIso > parentIso) {
           console.log(
             "❌ Due date validation failed: cannot be after parent task due date",
           );
-          newErrors.dueDate = `Due date cannot be after parent task due date (${formatDateToInput(parentTask.dueDate)})`;
+          const parentDisplay = formatDateTimeToInput(
+            parentTask.dueDate,
+          ).replace("T", " ");
+          newErrors.dueDate = `Due date cannot be after parent task due date (${parentDisplay})`;
         } else {
           console.log("✅ Due date validation passed");
         }
@@ -1358,7 +1501,9 @@ function SubtaskForm({
     setFormData({
       title: "",
       assignee: isOrgUser ? null : { value: "self", label: "Self" }, // Object format for AssigneeSearchSelect
-      dueDate: parentTask?.dueDate ? formatDateToInput(parentTask.dueDate) : "",
+      dueDate: parentTask?.dueDate
+        ? formatDateTimeToInput(parentTask.dueDate)
+        : formatDateTimeToInput(new Date()),
       priority: getDefaultPriorityCode(taskPriorities),
       status: "OPEN",
       visibility: parentTask?.visibility || "Private",
@@ -1385,255 +1530,321 @@ function SubtaskForm({
 
   return (
     <>
-      <div className="modal-overlay">
-        <div className="modal-container subtask-form-square max-w-2xl">
-          {/* Header */}
-          <div className="modal-header" style={{ background: "#4f46e5" }}>
-            <div className="modal-title-section">
-              <div className="modal-icon">
-                <Plus size={16} />
-              </div>
-              <div>
-                <h3>{mode === "edit" ? "Edit Sub-task" : "Add Sub-tasks"}</h3>
-                <p
-                  className="truncate max-w-[250px] "
-                  title={`+ Parent: ${parentTask?.title || "Unknown"}`}
+      <Dialog
+        open={isOpen}
+        onOpenChange={(open) => {
+          if (!open) handleCancel();
+        }}
+      >
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col bg-white text-gray-900 border-gray-200 shadow-xl p-0 overflow-hidden rounded-md">
+          <DialogHeader className="px-6 pt-3.5 pb-2 border-b border-gray-200 bg-gray-50/80">
+            <DialogTitle
+              className="text-xl font-normal text-gray-800 flex items-center gap-2"
+              style={{ color: "#676a6c" }}
+            >
+              <ListTodo className="w-5 h-5 text-indigo-600" />
+              {mode === "edit" ? "Edit Sub-task" : "Add Sub-task"}
+            </DialogTitle>
+            <p
+              className="text-xs text-blue-600 mt-0.5 font-medium truncate"
+              title={`+ Parent Task : ${parentTask?.title || "Unknown"}`}
+            >
+              + Parent Task :- {parentTask?.title || "Unknown"}
+            </p>
+
+            {/* Subtask Type Selector Tabs */}
+            {mode !== "edit" && (
+              <div className="flex items-center gap-1.5 mt-2.5 p-1 bg-gray-200/70 rounded-lg border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setSubtaskType("regular")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold rounded-md transition-all ${
+                    subtaskType === "regular"
+                      ? "bg-white text-indigo-700 shadow-sm border border-gray-200"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
                 >
-                  + Parent: {parentTask?.title || "Unknown"}
+                  <ListTodo className="w-3.5 h-3.5 text-indigo-600" />
+                  Standard Subtask
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubtaskType("milestone")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold rounded-md transition-all ${
+                    subtaskType === "milestone"
+                      ? "bg-white text-blue-700 shadow-sm border border-blue-200"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
+                >
+                  <Target className="w-3.5 h-3.5 text-blue-600" />
+                  Milestone Subtask
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubtaskType("approval")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold rounded-md transition-all ${
+                    subtaskType === "approval"
+                      ? "bg-white text-blue-700 shadow-sm border border-blue-200"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                  Approval Subtask
+                </button>
+              </div>
+            )}
+          </DialogHeader>
+
+          {subtaskType === "milestone" ? (
+            <div className="flex-1 overflow-y-auto p-4 bg-white">
+              <MilestoneSubtaskForm
+                user={currentUser}
+                isOrgUser={isOrgUser}
+                parentTask={parentTask}
+                isSubmitting={isLoading}
+                onCancel={onClose}
+                onSubmit={(data) => handleSpecialSubtaskSubmit("milestone", data)}
+              />
+            </div>
+          ) : subtaskType === "approval" ? (
+            <div className="flex-1 overflow-y-auto p-4 bg-white">
+              <ApprovalSubtaskForm
+                user={currentUser}
+                isOrgUser={isOrgUser}
+                parentTask={parentTask}
+                isSubmitting={isLoading}
+                onCancel={onClose}
+                onSubmit={(data) => handleSpecialSubtaskSubmit("approval", data)}
+              />
+            </div>
+          ) : (
+          <form
+            onSubmit={handleSubmit}
+            className="flex-1 overflow-y-auto px-6 pt-2 pb-4 space-y-3.5"
+          >
+            {/* Task Title */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor="subtaskTitle"
+                  className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
+                >
+                  Task Title
+                </Label>
+                <span className="text-xs text-gray-400 font-normal">
+                  {formData.title.length}/60
+                </span>
+              </div>
+              
+              <Input
+                id="subtaskTitle"
+                type="text"
+                value={formData.title}
+                onChange={(e) => handleChange("title", e.target.value)}
+                placeholder="Sub-task title"
+                className={`bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500 text-sm !h-8 ${
+                  errors.title ? "border-red-500 focus:border-red-500" : ""
+                }`}
+                style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
+                maxLength={60}
+                autoFocus
+              />
+              {errors.title && (
+                <p className="text-xs text-red-500 mt-1">{errors.title}</p>
+              )}
+            </div>
+
+            {/* Row 1: Assignee & Priority */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              {/* Assignee */}
+              <div className="flex flex-col">
+                <div className="h-5 flex items-center mb-1.5">
+                  <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Assignee <span className="text-red-500">*</span>
+                  </Label>
+                </div>
+                <div className="h-8">
+                  <AssigneeSearchSelect
+                    value={formData.assignee || (!isOrgUser ? { value: "self", label: "Self" } : null)}
+                    onChange={(value) => handleChange("assignee", value)}
+                    className="react-select-container react-select--small whitespace-nowrap text-sm !h-8"
+                    isDisabled={!isOrgUser}
+                    placeholder={
+                      isOrgUser ? "Search and select assignee..." : "Self"
+                    }
+                    required={isOrgUser}
+                    skipClearOnRoleChange={true}
+                  />
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Search by name, email, department, or designation
                 </p>
+                {errors.assignee && (
+                  <p className="text-xs text-red-500 mt-1">{errors.assignee}</p>
+                )}
+              </div>
+
+              {/* Priority */}
+              <div className="flex flex-col">
+                <div className="h-5 flex items-center mb-1.5">
+                  <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Priority
+                  </Label>
+                </div>
+                <Select
+                  value={formData.priority}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, priority: value })
+                  }
+                >
+                  <SelectTrigger
+                    className="w-full bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-blue-500 text-sm !h-8"
+                    style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
+                  >
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {priorityOptions.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-white hover:text-gray-700"
-              onClick={onClose}
-            >
-              <X size={20} />
-            </Button>
-          </div>
 
-          {/* Form */}
-          <div className="modal-body">
-            <div className="form-card">
-              <form onSubmit={handleSubmit} className="space-y-0">
-                {/* Task Title */}
-                <div className="form-group">
-                  <label className="form-label flex justify-between">
-                    <div>
-                      <Tag size={16} />
-                      Task Title
-                    </div>
-                    <span className="text-gray-500">
-                      {formData.title.length}/60
+            {/* Row 2: Due Date & Status */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              {/* Due Date */}
+              <div className="flex flex-col">
+                <div className="h-5 flex items-center mb-1.5">
+                  <Label
+                    htmlFor="dueDate"
+                    className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
+                  >
+                    Due Date
+                  </Label>
+                </div>
+                <Input
+                  id="dueDate"
+                  type="datetime-local"
+                  value={formData.dueDate}
+                  min={getCurrentDateTimeLocal()}
+                  max={
+                    parentTask?.dueDate
+                      ? formatDateTimeToInput(parentTask.dueDate)
+                      : undefined
+                  }
+                  onChange={(e) => handleChange("dueDate", e.target.value)}
+                  className={`bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500 text-sm !h-8 ${
+                    errors.dueDate ? "border-red-500 focus:border-red-500" : ""
+                  }`}
+                  style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
+                />
+                {errors.dueDate ? (
+                  <p className="text-xs text-red-500 mt-1">{errors.dueDate}</p>
+                ) : parentTask?.dueDate ? (
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Parent task due: {formatDateTimeToInput(parentTask.dueDate).replace("T", " ")}
+                  </p>
+                ) : null}
+              </div>
+
+              {/* Status */}
+              <div className="flex flex-col">
+                <div className="h-5 flex items-center mb-1.5">
+                  <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Status
+                  </Label>
+                </div>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, status: value })
+                  }
+                >
+                  <SelectTrigger
+                    className="w-full bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-blue-500 text-sm !h-8"
+                    style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
+                  >
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getValidStatusOptions().map((s) => (
+                      <SelectItem key={s._id || s.code} value={s.code}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Row 3: Visibility & Labels/Tags */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              {/* Visibility */}
+              <div className="flex flex-col">
+                <div className="h-5 flex items-center gap-1.5 mb-1.5">
+                  <Label
+                    htmlFor="visibility"
+                    className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
+                  >
+                    Visibility
+                  </Label>
+                  {!isOrgUser && (
+                    <span className="text-[11px] text-gray-400 font-normal">
+                      (Defaults from parent)
                     </span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.title}
-                    onChange={(e) => handleChange("title", e.target.value)}
-                    placeholder="Sub-task title"
-                    className={`form-input ${errors.title ? "border-red-500 focus:border-red-500" : ""}`}
-                    maxLength={60}
-                    autoFocus
-                  />
-                  {errors.title && (
-                    <div className="flex items-center gap-2 text-red-500 text-sm mt-1">
-                      <AlertCircle size={16} />
-                      <span>{errors.title}</span>
-                    </div>
                   )}
                 </div>
+                <select
+                  id="visibility"
+                  value={formData.visibility}
+                  onChange={(e) =>
+                    setFormData({ ...formData, visibility: e.target.value })
+                  }
+                  className="w-full !h-8 px-3 border border-gray-300 rounded-md bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                  style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
+                  disabled={!isOrgUser}
+                >
+                  <option value="Private">Private</option>
+                  <option value="Public">Public</option>
+                </select>
+                {!isOrgUser && (
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Only company users can override visibility
+                  </p>
+                )}
+              </div>
 
-                {/* Row 1: Assignee & Priority */}
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">
-                      <User size={16} />
-                      Assignee <span className="text-red-500">*</span>
-                    </label>
-                    <AssigneeSearchSelect
-                      value={formData.assignee}
-                      onChange={(value) => handleChange("assignee", value)}
-                      className="react-select-container react-select--small whitespace-nowrap"
-                      isDisabled={!isOrgUser}
-                      placeholder={
-                        isOrgUser ? "Search and select assignee..." : "Self"
-                      }
-                      required={isOrgUser}
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Search by name, email, department, or designation
-                    </p>
-                    {errors.assignee && (
-                      <div className="flex items-center gap-2 text-red-500 text-sm mt-1">
-                        <AlertCircle size={16} />
-                        <span>{errors.assignee}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">
-                      <AlertCircle size={16} />
-                      Priority
-                    </label>
-                    <Select
-                      value={formData.priority}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, priority: value })
-                      }
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select priority" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {priorityOptions.map((p) => (
-                          <SelectItem key={p.value} value={p.value}>
-                            {p.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Row 2: Due Date & Status */}
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">
-                      <Calendar size={16} />
-                      Due Date
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.dueDate}
-                      min={formatDateToInput(new Date())}
-                      max={
-                        parentTask?.dueDate
-                          ? formatDateToInput(new Date(parentTask.dueDate))
-                          : undefined
-                      }
-                      // min={new Date().toISOString().split('T')[0]}
-                      // max={parentTask?.dueDate ? new Date(parentTask.dueDate).toISOString().split('T')[0] : undefined}
-                      onChange={(e) => handleChange("dueDate", e.target.value)}
-                      className={`form-input ${errors.dueDate ? "border-red-500 focus:border-red-500" : ""}`}
-                    />
-                    {errors.dueDate && (
-                      <div className="flex items-center gap-2 text-red-500 text-sm mt-1">
-                        <AlertCircle size={16} />
-                        <span>{errors.dueDate}</span>
-                      </div>
-                    )}
-                    {!errors.dueDate && parentTask?.dueDate && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        Parent task due: {formatDateToInput(parentTask.dueDate)}
-                      </div>
-                    )}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Status</label>
-                    <Select
-                      value={formData.status}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, status: value })
-                      }
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getValidStatusOptions().map((s) => (
-                          <SelectItem key={s._id || s.code} value={s.code}>
-                            {s.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Visibility */}
-                <div className="form-group">
-                  <label className="form-label">
-                    Visibility
-                    {!isOrgUser && (
-                      <span className="text-xs text-gray-500 ml-2">
-                        (Defaults from parent)
+              {/* Labels / Tags */}
+              <div className="flex flex-col">
+                <div className="h-5 flex items-center gap-1.5 mb-1.5">
+                  <Label
+                    htmlFor="tagsInput"
+                    className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
+                  >
+                    Labels / Tags
+                  </Label>
+                  {mode === "create" &&
+                    parentTask?.tags &&
+                    parentTask.tags.length > 0 && (
+                      <span className="text-[11px] text-gray-400 font-normal">
+                        (Inherited from parent)
                       </span>
                     )}
-                  </label>
-                  <select
-                    value={formData.visibility}
-                    onChange={(e) =>
-                      setFormData({ ...formData, visibility: e.target.value })
-                    }
-                    className="form-select"
-                    disabled={!isOrgUser}
-                  >
-                    <option value="Private">Private</option>
-                    <option value="Public">Public</option>
-                  </select>
-                  {!isOrgUser && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Only company users can override visibility
-                    </p>
-                  )}
                 </div>
-
-                {/* Tags */}
-                <div className="form-group">
-                  <label className="form-label">
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                      />
-                    </svg>
-                    Labels / Tags
-                    {mode === "create" &&
-                      parentTask?.tags &&
-                      parentTask.tags.length > 0 && (
-                        <span className="text-xs text-gray-500 ml-2">
-                          (Inherited from parent)
-                        </span>
-                      )}
-                  </label>
-                  <div className="space-y-2">
-                    {/* Tag Input */}
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={tagInput}
-                        onChange={(e) => setTagInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === ",") {
-                            e.preventDefault();
-                            const trimmedTag = tagInput.trim();
-                            if (
-                              trimmedTag &&
-                              !formData.tags.includes(trimmedTag)
-                            ) {
-                              setFormData({
-                                ...formData,
-                                tags: [...formData.tags, trimmedTag],
-                              });
-                              setTagInput("");
-                            }
-                          }
-                        }}
-                        placeholder="Type tag and press Enter or comma..."
-                        className="w-full h-8 min-h-8 max-h-8 box-border px-3 pr-10 py-0 border border-gray-300 rounded-none text-sm leading-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => {
+                <div className="space-y-2">
+                  <div className="relative flex items-center">
+                    <Input
+                      id="tagsInput"
+                      type="text"
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === ",") {
+                          e.preventDefault();
                           const trimmedTag = tagInput.trim();
                           if (
                             trimmedTag &&
@@ -1645,402 +1856,386 @@ function SubtaskForm({
                             });
                             setTagInput("");
                           }
-                        }}
-                        variant="primary"
-                        size="icon"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
-                        title="Add tag"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 4v16m8-8H4"
-                          />
-                        </svg>
-                      </Button>
-                    </div>
-
-                    {/* Tags Display */}
-                    {formData.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-none border border-gray-200">
-                        {formData.tags.map((tag, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-none text-xs font-medium bg-indigo-100 text-indigo-800"
-                          >
-                            {tag}
-                            <Button
-                              type="button"
-                              onClick={() => {
-                                setFormData({
-                                  ...formData,
-                                  tags: formData.tags.filter(
-                                    (_, i) => i !== index,
-                                  ),
-                                });
-                              }}
-                              variant="ghost"
-                              size="icon"
-                              className="h-4 w-4 p-0 hover:text-indigo-900"
-                            >
-                              ×
-                            </Button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div className="form-group">
-                  <label className="form-label">Description</label>
-                  <CustomEditor
-                    value={formData.description}
-                    onChange={(content) =>
-                      setFormData({ ...formData, description: content })
-                    }
-                    placeholder="Add notes or description... (supports rich text)"
-                    className="w-full border"
-                  />
-                  <div className="form-hint">
-                    Use Tab to navigate fields, Enter to submit form
-                  </div>
-                </div>
-
-                {/* Attachments */}
-                <div style={{ marginBottom: "20px" }}>
-                  <label className="block text-xs sm:text-sm font-medium text-gray-900 mb-1">
-                    Attachments
-                    <span className="text-xs text-gray-500 ml-2">
-                      (Max 5MB total)
-                    </span>
-                  </label>
-                  <div
-                    className={`w-full border-2 border-dashed p-4 text-center cursor-pointer transition-colors rounded-none ${isDragActive ? "border-blue-500 bg-blue-50" : "border-blue-300 bg-white"}`}
-                    onDragOver={handleAttachmentsDragOver}
-                    onDragLeave={handleAttachmentsDragLeave}
-                    onDrop={handleAttachmentsDrop}
-                    onClick={() => attachmentsInputRef.current?.click()}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        attachmentsInputRef.current?.click();
-                      }
-                    }}
-                    data-testid="dropzone-attachments"
-                  >
-                    <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center bg-blue-100 text-blue-600 rounded-none">
-                      +
-                    </div>
-                    <p className="text-sm font-semibold text-blue-600">
-                      Drag & Drop files
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      PDF, DOC, images supported
-                    </p>
-                  </div>
-                  <input
-                    ref={attachmentsInputRef}
-                    type="file"
-                    multiple
-                    accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
-                    onChange={(e) => {
-                      processAttachmentFiles(e.target.files);
-                      e.target.value = "";
-                    }}
-                    className="hidden"
-                    data-testid="input-attachments"
-                  />
-
-                  {/* File List */}
-                  {formData.attachments && formData.attachments.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      {formData.attachments.map((file) => (
-                        <div
-                          key={file.id}
-                          className={`flex items-center justify-between px-3 py-2 rounded-none border ${
-                            file.isExisting
-                              ? "bg-green-50 border-green-200"
-                              : "bg-gray-50 border-gray-200"
-                          }`}
-                        >
-                          <div className="flex items-center space-x-2 flex-1">
-                            <svg
-                              className={`w-4 h-4 ${file.isExisting ? "text-green-600" : "text-gray-500"}`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                              />
-                            </svg>
-                            <div className="flex-1">
-                              <span
-                                className={`text-sm ${file.isExisting ? "text-green-700 font-medium" : "text-gray-700"}`}
-                              >
-                                {file.name}
-                              </span>
-                              {file.size > 0 && (
-                                <span className="text-xs text-gray-500">
-                                  {" "}
-                                  ({(file.size / 1024).toFixed(2)} KB)
-                                </span>
-                              )}
-                              {file.isExisting && (
-                                <span className="ml-2 inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-none">
-                                  Existing
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <Button
-                            type="button"
-                            onClick={() => {
-                              setFormData((prev) => ({
-                                ...prev,
-                                attachments: prev.attachments.filter(
-                                  (f) => f.id !== file.id,
-                                ),
-                              }));
-                            }}
-                            variant="ghost"
-                            size="icon"
-                            className="text-red-500 hover:text-red-700"
-                            title={
-                              file.isExisting
-                                ? "Remove this attachment"
-                                : "Remove this file"
-                            }
-                            data-testid={`remove-file-${file.id}`}
-                          >
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M6 18L18 6M6 6l12 12"
-                              />
-                            </svg>
-                          </Button>
-                        </div>
-                      ))}
-                      <div className="text-xs text-gray-500">
-                        Total size:{" "}
-                        {formData.attachments.reduce(
-                          (sum, f) => sum + (f.size || 0),
-                          0,
-                        ) > 0
-                          ? `${(formData.attachments.reduce((sum, f) => sum + (f.size || 0), 0) / 1024 / 1024).toFixed(2)} MB`
-                          : "0 MB"}{" "}
-                        / 5MB
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Form Attachment - Phase I */}
-                {/* {mode === 'edit' && ( */}
-                <div className="form-group">
-                  <label className="form-label">
-                    <FileText size={16} />
-                    Form Attachment
-                    {pendingFormAttachment && (
-                      <span className="text-xs text-blue-500 ml-2">
-                        {mode === "create"
-                          ? "(Will be attached after creation)"
-                          : "(Will be attached on save)"}
-                      </span>
-                    )}
-                  </label>
-                  {/* Show pending form in create/edit mode */}
-                  {pendingFormAttachment ? (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-none p-3 space-y-2">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <FileText className="h-4 w-4 text-yellow-600" />
-                            <span className="font-medium text-sm text-gray-900">
-                              {pendingFormAttachment.form_title ||
-                                "Selected Form"}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-600">
-                            Version:{" "}
-                            {pendingFormAttachment.version_number || "Latest"}{" "}
-                            (Pending)
-                          </p>
-                          <p className="text-xs text-yellow-600 mt-1">
-                            ⏳{" "}
-                            {mode === "create"
-                              ? "Form will be attached after subtask is created"
-                              : "Form will be attached when you save changes"}
-                          </p>
-                        </div>
-                        <Button
-                          type="button"
-                          onClick={() => {
-                            setPendingFormAttachment(null);
-                            showSuccessToast("Form selection removed");
-                          }}
-                          variant="ghost"
-                          className="text-red-600 hover:text-red-800 text-sm font-medium h-auto p-0"
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </div>
-                  ) : attachedForm ? (
-                    <div className="bg-blue-50 border border-blue-200 rounded-none p-3 space-y-2">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <FileText className="h-4 w-4 text-blue-600" />
-                            <span className="font-medium text-sm text-gray-900">
-                              {attachedForm.form_title || "Attached Form"}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-600">
-                            Version: {attachedForm.version_number || "N/A"}{" "}
-                            (Locked)
-                          </p>
-                          <div className="flex items-center gap-3 mt-2 text-xs">
-                            <a
-                              href={`/forms/preview/${attachedForm.form_id}?version=${attachedForm.version_id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline flex items-center gap-1"
-                            >
-                              <FileText className="h-3 w-3" />
-                              Preview Form
-                            </a>
-                            {attachedForm.submission_count > 0 && (
-                              <span className="text-gray-500">
-                                {attachedForm.submission_count} submission
-                                {attachedForm.submission_count !== 1 ? "s" : ""}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <Button
-                          type="button"
-                          onClick={() => {
-                            if (attachedForm.submission_count > 0) {
-                              showErrorToast(
-                                "Cannot unlink form - it has already been submitted. Submissions are kept as read-only history.",
-                              );
-                            } else {
-                              setShowUnlinkConfirm(true);
-                            }
-                          }}
-                          variant="ghost"
-                          className="text-red-600 hover:text-red-800 text-sm font-medium h-auto p-0"
-                          disabled={attachedForm.submission_count > 0}
-                        >
-                          {attachedForm.submission_count > 0
-                            ? "Cannot Unlink"
-                            : "Unlink"}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
+                        }
+                      }}
+                      placeholder="Type tag and press Enter or comma..."
+                      className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500 text-sm pr-10 !h-8"
+                      style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
+                    />
                     <Button
                       type="button"
-                      onClick={() => setShowFormAttachModal(true)}
-                      variant="outline"
-                      className="w-full border-2 border-dashed border-gray-300 rounded-none p-4 hover:border-blue-400 hover:bg-blue-50 flex items-center justify-center gap-2 text-gray-600 hover:text-blue-600 h-auto"
+                      onClick={() => {
+                        const trimmedTag = tagInput.trim();
+                        if (
+                          trimmedTag &&
+                          !formData.tags.includes(trimmedTag)
+                        ) {
+                          setFormData({
+                            ...formData,
+                            tags: [...formData.tags, trimmedTag],
+                          });
+                          setTagInput("");
+                        }
+                      }}
+                      size="icon"
+                      className="absolute right-1 h-7 w-7 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md"
+                      title="Add tag"
                     >
-                      <Link2 size={18} />
-                      <span className="font-medium">Attach a Form</span>
+                      <Plus className="w-4 h-4" />
                     </Button>
+                  </div>
+
+                  {formData.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded-md border border-gray-200">
+                      {formData.tags.map((tag, index) => (
+                        <Badge
+                          key={index}
+                          variant="outline"
+                          className="bg-indigo-50 border-indigo-200 text-indigo-700 text-xs px-2 py-0.5 flex items-center gap-1 rounded"
+                        >
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData({
+                                ...formData,
+                                tags: formData.tags.filter(
+                                  (_, i) => i !== index,
+                                ),
+                              });
+                            }}
+                            className="hover:text-indigo-900 font-bold ml-1"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
                   )}
                 </div>
-                {/* )} */}
+              </div>
+            </div>
 
-                {/* Actions */}
-                <div className="form-actions flex justify-between">
+            {/* Description */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                Description
+              </Label>
+              <div className="border border-gray-300 rounded-md overflow-hidden bg-white focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+                <CustomEditor
+                  value={formData.description}
+                  onChange={(content) =>
+                    setFormData({ ...formData, description: content })
+                  }
+                  placeholder="Add notes or description... (supports rich text)"
+                  className="w-full"
+                />
+              </div>
+            </div>
+
+            {/* Attachments */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Attachments
+                </Label>
+                <span className="text-[11px] text-gray-400 font-normal">
+                  (Max 5MB total)
+                </span>
+              </div>
+              <div
+                className={`w-full border-2 border-dashed rounded-md p-4 text-center cursor-pointer transition-all ${
+                  isDragActive
+                    ? "border-indigo-500 bg-indigo-50/50"
+                    : "border-gray-300 bg-gray-50/60 hover:bg-indigo-50/30 hover:border-indigo-300"
+                }`}
+                onDragOver={handleAttachmentsDragOver}
+                onDragLeave={handleAttachmentsDragLeave}
+                onDrop={handleAttachmentsDrop}
+                onClick={() => attachmentsInputRef.current?.click()}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    attachmentsInputRef.current?.click();
+                  }
+                }}
+                data-testid="dropzone-attachments"
+              >
+                <div className="mx-auto mb-2 flex h-9 w-9 items-center justify-center bg-indigo-100 text-indigo-600 rounded-full">
+                  <Upload className="w-4 h-4" />
+                </div>
+                <p className="text-sm font-semibold text-indigo-700">
+                  Drag & Drop files or click to browse
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  PDF, DOC, images supported
+                </p>
+              </div>
+              <input
+                ref={attachmentsInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
+                onChange={(e) => {
+                  processAttachmentFiles(e.target.files);
+                  e.target.value = "";
+                }}
+                className="hidden"
+                data-testid="input-attachments"
+              />
+
+              {formData.attachments && formData.attachments.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {formData.attachments.map((file) => (
+                    <div
+                      key={file.id}
+                      className={`flex items-center justify-between px-3 py-2 rounded-md border ${
+                        file.isExisting
+                          ? "bg-emerald-50/60 border-emerald-200"
+                          : "bg-gray-50/80 border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2 flex-1 min-w-0">
+                        <Paperclip
+                          className={`w-4 h-4 shrink-0 ${
+                            file.isExisting
+                              ? "text-emerald-600"
+                              : "text-gray-500"
+                          }`}
+                        />
+                        <div className="flex-1 min-w-0 truncate">
+                          <span
+                            className={`text-sm ${
+                              file.isExisting
+                                ? "text-emerald-800 font-medium"
+                                : "text-gray-800"
+                            }`}
+                          >
+                            {file.name}
+                          </span>
+                          {file.size > 0 && (
+                            <span className="text-xs text-gray-500 ml-1.5">
+                              ({(file.size / 1024).toFixed(2)} KB)
+                            </span>
+                          )}
+                          {file.isExisting && (
+                            <Badge
+                              variant="outline"
+                              className="ml-2 bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px] px-1.5 py-0"
+                            >
+                              Existing
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            attachments: prev.attachments.filter(
+                              (f) => f.id !== file.id,
+                            ),
+                          }));
+                        }}
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 h-7 w-7 shrink-0"
+                        title="Remove file"
+                        data-testid={`remove-file-${file.id}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="text-xs text-gray-500 text-right">
+                    Total size:{" "}
+                    {formData.attachments.reduce(
+                      (sum, f) => sum + (f.size || 0),
+                      0,
+                    ) > 0
+                      ? `${(formData.attachments.reduce((sum, f) => sum + (f.size || 0), 0) / 1024 / 1024).toFixed(2)} MB`
+                      : "0 MB"}{" "}
+                    / 5MB
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Form Attachment */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Form Attachment
+                </Label>
+                {pendingFormAttachment && (
+                  <span className="text-[11px] text-indigo-600 font-normal">
+                    {mode === "create"
+                      ? "(Will be attached after creation)"
+                      : "(Will be attached on save)"}
+                  </span>
+                )}
+              </div>
+
+              {pendingFormAttachment ? (
+                <div className="bg-amber-50/80 border border-amber-200 rounded-md p-3.5 flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FileText className="h-4 w-4 text-amber-600 shrink-0" />
+                      <span className="font-semibold text-sm text-gray-900 truncate">
+                        {pendingFormAttachment.form_title || "Selected Form"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      Version:{" "}
+                      {pendingFormAttachment.version_number || "Latest"}{" "}
+                      (Pending)
+                    </p>
+                    <p className="text-xs text-amber-700 mt-1 flex items-center gap-1">
+                      ⏳{" "}
+                      {mode === "create"
+                        ? "Form will be attached after subtask is created"
+                        : "Form will be attached when you save changes"}
+                    </p>
+                  </div>
                   <Button
                     type="button"
-                    onClick={handleCancel}
-                    variant="outline"
-                    className="h-8"
-                    disabled={isLoading}
+                    onClick={() => {
+                      setPendingFormAttachment(null);
+                      showSuccessToast("Form selection removed");
+                    }}
+                    variant="ghost"
+                    className="text-red-600 hover:text-red-800 hover:bg-red-50 text-xs font-medium h-7 px-2"
                   >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    className="h-8"
-                    disabled={isLoading}
-                  >
-                    {isLoading
-                      ? "Creating..."
-                      : mode === "edit"
-                        ? "Update Sub-task"
-                        : "Create Sub-task"}
+                    Remove
                   </Button>
                 </div>
-              </form>
+              ) : attachedForm ? (
+                <div className="bg-indigo-50/60 border border-indigo-200 rounded-md p-3.5 flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FileText className="h-4 w-4 text-indigo-600 shrink-0" />
+                      <span className="font-semibold text-sm text-gray-900 truncate">
+                        {attachedForm.form_title || "Attached Form"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      Version: {attachedForm.version_number || "N/A"} (Locked)
+                    </p>
+                    <div className="flex items-center gap-3 mt-2 text-xs">
+                      <a
+                        href={`/forms/preview/${attachedForm.form_id}?version=${attachedForm.version_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 hover:underline flex items-center gap-1 font-medium"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        Preview Form
+                      </a>
+                      {attachedForm.submission_count > 0 && (
+                        <span className="text-gray-500">
+                          {attachedForm.submission_count} submission
+                          {attachedForm.submission_count !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (attachedForm.submission_count > 0) {
+                        showErrorToast(
+                          "Cannot unlink form - it has already been submitted.",
+                        );
+                      } else {
+                        setShowUnlinkConfirm(true);
+                      }
+                    }}
+                    variant="ghost"
+                    className="text-red-600 hover:text-red-800 hover:bg-red-50 text-xs font-medium h-7 px-2"
+                    disabled={attachedForm.submission_count > 0}
+                  >
+                    {attachedForm.submission_count > 0
+                      ? "Cannot Unlink"
+                      : "Unlink"}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => setShowFormAttachModal(true)}
+                  variant="outline"
+                  className="w-full border-2 border-dashed border-gray-300 hover:border-indigo-300 bg-white hover:bg-indigo-50/30 rounded-md p-3.5 text-gray-700 hover:text-indigo-700 flex items-center justify-center gap-2 text-sm font-medium transition-all h-auto"
+                >
+                  <Link2 className="w-4 h-4 text-indigo-600" />
+                  <span>Attach a Form</span>
+                </Button>
+              )}
             </div>
-          </div>
 
-          {/* Form Attach Modal */}
-          {showFormAttachModal && (
-            <FormAttachModal
-              open={showFormAttachModal}
-              onClose={(refresh, selectedFormData) => {
-                setShowFormAttachModal(false);
-
-                // In both create and edit mode, store the form selection for later attachment
-                if (selectedFormData) {
-                  console.log(
-                    "📎 Storing pending form attachment:",
-                    selectedFormData,
-                  );
-                  setPendingFormAttachment(selectedFormData);
-                  if (mode === "create") {
-                    showSuccessToast(
-                      "Form selected - will be attached after subtask is created",
-                    );
-                  } else {
-                    showSuccessToast(
-                      "Form selected - will be attached when you save changes",
-                    );
-                  }
-                } else if (refresh && mode === "edit") {
-                  // Legacy: In edit mode, the form was attached via API (for backwards compatibility)
-                  showSuccessToast("Form attached");
-                }
-              }}
-              taskId={parentTask?._id}
-              subtaskId={mode === "edit" ? editData?._id || null : null} // null in create mode
-              subtaskName={formData.title}
-              pendingMode={true} // Always use pending mode - form will be attached after subtask create/update
-            />
+            <DialogFooter className="border-t border-gray-200 pt-4 px-0 flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancel}
+                disabled={isLoading}
+                className="border-gray-300 text-gray-700 hover:bg-gray-50 h-8 px-4 rounded-md flex items-center justify-center text-center leading-none py-0"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium h-8 px-4 shadow-sm rounded-md flex items-center justify-center text-center leading-none py-0"
+              >
+                {isLoading
+                  ? "Saving..."
+                  : mode === "edit"
+                  ? "Update Sub-task"
+                  : "Create Sub-task"}
+              </Button>
+            </DialogFooter>
+          </form>
           )}
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
 
-      {/* Unlink Form Confirmation Dialog - High z-index ensures visibility above modal */}
+      {/* Form Attach Modal */}
+      {showFormAttachModal && (
+        <FormAttachModal
+          open={showFormAttachModal}
+          onClose={(refresh, selectedFormData) => {
+            setShowFormAttachModal(false);
+
+            if (selectedFormData) {
+              console.log(
+                "📎 Storing pending form attachment:",
+                selectedFormData,
+              );
+              setPendingFormAttachment(selectedFormData);
+              if (mode === "create") {
+                showSuccessToast(
+                  "Form selected - will be attached after subtask is created",
+                );
+              } else {
+                showSuccessToast(
+                  "Form selected - will be attached when you save changes",
+                );
+              }
+            } else if (refresh && mode === "edit") {
+              showSuccessToast("Form attached");
+            }
+          }}
+          taskId={parentTask?._id}
+          subtaskId={mode === "edit" ? editData?._id || null : null}
+          subtaskName={formData.title}
+          pendingMode={true}
+        />
+      )}
+
+      {/* Unlink Form Confirmation Dialog */}
       <ConfirmDialog
         isOpen={showUnlinkConfirm}
         title="Unlink Form?"
@@ -2054,7 +2249,11 @@ function SubtaskForm({
           try {
             const token = localStorage.getItem("token");
             const subtaskId = editData?._id || editData?.id;
-            await unlinkFormFromSubtask(attachedForm.form_id, subtaskId, token);
+            await unlinkFormFromSubtask(
+              attachedForm.form_id,
+              subtaskId,
+              token,
+            );
             setAttachedForm(null);
             showSuccessToast("Form unlinked");
           } catch (error) {

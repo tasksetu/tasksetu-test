@@ -62,18 +62,20 @@ export function OrganizationHierarchy() {
   });
 
   // Get existing hierarchy entries
-  const { data: hierarchyEntries = [], isLoading: hierarchyLoading } = useQuery({
-    queryKey: ["/api/organization/hierarchy"],
-    queryFn: async () => {
-      const response = await fetch("/api/organization/hierarchy", {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-      const result = await response.json();
-      return result.data || [];
+  const { data: hierarchyEntries = [], isLoading: hierarchyLoading } = useQuery(
+    {
+      queryKey: ["/api/organization/hierarchy"],
+      queryFn: async () => {
+        const response = await fetch("/api/organization/hierarchy", {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
+        const result = await response.json();
+        return result.data || [];
+      },
     },
-  });
+  );
 
   // Filter users by role
   const managerUsers = users.filter((u) => u.role.includes("manager"));
@@ -475,7 +477,7 @@ export function OrganizationHierarchy() {
                     </td>
                   </tr>
                 ) : (
-hierarchyEntries.map((entry) => (
+                  hierarchyEntries.map((entry) => (
                     <tr
                       key={entry._id}
                       className="hover:bg-gray-50 transition-colors"
@@ -487,8 +489,8 @@ hierarchyEntries.map((entry) => (
                             className="text-xs"
                             style={{ color: "#676a6c" }}
                           >
-                           {entry?.manager?.firstName} 
-                           </span>
+                            {entry?.manager?.firstName}
+                          </span>
                         </div>
                       </td>
                       <td className="py-2 px-3">
@@ -498,7 +500,7 @@ hierarchyEntries.map((entry) => (
                             className="text-xs"
                             style={{ color: "#676a6c" }}
                           >
-                          {entry?.reporty?.firstName}
+                            {entry?.reporty?.firstName}
                           </span>
                         </div>
                       </td>

@@ -55,7 +55,7 @@ export function EditUserModal({ isOpen, onClose, user, onUserUpdated }) {
   const roleOptions = [
     { value: "employee", label: "Employee" },
     { value: "manager", label: "Manager" },
-    { value: "org_admin", label: "Company Admin" },
+    { value: "org_admin", label: "Org Admin" },
   ];
 
   // ✅ NEW: Fetch license pool using new user-level license API
@@ -537,7 +537,7 @@ export function EditUserModal({ isOpen, onClose, user, onUserUpdated }) {
                   className={
                     isPrimaryAdmin
                       ? "opacity-60 cursor-not-allowed flex justify-start items-center"
-                      : ""
+                      : "flex justify-start items-center"
                   }
                 />
 

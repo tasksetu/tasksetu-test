@@ -237,7 +237,6 @@ export const getAllForms = async (req, res) => {
     const user_id = req.user.id;
     const userRoles = req.user.role || [];
 
-    console.log('📋 GET /api/forms query params:', { page, limit, search, statusFilter, categoryFilter, tagsFilter, ownerFilter, sortBy, sortOrder, user: req.user.email });
 
     // Check if user is admin
     const isTasksetuAdmin = userRoles.includes('super_admin');
@@ -249,31 +248,19 @@ export const getAllForms = async (req, res) => {
     // Use organization_id (the actual schema field, not the virtual)
     const userOrgId = currentUser?.organization_id || currentUser?.organizationId;
 
-    console.log('👤 User info:', {
-      user_id,
-      email: req.user.email,
-      isTasksetuAdmin,
-      isCompanyAdmin,
-      userOrgId: userOrgId?.toString(),
-      rawOrgId: currentUser?.organization_id,
-      rawOrgIdVirtual: currentUser?.organizationId
-    });
 
     let query;
 
     // Platform Admin sees ALL forms (cross-org)
     if (isTasksetuAdmin) {
       query = {}; // No restrictions
-      console.log(`ℹ️  PLATFORM ADMIN: ${req.user.email} viewing all forms`);
     }
     // Company Admin sees all organization forms
     else if (isCompanyAdmin && userOrgId) {
       // Find all users in same organization (use organization_id field)
-      console.log(`🔍 Looking for org users with organization_id:`, userOrgId.toString());
       const orgUsers = await User.find({ organization_id: userOrgId }).select('_id email organization_id');
       const orgUserIds = orgUsers.map(u => u._id);
 
-      console.log(`ℹ️  COMPANY ADMIN: ${req.user.email} - Found ${orgUserIds.length} org users:`, orgUsers.map(u => ({ email: u.email, id: u._id.toString(), org: u.organization_id?.toString() })));
 
       // Company Admin sees all forms owned by anyone in the organization
       query = {
@@ -306,23 +293,19 @@ export const getAllForms = async (req, res) => {
           status: "PUBLISHED"
         });
 
-        console.log(`ℹ️  REGULAR USER with org: Adding ORG visibility condition for ${orgUserIds.length} org users`);
       }
 
       query = { $or: orConditions };
-      console.log(`ℹ️  REGULAR USER: ${req.user.email} viewing owned + shared + ORG forms. User ID:`, userObjectId.toString());
     }
 
     // ✅ Apply status filter if provided
     if (statusFilter) {
       query.status = statusFilter;
-      console.log('🔍 Applying status filter:', statusFilter);
     }
 
     // ✅ Apply category filter
     if (categoryFilter) {
       query.category_id = categoryFilter;
-      console.log('🔍 Applying category filter:', categoryFilter);
     }
 
     // ✅ Apply tags filter (supports comma-separated tags, case-insensitive)
@@ -332,7 +315,6 @@ export const getAllForms = async (req, res) => {
         // Use regex for case-insensitive tag matching
         const tagRegexes = tagsArray.map(tag => new RegExp(`^${tag}$`, 'i'));
         query.tags = { $in: tagRegexes };
-        console.log('🔍 Applying tags filter:', tagsArray);
       }
     }
 
@@ -352,7 +334,6 @@ export const getAllForms = async (req, res) => {
       if (ownerUsers.length > 0) {
         // If multiple users match, use all their IDs
         ownerFilterUserId = ownerUsers.length === 1 ? ownerUsers[0]._id : { $in: ownerUsers.map(u => u._id) };
-        console.log('🔍 Found owner(s) matching filter:', ownerUsers.map(u => u.email));
       }
     }
 
@@ -401,13 +382,11 @@ export const getAllForms = async (req, res) => {
         // Simple case - just add to query
         query.owner_user_id = ownerFilterUserId;
       }
-      console.log('🔍 Applied owner filter to query');
     }
 
     // Count total
     const total = await FormTemplate.countDocuments(query);
 
-    console.log('📊 Forms query result:', { total, query: JSON.stringify(query) });
 
     // Build sort object
     const sortOptions = {};
@@ -489,11 +468,9 @@ export const getFormById = async (req, res) => {
     const user_id = req.user.id;
     const userRoles = req.user.role || [];
 
-    console.log('🔍 getFormById called with form_id:', form_id, 'user:', req.user.email);
 
     // ✅ If middleware already attached form (permission already checked), use it
     if (req.form) {
-      console.log('✅ Using form from middleware (permission pre-validated):', req.form.title);
 
       // Populate additional fields if needed
       await req.form.populate('current_version_id');
@@ -508,21 +485,18 @@ export const getFormById = async (req, res) => {
     // Fallback: Find form if middleware didn't attach it
     let form;
     if (mongoose.Types.ObjectId.isValid(form_id)) {
-      console.log('📝 Valid ObjectId detected, searching by _id');
       form = await FormTemplate.findById(form_id)
         .populate('current_version_id')
         .populate('owner_user_id', 'firstName lastName email organizationId organization_id');
     }
 
     if (!form) {
-      console.log('📝 Not found by _id, trying form_id field');
       form = await FormTemplate.findOne({ form_id: form_id })
         .populate('current_version_id')
         .populate('owner_user_id', 'firstName lastName email organizationId organization_id');
     }
 
     if (!form) {
-      console.log('❌ Form not found:', form_id);
       return res.status(404).json({
         success: false,
         message: 'Form not found or unauthorized'
@@ -555,17 +529,8 @@ export const getFormById = async (req, res) => {
     // ✅ Check for super_admin access
     const isSuperAdmin = userRoles.includes('super_admin');
 
-    console.log('🔐 Access check:', {
-      isOwner,
-      isSharedUser,
-      isCompanyAdminWithOrgAccess,
-      isSuperAdmin,
-      user: req.user.email,
-      shared_with_count: form.shared_with?.length || 0
-    });
 
     if (!isOwner && !isSharedUser && !isCompanyAdminWithOrgAccess && !isSuperAdmin) {
-      console.log('❌ User not authorized to access form:', req.user.email);
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to access this form'
@@ -574,10 +539,8 @@ export const getFormById = async (req, res) => {
 
     // Log org_admin access
     if (isCompanyAdminWithOrgAccess && !isOwner) {
-      console.log('ℹ️  ORG ADMIN accessing form:', req.user.email);
     }
 
-    console.log('✅ Form found and user authorized:', form.title);
     res.status(200).json({
       success: true,
       data: form
@@ -687,8 +650,6 @@ export const createForm = async (req, res) => {
     const userId = req.featureUsage?.user_id || req.user?.id || req.user?._id;
     if (userId) {
       try {
-        console.log('📊 [USAGE TRACKING] Tracking FORM_CREATE usage for createForm');
-        console.log('📊 [USAGE TRACKING] User ID:', userId);
 
         const consumeResult = await licenseService.consumeFeature(
           userId,
@@ -697,7 +658,6 @@ export const createForm = async (req, res) => {
         );
 
         if (consumeResult.success) {
-          console.log('📊 [USAGE TRACKING] ✅ FORM_CREATE usage tracked successfully. New usage:', consumeResult.usage);
         } else {
           console.warn('📊 [USAGE TRACKING] ⚠️ Failed to track FORM_CREATE usage:', consumeResult.message);
         }
@@ -809,14 +769,12 @@ export const saveOrUpdateDraftForm = async (req, res) => {
         userOrgId.toString() === formOwnerOrgId.toString();
 
       if (!isOwner && !editorAccess && !isCompanyAdminWithOrgAccess && !isSuperAdmin) {
-        console.log('❌ User not authorized to edit form:', req.user.email, '| isOwner:', isOwner, '| editorAccess:', !!editorAccess, '| isCompanyAdminWithOrgAccess:', isCompanyAdminWithOrgAccess);
         return res.status(403).json({
           success: false,
           message: "You do not have permission to edit this form",
         });
       }
 
-      console.log('✅ User authorized to edit form:', req.user.email, '| isOwner:', isOwner, '| editorAccess:', !!editorAccess, '| isCompanyAdminWithOrgAccess:', isCompanyAdminWithOrgAccess);
 
       existingForm.title = title ?? existingForm.title;
       existingForm.description = description ?? existingForm.description;
@@ -882,8 +840,6 @@ export const saveOrUpdateDraftForm = async (req, res) => {
     const userId1 = req.featureUsage?.user_id || req.user?.id || req.user?._id;
     if (userId1) {
       try {
-        console.log('📊 [USAGE TRACKING] Tracking FORM_CREATE usage');
-        console.log('📊 [USAGE TRACKING] User ID:', userId1);
 
         const consumeResult = await licenseService.consumeFeature(
           userId1,
@@ -892,7 +848,6 @@ export const saveOrUpdateDraftForm = async (req, res) => {
         );
 
         if (consumeResult.success) {
-          console.log('📊 [USAGE TRACKING] ✅ FORM_CREATE usage tracked successfully. New usage:', consumeResult.usage);
         } else {
           console.warn('📊 [USAGE TRACKING] ⚠️ Failed to track FORM_CREATE usage:', consumeResult.message);
         }
@@ -979,7 +934,6 @@ export const deleteFormById = async (req, res) => {
 
     // Log org_admin delete
     if (isCompanyAdminWithOrgAccess && !isOwner) {
-      console.log(`⚠️  ORG ADMIN DELETE: ${req.user.email} deleting form ${form_id}`);
     }
 
     // ✅ CRITICAL: Check for active usage (dependencies)
@@ -1016,7 +970,6 @@ export const deleteFormById = async (req, res) => {
     // ✅ Also delete all versions for this form (cleanup)
     await FormVersion.deleteMany({ form_id: form_id });
 
-    console.log(`🗑️  FORM DELETED: ${req.user.email} deleted form ${form.title} (${form_id})`);
 
     res.status(200).json({
       success: true,
@@ -1083,7 +1036,6 @@ export const cloneFormTemplate = async (req, res) => {
             ? field.label.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 20)
             : `field_${index + 1}`;
           field.field_code = `${baseCode}_${Date.now()}_${index}`;
-          console.log(`⚠️ Generated field_code for cloned field: ${field.field_code}`);
         }
         // Display-only fields (Section Title, Read-only Label) cannot be required
         if (['title', 'label'].includes(field.type)) {
@@ -1171,7 +1123,6 @@ export const publishFormVersion = async (req, res) => {
     // Find the form to check owner
     let form = await FormTemplate.findById(form_id);
     if (!form) {
-      console.log(`🔍 Form not found by _id (${form_id}), trying form_id field...`);
       form = await FormTemplate.findOne({ form_id: form_id });
     }
     if (!form) {
@@ -1236,7 +1187,6 @@ export const publishFormVersion = async (req, res) => {
 
     // ✅ Get next version number
     // Log require_captcha value for debugging
-    console.log('🔍 [Publish] require_captcha:', require_captcha);
     const version_number = await FormVersion.getNextVersionNumber(form_id);
 
     // ✅ Create snapshot of current form
@@ -1262,16 +1212,13 @@ export const publishFormVersion = async (req, res) => {
       external_url = `${process.env.PRODUCTION_BASE_URL}/forms/public/${external_token}`;
       // external_url = `${'https://tasksetu.shrawantravels.com' || 'https://tasksetu.shrawantravels.com'}/forms/public/${external_token}`;
 
-      console.log('🔑 External submission enabled - Generated token:', external_token);
 
       // Hash password if provided
       if (external_password) {
         const bcrypt = await import('bcrypt');
         hashed_password = await bcrypt.hash(external_password, 10);
-        console.log('🔒 External password hashed');
       }
     } else {
-      console.log('📝 Creating version without external_token (internal form)');
     }
 
     // ✅ Create new version - only include external fields if enabled
@@ -1300,18 +1247,11 @@ export const publishFormVersion = async (req, res) => {
       }
     }
 
-    console.log('📦 Creating FormVersion:', {
-      version_number,
-      external_submission_enabled,
-      has_external_token: !!external_token,
-      form_id: form_id
-    });
 
     const newVersion = new FormVersion(versionData);
 
     try {
       await newVersion.save();
-      console.log('✅ FormVersion saved successfully:', newVersion._id);
     } catch (saveError) {
       console.error('❌ Error saving FormVersion:', saveError.message);
       if (saveError.code === 11000) {
@@ -1333,7 +1273,6 @@ export const publishFormVersion = async (req, res) => {
             ? field.label.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 20)
             : `field_${index + 1}`;
           field.field_code = `${baseCode}_${Date.now()}_${index}`;
-          console.log(`⚠️ Generated missing field_code: ${field.field_code} for field: ${field.label}`);
         }
         return field;
       });
@@ -1353,7 +1292,6 @@ export const publishFormVersion = async (req, res) => {
 
     try {
       await form.save();
-      console.log('✅ Form template updated successfully');
     } catch (saveError) {
       console.error('❌ Error saving form template:', saveError.message);
       console.error('Form fields:', JSON.stringify(form.fields, null, 2));
@@ -1417,7 +1355,6 @@ export const publishFormVersion = async (req, res) => {
     }
 
     // ✅ Audit log (Spec 5.12)
-    console.log(`📢 FORM PUBLISHED: ${req.user.email} published form ${form.title} as v${version_number}${external_url ? ' with external URL' : ''}`);
     await auditLogger.logFormPublished(form, newVersion, req.user, req);
 
     // Log external link generation if enabled
@@ -1601,7 +1538,6 @@ export const unpublishForm = async (req, res) => {
     if (form.external_submission_enabled) {
       form.external_submission_enabled = false;
       // Note: We keep external_token for historical reference but disable it
-      console.log(`🔒 Disabled external submissions for unpublished form ${form_id}`);
     }
 
     await form.save();
@@ -1611,7 +1547,6 @@ export const unpublishForm = async (req, res) => {
       ? `🚨 FORCE UNPUBLISH: ${req.user.email} force-unpublished form ${form.title} (${previousStatus} → DRAFT). Active usage: ${activeUsage}, Pending submissions: ${pendingSubmissions}. Reason: ${reason}`
       : `🔄 FORM UNPUBLISHED: ${req.user.email} unpublished form ${form.title} (${previousStatus} → DRAFT). Reason: ${reason}`;
 
-    console.log(auditMessage);
     await auditLogger.logFormUnpublished(form, req.user, req, reason, {
       force,
       previousStatus,
@@ -1694,7 +1629,6 @@ export const archiveForm = async (req, res) => {
     await form.save();
 
     // ✅ Audit log (Spec 5.12)
-    console.log(`📦 FORM ARCHIVED: ${req.user.email} archived form ${form.title} (${previousStatus} → ARCHIVED). Reason: ${reason || 'Not provided'}`);
     await auditLogger.logFormArchived(form, req.user, req, reason);
 
     res.status(200).json({
@@ -1774,7 +1708,6 @@ export const deleteFormTemplate = async (req, res) => {
 
     // Log if org_admin is deleting
     if (isCompanyAdminWithOrgAccess && !isOwner) {
-      console.log(`⚠️  COMPANY ADMIN DELETE: ${req.user.email} deleting form ${form_id}`);
     }
 
     // ✅ Check for active usage (Section 5.8 - Block deletion if active linked processes)
@@ -1820,7 +1753,6 @@ export const deleteFormTemplate = async (req, res) => {
     await form.save();
 
     // ✅ Audit log (Spec 5.12)
-    console.log(`🗑️  FORM DELETED: ${req.user.email} deleted form ${form.title} (${form_id}). Submissions preserved: ${submissionCount}`);
     await auditLogger.logFormDeleted(form, req.user, req, submissionCount);
 
     res.status(200).json({
@@ -1854,20 +1786,16 @@ export const getFormVersions = async (req, res) => {
     const { form_id } = req.params;
     const userId = req.user.id;
 
-    console.log('📋 GET /api/forms/:form_id/versions called:', { form_id, userId });
 
     // ✅ Find form by _id first (matches URL param), then form_id field
     let form = await FormTemplate.findById(form_id);
 
     if (!form) {
-      console.log('🔍 Form not found by _id, trying form_id field...');
       form = await FormTemplate.findOne({ form_id: form_id });
     }
 
-    console.log('🔍 Form lookup result:', form ? `Found: ${form.title}` : 'Not found');
 
     if (!form) {
-      console.log('❌ Form not found with ID:', form_id);
       return res.status(404).json({
         success: false,
         message: "Form not found",
@@ -1880,7 +1808,6 @@ export const getFormVersions = async (req, res) => {
     const isOwner = form.owner_user_id.toString() === userId.toString();
 
     if (!isOwner && !isAdmin) {
-      console.log('🔒 Restricted form list for user (not owner/admin):', req.user.email);
       // Return a 200 with a restricted flag so frontend can render a placeholder
       return res.status(200).json({
         success: true,
@@ -1906,14 +1833,12 @@ export const getFormVersions = async (req, res) => {
 
     // If no versions found with form_id, try with form_template_id
     if (versions.length === 0) {
-      console.log('🔍 No versions found with form_id, trying form_template_id...');
       versions = await FormVersion.find({ form_template_id: form._id })
         .sort({ version_number: -1 })
         .populate("published_by", "firstName lastName email")
         .select("-snapshot_data");
     }
 
-    console.log('✅ Found', versions.length, 'versions for form:', form.title);
 
     res.status(200).json({
       success: true,
@@ -1941,14 +1866,12 @@ export const getFormVersionById = async (req, res) => {
     const { version_id } = req.params;
     const userId = req.user.id;
 
-    console.log('📋 GET /api/forms/versions/:version_id called:', { version_id, userId });
 
     // Find version by _id
     const version = await FormVersion.findById(version_id)
       .populate("published_by", "firstName lastName email");
 
     if (!version) {
-      console.log('❌ Form version not found with ID:', version_id);
       return res.status(404).json({
         success: false,
         message: "Form version not found",
@@ -1964,7 +1887,6 @@ export const getFormVersionById = async (req, res) => {
     });
 
     if (!form) {
-      console.log('❌ Form template not found for version');
       return res.status(404).json({
         success: false,
         message: "Form template not found",
@@ -1987,16 +1909,6 @@ export const getFormVersionById = async (req, res) => {
       isDeleted: { $ne: true }
     }).populate('assignedTo collaborators', '_id');
 
-    console.log('📝 Tasks with form attached:', {
-      formVersionId: version._id.toString(),
-      tasksFound: tasksWithForm.length,
-      taskDetails: tasksWithForm.map(t => ({
-        taskId: t._id.toString(),
-        assignedToId: t.assignedTo?._id?.toString(),
-        collaborators: t.collaborators?.map(c => c._id.toString())
-      })),
-      currentUserId: userId.toString()
-    });
 
     const isTaskAssignee = tasksWithForm.some(task =>
       task.assignedTo && task.assignedTo._id.toString() === userId.toString()
@@ -2008,17 +1920,8 @@ export const getFormVersionById = async (req, res) => {
       )
     );
 
-    console.log('🔐 Form access check:', {
-      isOwner,
-      isAdmin,
-      isSharedUser,
-      isTaskAssignee,
-      isTaskContributor,
-      tasksWithFormCount: tasksWithForm.length
-    });
 
     if (!isOwner && !isAdmin && !isSharedUser && !isTaskAssignee && !isTaskContributor) {
-      console.log('🔒 Restricted form version access for user:', req.user.email);
       // Return 200 + restricted flag so frontend can show a friendly placeholder
       return res.status(200).json({
         success: true,
@@ -2034,7 +1937,6 @@ export const getFormVersionById = async (req, res) => {
       });
     }
 
-    console.log('✅ Form version found:', version.version_number);
 
     res.status(200).json({
       success: true,
@@ -2398,11 +2300,6 @@ export const submitPublicForm = async (req, res) => {
     const { token } = req.params;
     const { responses, submitted_by, captchaToken } = req.body;
 
-    console.log('📝 Public form submission:', {
-      token: token.substring(0, 20) + '...',
-      responseFields: Object.keys(responses || {}),
-      submitted_by
-    });
 
     // Validate token and get form version
     const formVersion = await FormVersion.getByExternalToken(token);
@@ -2427,14 +2324,6 @@ export const submitPublicForm = async (req, res) => {
       consumeCaptchaToken(captchaToken);
     }
 
-    console.log('🔍 FormVersion details:', {
-      _id: formVersion._id,
-      form_id: formVersion.form_id,
-      form_template_id: formVersion.form_template_id,
-      form_id_type: typeof formVersion.form_id,
-      form_template_id_type: typeof formVersion.form_template_id,
-      version_number: formVersion.version_number
-    });
 
     // Check if external submissions are enabled
     if (!formVersion.external_submission_enabled) {
@@ -2549,7 +2438,6 @@ export const submitPublicForm = async (req, res) => {
       formVersion.form_id?.title ||
       formVersion.form_template_id?.title ||
       'Untitled Form';
-    console.log(`✅ Public form submitted: ${formTitle} (version ${formVersion.version_number})`);
 
     await auditLogger.logFormSubmission(
       { _id: formId, title: formTitle },
@@ -2614,13 +2502,6 @@ export const getFormResponses = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const format = req.query.format || "json"; // json or csv
 
-    console.log('📊 getFormResponses called:', {
-      form_id,
-      userId,
-      page,
-      limit,
-      format
-    });
 
     // Filters
     const status = req.query.status;
@@ -2631,22 +2512,10 @@ export const getFormResponses = async (req, res) => {
     // ✅ Check ownership - try both _id and form_id field (remove ownership check for now)
     let form = await FormTemplate.findById(form_id);
 
-    console.log('🔍 FormTemplate lookup by _id result:', {
-      searchId: form_id,
-      found: !!form,
-      formId: form?._id?.toString(),
-      formFormId: form?.form_id?.toString()
-    });
 
     // Fallback: try form_id field if not found by _id
     if (!form) {
       form = await FormTemplate.findOne({ form_id: form_id });
-      console.log('🔍 FormTemplate lookup by form_id result:', {
-        searchId: form_id,
-        found: !!form,
-        formId: form?._id?.toString(),
-        formFormId: form?.form_id?.toString()
-      });
     }
 
     // Maybe the ID passed is a FormVersion ID, try that
@@ -2655,22 +2524,11 @@ export const getFormResponses = async (req, res) => {
       const formVersion = await FormVersion.findById(form_id);
       if (formVersion) {
         form = await FormTemplate.findById(formVersion.form_id);
-        console.log('🔍 Found via FormVersion:', {
-          versionId: form_id,
-          formId: form?._id?.toString()
-        });
       }
     }
 
-    console.log('🔍 Form lookup result:', {
-      formFound: !!form,
-      formId: form?._id?.toString(),
-      formFormId: form?.form_id?.toString(),
-      formTitle: form?.title
-    });
 
     if (!form) {
-      console.log('❌ Form not found for ID:', form_id);
       return res.status(404).json({
         success: false,
         message: "Form not found",
@@ -2682,19 +2540,11 @@ export const getFormResponses = async (req, res) => {
     let query = { form_id: form._id };
     let total = await FormSubmission.countDocuments(query);
 
-    console.log('📊 Query attempt 1 (form._id):', {
-      query: JSON.stringify(query),
-      total
-    });
 
     // If no results, try with form.form_id (custom field)
     if (total === 0 && form.form_id) {
       query = { form_id: form.form_id };
       total = await FormSubmission.countDocuments(query);
-      console.log('📊 Query attempt 2 (form.form_id):', {
-        query: JSON.stringify(query),
-        total
-      });
     }
 
     // Add filters
@@ -2706,12 +2556,10 @@ export const getFormResponses = async (req, res) => {
       if (endDate) query.submitted_at.$lte = new Date(endDate);
     }
 
-    console.log('📊 Final query for form responses:', JSON.stringify(query, null, 2));
 
     // ✅ Get total count with final query
     total = await FormSubmission.countDocuments(query);
 
-    console.log('📈 Total submissions found:', total);
 
     // ✅ Fetch submissions
     const submissions = await FormSubmission.find(query)
@@ -2721,25 +2569,17 @@ export const getFormResponses = async (req, res) => {
       .populate("submitted_by", "firstName lastName email")
       .populate("form_version_id", "version_number snapshot_data");
 
-    console.log(`📄 Found ${submissions.length} submissions for form ${form._id}`);
 
     // Get form fields for transformation
     let formFields = [];
     if (submissions.length > 0 && submissions[0].form_version_id?.snapshot_data?.fields) {
       formFields = submissions[0].form_version_id.snapshot_data.fields;
-      console.log(`📋 Using ${formFields.length} fields for transformation`);
     }
 
     // Transform submissions to use labels instead of field_ids
     const transformedSubmissions = submissions.map(sub => {
       const subObj = sub.toObject();
 
-      console.log('🔍 [ATTACHMENTS DEBUG] Submission:', {
-        id: subObj._id,
-        hasAttachments: !!subObj.attachments,
-        attachmentsCount: subObj.attachments?.length || 0,
-        attachments: subObj.attachments
-      });
 
       if (formFields.length > 0) {
         const originalData = { ...subObj.submission_data_json };
@@ -2747,17 +2587,10 @@ export const getFormResponses = async (req, res) => {
           originalData,
           formFields
         );
-        console.log('🔄 Transformed submission:', {
-          submissionId: subObj._id,
-          before: Object.keys(originalData).slice(0, 3),
-          after: Object.keys(subObj.submission_data_json).slice(0, 3),
-          attachmentsPreserved: subObj.attachments?.length || 0
-        });
       }
 
       // ✅ Add file upload data to submission_data_json for display
       if (subObj.attachments && subObj.attachments.length > 0) {
-        console.log('📎 [ATTACHMENTS DEBUG] Processing attachments for display');
 
         // Group attachments by field_id
         const attachmentsByField = {};
@@ -2779,7 +2612,6 @@ export const getFormResponses = async (req, res) => {
           const field = formFields.find(f => f.field_code === fieldId);
           const fieldLabel = field ? field.label : fieldId;
 
-          console.log(`  ✅ Adding ${files.length} file(s) to field "${fieldLabel}"`);
 
           // Store both by field_code and field_label for compatibility
           subObj.submission_data_json[fieldId] = files;
@@ -2788,7 +2620,6 @@ export const getFormResponses = async (req, res) => {
           }
         }
 
-        console.log('✅ [ATTACHMENTS DEBUG] Final submission_data_json keys:', Object.keys(subObj.submission_data_json));
       }
 
       return subObj;
@@ -2913,7 +2744,6 @@ export const attachFormToSubtask = async (req, res) => {
     const attachmentType = isSubtaskAttachment ? "SUBTASK" : "TASK";
     const targetId = isSubtaskAttachment ? subtask_id : task_id;
 
-    console.log(`📎 Attaching form to ${attachmentType}:`, { targetId, form_version_id });
 
     // ✅ Find form (try _id first, then form_id field)
     let form = await FormTemplate.findById(form_id);
@@ -2929,7 +2759,6 @@ export const attachFormToSubtask = async (req, res) => {
 
     // ✅ If form_version_id is not provided, fetch the latest published version
     if (!form_version_id) {
-      console.log(`📌 form_version_id is null, fetching latest version for form ${form._id}`);
       const latestVersion = await FormVersion.findOne({ form_id: form._id })
         .sort({ version_number: -1 });
 
@@ -2942,7 +2771,6 @@ export const attachFormToSubtask = async (req, res) => {
       }
 
       form_version_id = latestVersion._id;
-      console.log(`✅ Using latest version: ${latestVersion.version_number} (${form_version_id})`);
     }
 
     // ✅ CRITICAL: Check form is PUBLISHED (Phase I Rule #2)
@@ -3065,7 +2893,6 @@ export const attachFormToSubtask = async (req, res) => {
     }
 
     // ✅ Audit log (Spec 5.12)
-    console.log(`📎 FORM ATTACHED: User ${req.user.email} attached form ${form.title} (v${formVersion.version_number}) to ${attachmentType.toLowerCase()} ${targetId}`);
     await auditLogger.logFormAttached(form, formVersion, { _id: targetId }, req.user, req);
 
     res.status(201).json({
@@ -3207,7 +3034,6 @@ export const unlinkFormFromSubtask = async (req, res) => {
     );
 
     // ✅ Audit log (Spec 5.12 - Phase I Rule #7)
-    console.log(`🔓 FORM UNLINKED: User ${req.user.email} unlinked form ${usage.metadata?.form_title} from subtask ${subtask_id} (no submissions)`);
 
     // Create form object for audit logger
     const formForAudit = {
@@ -3249,7 +3075,6 @@ export const shareForm = async (req, res) => {
     const { user_id, role } = req.body; // role: EDITOR | VIEWER
     const owner_id = req.user.id;
 
-    console.log('🔄 SHARE FORM REQUEST:', { form_id, user_id, role, owner_id: owner_id.toString() });
 
     // Validate role
     if (!['EDITOR', 'VIEWER'].includes(role)) {
@@ -3279,18 +3104,10 @@ export const shareForm = async (req, res) => {
       });
     }
 
-    console.log('✅ Target user found:', { _id: targetUser._id, email: targetUser.email });
 
     // Get form (already attached to req by ACL middleware)
     const form = req.form;
 
-    console.log('📋 Form before share:', {
-      form_id: form.form_id,
-      title: form.title,
-      owner: form.owner_user_id.toString(),
-      shared_with_count: form.shared_with?.length || 0,
-      shared_with: form.shared_with?.map(s => ({ user: s.user_id.toString(), role: s.role }))
-    });
 
     // Prevent sharing with self
     if (form.owner_user_id.toString() === user_id.toString()) {
@@ -3303,45 +3120,24 @@ export const shareForm = async (req, res) => {
     // Add or update shared user
     const updatedForm = await form.addSharedUser(user_id, role, owner_id);
 
-    console.log('✅ Form after share:', {
-      form_id: updatedForm.form_id,
-      shared_with_count: updatedForm.shared_with?.length || 0,
-      shared_with: updatedForm.shared_with?.map(s => ({ user: s.user_id.toString(), role: s.role }))
-    });
 
     // 📧 Send email notification to the user
     try {
-      console.log('📧 Starting email notification process...');
-      console.log('📧 Importing email service...');
       const { emailService } = await import('../services/emailService.js');
-      console.log('✅ Email service imported successfully');
 
       // Get external token for VIEWER role (public link)
       let externalToken = null;
       if (role === 'VIEWER' && form.current_version_id) {
-        console.log('🔍 Fetching external token for VIEWER role...');
         const { FormVersion } = await import('../modals/formVersionModal.js');
         const currentVersion = await FormVersion.findById(form.current_version_id);
         externalToken = currentVersion?.external_token || null;
-        console.log('🔑 External token for VIEWER:', externalToken ? 'Found' : 'Not found');
       }
 
       // Re-import User model to ensure it's in scope for this block
-      console.log('🔍 Fetching owner user details...');
       const { User: UserModel } = await import('../modals/userModal.js');
       const ownerUser = await UserModel.findById(owner_id);
-      console.log('✅ Owner user fetched:', ownerUser ? ownerUser.email : 'Not found');
 
-      console.log('📧 Preparing email parameters:', {
-        recipientEmail: targetUser.email,
-        recipientName: targetUser.firstName || targetUser.email,
-        formTitle: form.title,
-        formId: form.form_id,
-        role: role,
-        externalToken: externalToken
-      });
 
-      console.log('📧 Calling emailService.sendFormShareNotification...');
       const emailSent = await emailService.sendFormShareNotification({
         recipientEmail: targetUser.email,
         recipientName: targetUser.firstName || targetUser.email,
@@ -3352,10 +3148,8 @@ export const shareForm = async (req, res) => {
         sharedByEmail: ownerUser?.email || req.user.email,
         externalToken: externalToken
       });
-      console.log('📧 Email service returned:', emailSent);
 
       if (emailSent) {
-        console.log(`📧 Email notification sent to ${targetUser.email}`);
       } else {
         console.warn(`⚠️  Failed to send email notification to ${targetUser.email}`);
       }
@@ -3807,18 +3601,8 @@ export const updateFormSubmission = async (req, res) => {
     const isSubmitter = submittedById === currentUserId;
     const hasPermission = isSubmitter || isOrgAdmin;
 
-    console.log('🔍 Update submission permission check:', {
-      submissionId: submission_id,
-      submittedBy: submittedById,
-      currentUser: currentUserId,
-      userRoles,
-      isSubmitter,
-      isOrgAdmin,
-      hasPermission
-    });
 
     if (!hasPermission) {
-      console.log('❌ Permission denied - user can only edit their own submission');
       return res.status(403).json({
         success: false,
         message: 'You can only update your own submission'
@@ -3951,32 +3735,8 @@ export const getFormSubmissionById = async (req, res) => {
       (isTaskAssignee) || // Task assignee sees all submissions
       (isSubmitter); // Submitter sees their own
 
-    console.log('🔐 Submission access check:', {
-      submissionId: submission_id,
-      submittedBy: submission.submitted_by?._id?.toString(),
-      submittedByDirect: submission.submitted_by?.toString?.(), // In case it's already ObjectId
-      currentUserId: req.user.id?.toString?.() || req.user.id,
-      formOwnerId: form?.created_by?.toString(),
-      userRole: req.user.role,
-      userRolesArray: userRoles,
-      taskId: submission.source_task_id || submission.source_subtask_id,
-      isSubmitter,
-      isFormOwner,
-      isAdmin,
-      isTaskAssignee,
-      isTaskContributor,
-      hasPermission
-    });
 
     if (!hasPermission) {
-      console.log('❌ Permission denied for submission:', {
-        reasons: {
-          notSubmitter: !isSubmitter,
-          notFormOwner: !isFormOwner,
-          notAdmin: !isAdmin,
-          notTaskAssignee: !isTaskAssignee
-        }
-      });
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to view this submission'
@@ -4124,7 +3884,6 @@ export const getPublicFormByToken = async (req, res) => {
       });
     }
 
-    console.log('🔍 Searching for published form with external_token:', token);
 
     // Find the active form version with this token
     const formVersion = await FormVersion.findOne({
@@ -4135,7 +3894,6 @@ export const getPublicFormByToken = async (req, res) => {
       .populate('form_id', 'title description');
 
     if (!formVersion) {
-      console.log('❌ No active form version found with token:', token);
       return res.status(404).json({
         success: false,
         message: 'Form not found or has been unpublished'
@@ -4191,11 +3949,6 @@ export const getPublicFormByToken = async (req, res) => {
       timezone: formVersion.timezone || 'UTC',
     };
 
-    console.log('✅ Public form found:', {
-      title: formData.title,
-      version: formData.version_number,
-      fields: formData.fields.length
-    });
 
     res.json({
       success: true,
@@ -4277,22 +4030,17 @@ export const verifyCaptchaAnswer = async (req, res) => {
 
 // Helper: resolve form submission file path across environments
 const resolveFormFilePath = (filePath, filename) => {
-  console.log('🔍 [resolveFormFilePath] Trying to resolve:', { filePath, filename, cwd: process.cwd() });
 
   // 1. Try the stored path directly (relative to cwd)
   if (filePath) {
     const directPath = path.resolve(process.cwd(), filePath.replace(/^\//, ''));
-    console.log('  → Try 1 (cwd + relative):', directPath);
     if (fs.existsSync(directPath)) {
-      console.log('  ✅ Found at direct path');
       return directPath;
     }
 
     // Try as absolute path
     const absPath = path.resolve(filePath);
-    console.log('  → Try 2 (absolute):', absPath);
     if (fs.existsSync(absPath)) {
-      console.log('  ✅ Found at absolute path');
       return absPath;
     }
 
@@ -4301,9 +4049,7 @@ const resolveFormFilePath = (filePath, filename) => {
     if (uploadsIdx !== -1) {
       const relativePart = filePath.replace(/\\/g, '/').substring(uploadsIdx);
       const reconstructed = path.join(process.cwd(), relativePart);
-      console.log('  → Try 3 (extract uploads/):', reconstructed);
       if (fs.existsSync(reconstructed)) {
-        console.log('  ✅ Found at reconstructed path');
         return reconstructed;
       }
     }
@@ -4312,9 +4058,7 @@ const resolveFormFilePath = (filePath, filename) => {
     const storedFilename = filePath.split('/').pop();
     if (storedFilename) {
       const storedPath = path.join(process.cwd(), 'uploads', 'form-submissions', storedFilename);
-      console.log('  → Try 4 (stored filename from path):', storedPath);
       if (fs.existsSync(storedPath)) {
-        console.log('  ✅ Found using stored filename');
         return storedPath;
       }
     }
@@ -4323,14 +4067,11 @@ const resolveFormFilePath = (filePath, filename) => {
   // 2. Try uploads/form-submissions/<original filename>
   if (filename) {
     const formSubPath = path.join(process.cwd(), 'uploads', 'form-submissions', filename);
-    console.log('  → Try 5 (original filename):', formSubPath);
     if (fs.existsSync(formSubPath)) {
-      console.log('  ✅ Found at original filename path');
       return formSubPath;
     }
   }
 
-  console.log('  ❌ File not found at any path');
   return null;
 };
 
@@ -4341,7 +4082,6 @@ const resolveFormFilePath = (filePath, filename) => {
 export const viewFormSubmissionFile = async (req, res) => {
   try {
     const { submissionId, attachmentId } = req.params;
-    console.log('📂 [viewFormSubmissionFile] Request:', { submissionId, attachmentId });
 
     const submission = await FormSubmission.findById(submissionId);
     if (!submission) {
@@ -4351,11 +4091,9 @@ export const viewFormSubmissionFile = async (req, res) => {
     // Find attachment by _id
     const attachment = submission.attachments?.find(a => a._id.toString() === attachmentId);
     if (!attachment) {
-      console.log('❌ Attachment not found. Available attachments:', submission.attachments?.map(a => ({ _id: a._id, field_id: a.field_id, filename: a.filename })));
       return res.status(404).json({ success: false, message: 'File not found in submission' });
     }
 
-    console.log('📎 Found attachment:', { filename: attachment.filename, file_path: attachment.file_path, mime_type: attachment.mime_type });
 
     const filePath = resolveFormFilePath(attachment.file_path, attachment.filename);
     if (!filePath) {
@@ -4408,7 +4146,6 @@ export const viewFormSubmissionFile = async (req, res) => {
 export const downloadFormSubmissionFile = async (req, res) => {
   try {
     const { submissionId, attachmentId } = req.params;
-    console.log('📂 [downloadFormSubmissionFile] Request:', { submissionId, attachmentId });
 
     const submission = await FormSubmission.findById(submissionId);
     if (!submission) {
@@ -4417,11 +4154,9 @@ export const downloadFormSubmissionFile = async (req, res) => {
 
     const attachment = submission.attachments?.find(a => a._id.toString() === attachmentId);
     if (!attachment) {
-      console.log('❌ Attachment not found. Available attachments:', submission.attachments?.map(a => ({ _id: a._id, field_id: a.field_id, filename: a.filename })));
       return res.status(404).json({ success: false, message: 'File not found in submission' });
     }
 
-    console.log('📎 Found attachment:', { filename: attachment.filename, file_path: attachment.file_path, mime_type: attachment.mime_type });
 
     const filePath = resolveFormFilePath(attachment.file_path, attachment.filename);
     if (!filePath) {

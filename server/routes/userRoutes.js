@@ -317,6 +317,12 @@ router.get(
   userController.searchAssignableUsers
 );
 
+router.get(
+  "/users/search-for-assignment",
+  authenticateToken,
+  userController.searchAssignableUsers
+);
+
 /**
  * @swagger
  * /api/organization/users/bulk-upload:

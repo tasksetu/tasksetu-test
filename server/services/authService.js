@@ -10,7 +10,7 @@ const storage = new MongoStorage();
 
 export class AuthService {
   constructor() {
-    this.JWT_SECRET = process.env.JWT_SECRET;
+    this.JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
     this.JWT_EXPIRES_IN = "24h"; // Token expires in 24 hours
     this.VERIFICATION_TOKEN_EXPIRES = 24 * 60 * 60 * 1000; // 24 hours
     this.RESET_TOKEN_EXPIRES = 24 * 60 * 60 * 1000; // 24 hours
@@ -26,7 +26,6 @@ export class AuthService {
 
   // Generate JWT token
   generateToken(user) {
-    console.log("Generating token for user:", user.organization_id);
     return jwt.sign(
       {
         id: user._id,
@@ -707,7 +706,6 @@ export class AuthService {
               freeUsersBlocked: true,
               message: `Your organisation has exceeded its free user limit (${used}/${entitled}). Free users are blocked from logging in.`,
             };
-            console.log(`⚠️ Org admin login — free user limit exceeded: ${used}/${entitled}`);
           } else {
             // Non-admin free user → block login if their own license is free/explore/expired
             const userLicense = await getUserLicenseInfo(user._id);
@@ -839,15 +837,6 @@ export class AuthService {
       // Don't reveal if user exists
       return { message: "If the email exists, a reset link has been sent" };
     }
-
-    console.log("User found for password reset:", {
-      id: user._id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      hasFirstName: !!user.firstName,
-    });
-
     // Generate reset token
     const resetToken = this.generateResetToken();
     const resetExpires = new Date(Date.now() + this.RESET_TOKEN_EXPIRES);
@@ -867,7 +856,6 @@ export class AuthService {
 
     // Use firstName or fallback to a default greeting
     const userName = user.firstName || user.lastName || "User";
-    console.log("Using name for email:", userName);
 
     // Send reset email
     try {
@@ -878,13 +866,6 @@ export class AuthService {
       );
       if (!emailSent) {
         console.error("Failed to send password reset email to:", email);
-      } else {
-        console.log(
-          "Password reset email sent successfully to:",
-          email,
-          "with name:",
-          userName
-        );
       }
     } catch (error) {
       console.error("Error sending password reset email:", error);
@@ -1015,7 +996,6 @@ export class AuthService {
 
   // Send password reset email
   async sendPasswordResetEmail(email, token, firstName) {
-    console.log("AuthService sending email with firstName:", firstName);
     return await emailService.sendPasswordResetEmail(email, token, firstName);
   }
 
@@ -1156,8 +1136,6 @@ export class AuthService {
       // Get organization to determine license type
       const organization = await storage.getOrganization(invitedUser.organization_id);
       const orgLicenseCode = organization?.license_code || 'EXPLORE';
-
-      console.log(`🏢 Activating user with license: ${orgLicenseCode}`);
 
       // Update the invited user with password and activate account
       const updatedUser = await storage.updateUser(invitedUser._id, {

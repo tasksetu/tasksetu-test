@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Redirect, useLocation } from "wouter";
 import axios from "axios";
 import { useTaskStatuses } from "../../hooks/useTaskStatuses";
+import { Check, Flag } from "lucide-react";
 
 export default function AllTasks({
   onCreateTask,
@@ -96,9 +97,16 @@ export default function AllTasks({
 
   // Task type detection function
   const getTaskType = (task) => {
-    if (task.isApprovalTask) return "Approval Task";
-    if (task.isRecurring || task.recurringFromTaskId) return "Recurring Task";
-    if (task.category === "Milestone" || task.type === "milestone")
+    if (!task) return "Simple Task";
+    if (task.isApprovalTask || task.taskType === "approval") return "Approval Task";
+    if (task.isRecurring || task.recurringFromTaskId || task.taskType === "recurring") return "Recurring Task";
+    if (
+      task.isMilestone ||
+      task.taskType === "milestone" ||
+      task.category === "Milestone" ||
+      task.type === "milestone" ||
+      task.mainTaskType === "milestone"
+    )
       return "Milestone";
     return "Simple Task";
   };
@@ -1265,17 +1273,39 @@ export default function AllTasks({
                         {task.dueDate}
                       </TableCell>
                       <TableCell className="px-6 py-4 text-nowrap">
-                        <div className="flex items-center">
-                          <div className="w-full bg-gray-200 rounded-full h-2.5 mr-3 shadow-inner">
-                            <div
-                              className="bg-gradient-to-r from-blue-500 to-blue-600 h-2.5 rounded-full shadow-sm transition-all duration-300"
-                              style={{ width: `${task.progress}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-xs text-gray-600 min-w-[3rem] font-medium">
-                            {task.progress}%
-                          </span>
-                        </div>
+                        {(() => {
+                          let effectiveProgress = task.progress || 0;
+                          if (task.subtasks && task.subtasks.length > 0) {
+                            const total = task.subtasks.reduce((sum, st) => {
+                              const isApprovedOrDone =
+                                st.approvalStatus === "approved" ||
+                                st.status === "DONE" ||
+                                st.status === "completed";
+                              const isRejectedOrCancelled =
+                                st.approvalStatus === "rejected" ||
+                                st.status === "CANCELLED";
+
+                              if (isApprovedOrDone || isRejectedOrCancelled) return sum + 100;
+                              if (typeof st.progress === "number" && st.progress > 0) return sum + st.progress;
+                              if (st.status === "INPROGRESS" || st.status === "IN_PROGRESS") return sum + 50;
+                              return sum;
+                            }, 0);
+                            effectiveProgress = Math.round(total / task.subtasks.length);
+                          }
+                          return (
+                            <div className="flex items-center">
+                              <div className="w-full bg-gray-200 rounded-full h-2.5 mr-3 shadow-inner">
+                                <div
+                                  className="bg-gradient-to-r from-blue-500 to-blue-600 h-2.5 rounded-full shadow-sm transition-all duration-300"
+                                  style={{ width: `${effectiveProgress}%` }}
+                                ></div>
+                              </div>
+                              <span className="text-xs text-gray-600 min-w-[3rem] font-medium">
+                                {effectiveProgress}%
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="px-6 py-4 text-nowrap">
                         <div className="flex items-center space-x-2">
@@ -1340,33 +1370,41 @@ export default function AllTasks({
                           <TableCell className="px-6 py-3">
                             <div className="pl-8">
                               <div className="flex items-center gap-2">
-                                {/* <span className="text-blue-500 text-lg">↳</span> */}
-
-                                <svg
-                                  width="24"
-                                  height="24"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  xmlns="http://www.w3.org/2000/svg"
-                                >
-                                  <circle
-                                    cx="6"
-                                    cy="4"
-                                    r="2"
-                                    fill="currentColor"
-                                  />
-                                  <path
-                                    d="M6 6v2a2 2 0 002 2h4"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                  />
-                                  <circle
-                                    cx="16"
-                                    cy="10"
-                                    r="2"
-                                    fill="currentColor"
-                                  />
-                                </svg>
+                                {subtask.taskType === "approval" || subtask.isApprovalTask ? (
+                                  <span className="inline-flex items-center justify-center w-4.5 h-4.5 rounded-[4px] bg-gradient-to-b from-emerald-400 to-emerald-600 text-white shadow-sm flex-shrink-0" title="Approval Subtask">
+                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                  </span>
+                                ) : subtask.taskType === "milestone" || subtask.isMilestone ? (
+                                  <span className="inline-flex items-center justify-center text-base flex-shrink-0 leading-none" title="Milestone Subtask">
+                                    🎯
+                                  </span>
+                                ) : (
+                                  <svg
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                  >
+                                    <circle
+                                      cx="6"
+                                      cy="4"
+                                      r="2"
+                                      fill="currentColor"
+                                    />
+                                    <path
+                                      d="M6 6v2a2 2 0 002 2h4"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                    />
+                                    <circle
+                                      cx="16"
+                                      cy="10"
+                                      r="2"
+                                      fill="currentColor"
+                                    />
+                                  </svg>
+                                )}
 
                                 <span
                                   className="font-semibold text-gray-800 cursor-pointer hover:text-blue-600 transition-colors"
@@ -1402,20 +1440,38 @@ export default function AllTasks({
                             </div>
                           </TableCell>
                           <TableCell className="px-6 py-3">
-                            <TaskStatusDropdown
-                              task={subtask}
-                              currentStatus={subtask.status}
-                              statuses={companyStatuses}
-                              onStatusChange={(newStatus) =>
-                                handleSubtaskStatusChange(
-                                  task.id,
-                                  subtask.id,
-                                  newStatus,
-                                )
-                              }
-                              canEdit={canEditTaskStatus(subtask)}
-                              canMarkCompleted={true}
-                            />
+                            {subtask.isApprovalTask || subtask.taskType === "approval" ? (
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium text-white ${
+                                  subtask.status === "CANCELLED" || subtask.approvalStatus === "rejected"
+                                    ? "bg-red-600"
+                                    : subtask.approvalStatus === "approved" || subtask.status === "DONE" || subtask.status === "completed"
+                                      ? "bg-green-600"
+                                      : "bg-yellow-600"
+                                }`}
+                              >
+                                {subtask.status === "CANCELLED" || subtask.approvalStatus === "rejected"
+                                  ? "Rejected"
+                                  : subtask.approvalStatus === "approved" || subtask.status === "DONE" || subtask.status === "completed"
+                                    ? "Approved"
+                                    : "Pending"}
+                              </span>
+                            ) : (
+                              <TaskStatusDropdown
+                                task={subtask}
+                                currentStatus={subtask.status}
+                                statuses={companyStatuses}
+                                onStatusChange={(newStatus) =>
+                                  handleSubtaskStatusChange(
+                                    task.id,
+                                    subtask.id,
+                                    newStatus,
+                                  )
+                                }
+                                canEdit={canEditTaskStatus(subtask)}
+                                canMarkCompleted={true}
+                              />
+                            )}
                           </TableCell>
                           <TableCell className="px-6 py-3">
                             <span
@@ -1428,17 +1484,26 @@ export default function AllTasks({
                             {subtask.dueDate}
                           </TableCell>
                           <TableCell className="px-6 py-3">
-                            <div className="flex items-center">
-                              <div className="w-full bg-gray-200 rounded-full h-1.5 mr-2">
-                                <div
-                                  className="bg-primary-600 h-1.5 rounded-full"
-                                  style={{ width: `${subtask.progress}%` }}
-                                ></div>
-                              </div>
-                              <span className="text-xs text-gray-600 min-w-[3rem]">
-                                {subtask.progress}%
-                              </span>
-                            </div>
+                            {(() => {
+                              const isRejected = subtask.approvalStatus === "rejected" || subtask.status === "CANCELLED";
+                              const isApprovedOrDone = subtask.approvalStatus === "approved" || subtask.status === "DONE" || subtask.status === "completed";
+                              const subtaskProgress = (subtask.isApprovalTask || subtask.taskType === "approval")
+                                ? (isApprovedOrDone || isRejected ? 100 : (subtask.progress || 0))
+                                : (isApprovedOrDone ? 100 : (subtask.progress || 0));
+                              return (
+                                <div className="flex items-center">
+                                  <div className="w-full bg-gray-200 rounded-full h-1.5 mr-2">
+                                    <div
+                                      className={`h-1.5 rounded-full transition-all duration-300 ${isRejected ? "bg-red-500" : "bg-emerald-600"}`}
+                                      style={{ width: `${subtaskProgress}%` }}
+                                    ></div>
+                                  </div>
+                                  <span className="text-xs text-gray-600 min-w-[3rem]">
+                                    {subtaskProgress}%
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="px-6 py-3">
                             <div className="flex items-center space-x-2">

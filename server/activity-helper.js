@@ -215,18 +215,7 @@ export class ActivityHelper {
     relatedType,
     data = {}
   }) {
-    console.log('🏗️ [ACTIVITY HELPER] Creating activity data:', {
-      activityType,
-      userId,
-      organizationId,
-      relatedId,
-      relatedType,
-      data
-    });
-
     const description = this.generateDescription(activityType, data);
-
-    console.log('📝 [ACTIVITY HELPER] Generated description:', description);
 
     const activityData = {
       type: activityType.type,
@@ -242,8 +231,6 @@ export class ActivityHelper {
         timestamp: new Date()
       }
     };
-
-    console.log('✅ [ACTIVITY HELPER] Final activity data:', JSON.stringify(activityData, null, 2));
 
     return activityData;
   }
@@ -321,12 +308,8 @@ export class ActivityHelper {
         }
       };
 
-      console.log('📝 [ACTIVITY HELPER] logActivity derived data:', JSON.stringify(activityData, null, 2));
-
       const activity = new Activity(activityData);
       const saved = await activity.save();
-
-      console.log('✅ [ACTIVITY HELPER] Activity saved via logActivity:', saved._id);
       return saved;
     } catch (error) {
       console.error('❌ [ACTIVITY HELPER] logActivity failed:', error);

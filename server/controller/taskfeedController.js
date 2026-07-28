@@ -10,14 +10,6 @@ export const getDashboardStats = async (req, res) => {
         const userId = req.user.id;
         const userOrganizationId = req.user.organizationId;
         const userRole = Array.isArray(req.user.role) ? req.user.role : [req.user.role];
-
-        console.log('📊 [DASHBOARD STATS] User Info:', {
-            userId,
-            userOrganizationId,
-            userRole,
-            email: req.user.email
-        });
-
         const userTimezone = await TimezoneHelper.getUserTimezone(userId);
         const { startOfDay: todayStart, endOfDay: todayEnd } = TimezoneHelper.getDayBoundaries(userTimezone);
         const localParts = TimezoneHelper.getLocalTime(userTimezone);
@@ -36,7 +28,7 @@ export const getDashboardStats = async (req, res) => {
         if (!isOrgAdmin) {
             if (isManager) {
                 // Now Manager sees all organization tasks as per requirement
-                console.log('ℹ️ [DASHBOARD STATS] Manager viewing organization scope');
+                console.log('Manager viewing organization scope');
             } else {
                 // Individual/Employee see only their own
                 scopeFilter.$or = [
@@ -295,8 +287,6 @@ export const getDashboardStats = async (req, res) => {
                 licenseCode: licenseInfo?.license_code || 'NONE'
             }
         };
-
-        console.log('📊 [DASHBOARD STATS] Results for Role:', userRole);
 
         res.status(200).json({
             success: true,

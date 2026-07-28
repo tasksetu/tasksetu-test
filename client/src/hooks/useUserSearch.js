@@ -47,7 +47,7 @@ export const useUserSearch = (isOrgUser, currentUser) => {
       }
 
       const response = await fetch(
-        `/api/users/search-for-assignment?${params.toString()}`,
+        `/api/users/search-assignable?${params.toString()}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -61,7 +61,7 @@ export const useUserSearch = (isOrgUser, currentUser) => {
       }
 
       const data = await response.json();
-      setUsers(data.users || []);
+      setUsers(data.users || data.data || []);
     } catch (err) {
       console.error('Error fetching users:', err);
       setError(err.message);

@@ -307,7 +307,7 @@ export default function RegularTaskManager() {
       return response;
     },
     retry: 1,
-    staleTime: 300000, // 5 minutes
+    staleTime: 0,
   });
 
   const teamMembers = teamMembersResponse?.data || [];

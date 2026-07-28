@@ -367,6 +367,15 @@ export class CronJobService {
       for (const task of newlyAssignedTasks) {
         if (!task.assignedTo?.email) continue;
 
+        // Skip self-assigned tasks: Don't send assignment notification/email if creator is the assignee
+        const creatorId =
+          task.createdBy?._id?.toString() || task.createdBy?.toString();
+        const assigneeId =
+          task.assignedTo?._id?.toString() || task.assignedTo?.toString();
+        if (creatorId && assigneeId && creatorId === assigneeId) {
+          continue;
+        }
+
         // Dedup: skip if we already sent an assignment notification for this task
         const alreadyNotified = await Notification.findOne({
           user_id: task.assignedTo._id,

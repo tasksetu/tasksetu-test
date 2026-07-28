@@ -24,7 +24,6 @@ export const getEffectiveLicense = async (userId, organizationId) => {
 
         // Activate pending license if scheduled start date has arrived
         if (now >= scheduledStart) {
-          console.log(`🔄 Auto-activating pending license for user ${userId}: ${user.pending_license.license_code}`);
 
           if (user.license_instance_id) {
             const { default: LicenseInstance } = await import('../modals/licenseInstanceModal.js');
@@ -48,7 +47,6 @@ export const getEffectiveLicense = async (userId, organizationId) => {
             created_at: null,
           };
           await user.save({ validateBeforeSave: false });
-          console.log(`✅ Pending license activated: ${user.license_code} until ${user.license_expiry}`);
         }
       }
     } catch (pendingErr) {
@@ -85,11 +83,9 @@ export const getEffectiveLicense = async (userId, organizationId) => {
 export const checkFeatureAccess = (featureCode) => {
   return async (req, res, next) => {
     try {
-      console.log(`\n🔐 [LICENSE CHECK] Starting feature access check for: ${featureCode}`);
 
       const userId = req.user?.id || req.user?._id || req.user?.userId;
 
-      console.log('🔐 [LICENSE CHECK] User ID:', userId);
 
       if (!userId) {
         return res.status(401).json({
@@ -103,7 +99,6 @@ export const checkFeatureAccess = (featureCode) => {
       // Step 1: Check Feature Access using licenseService (USER-LEVEL)
       const accessCheck = await licenseService.checkFeatureAccess(userId, featureCode);
 
-      console.log('🔐 [LICENSE CHECK] Access Check Result:', accessCheck);
 
       if (!accessCheck.hasAccess) {
         return res.status(403).json({
@@ -121,7 +116,6 @@ export const checkFeatureAccess = (featureCode) => {
       // Step 2: Check Feature Limit using licenseService (USER-LEVEL)
       const limitCheck = await licenseService.checkFeatureLimit(userId, featureCode);
 
-      console.log('🔐 [LICENSE CHECK] Limit Check Result:', limitCheck);
 
       if (!limitCheck.canConsume) {
         const featureDisplayName = licenseService.getFeatureDisplayName(featureCode);
@@ -154,7 +148,6 @@ export const checkFeatureAccess = (featureCode) => {
       req.licenseInfo = accessCheck.subscription;
       req.featureAccess = accessCheck;
 
-      console.log('✅ [LICENSE CHECK] Access granted, proceeding to controller\n');
       next();
     } catch (error) {
       console.error('❌ Feature access check error:', error);
@@ -179,7 +172,6 @@ export const trackFeatureUsage = (featureCode, incrementAmount = 1) => {
       const userId = req.featureUsage?.user_id || req.user?.id || req.user?._id || req.user?.userId;
 
       if (!userId) {
-        console.log('⚠️ [TRACK USAGE] No user ID found, skipping');
         return next();
       }
 
@@ -190,7 +182,6 @@ export const trackFeatureUsage = (featureCode, incrementAmount = 1) => {
         incrementAmount
       );
 
-      console.log('✅ [TRACK USAGE] Feature consumed:', result);
 
       next();
     } catch (error) {
@@ -372,7 +363,6 @@ export const checkAvailableSeats = async (req, res, next) => {
 export const checkDynamicTaskFeature = () => {
   return async (req, res, next) => {
     try {
-      console.log('\n🔐 [DYNAMIC TASK CHECK] Starting dynamic task feature check...');
 
       const userId = req.user?.id || req.user?._id || req.user?.userId;
 
@@ -437,25 +427,18 @@ export const checkDynamicTaskFeature = () => {
         if (hasLinkedTasks) {
           // Milestone with linked tasks uses PROC_CREATE (process/workflow creation)
           featureCode = 'PROC_CREATE';
-          console.log('🔐 [DYNAMIC TASK CHECK] Milestone with linked tasks - using PROC_CREATE');
         } else {
           // Milestone without linked tasks uses TASK_MSTONE
           featureCode = 'TASK_MSTONE';
-          console.log('🔐 [DYNAMIC TASK CHECK] Milestone without linked tasks - using TASK_MSTONE');
         }
       }
 
-      console.log('🔐 [DYNAMIC TASK CHECK] Detected task type:', taskType);
-      console.log('🔐 [DYNAMIC TASK CHECK] Is Recurring:', isRecurring);
-      console.log('🔐 [DYNAMIC TASK CHECK] Feature Code:', featureCode);
       if (additionalFeatureToCheck) {
-        console.log('🔐 [DYNAMIC TASK CHECK] Additional Feature:', additionalFeatureToCheck);
       }
 
       // Check feature access for the determined feature code
       const accessCheck = await licenseService.checkFeatureAccess(userId, featureCode);
 
-      console.log('🔐 [DYNAMIC TASK CHECK] Access Check Result:', accessCheck);
 
       if (!accessCheck.hasAccess) {
         return res.status(403).json({
@@ -473,7 +456,6 @@ export const checkDynamicTaskFeature = () => {
       // Check feature limit
       const limitCheck = await licenseService.checkFeatureLimit(userId, featureCode);
 
-      console.log('🔐 [DYNAMIC TASK CHECK] Limit Check Result:', limitCheck);
 
       if (!limitCheck.canConsume) {
         const featureDisplayName = licenseService.getFeatureDisplayName(featureCode);
@@ -537,11 +519,8 @@ export const checkDynamicTaskFeature = () => {
       req.licenseInfo = accessCheck.subscription;
       req.featureAccess = accessCheck;
 
-      console.log('✅ [DYNAMIC TASK CHECK] Access granted for', featureCode);
       if (additionalFeatureToCheck) {
-        console.log('✅ [DYNAMIC TASK CHECK] Also consuming:', additionalFeatureToCheck);
       }
-      console.log('');
       next();
     } catch (error) {
       console.error('❌ Dynamic task feature check error:', error);

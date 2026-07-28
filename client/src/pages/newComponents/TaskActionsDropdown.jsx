@@ -541,69 +541,71 @@ export default function TaskActionsDropdown({
             />
 
             {showCancelModal && (
-              <div className="modal-overlay task-modals-square">
-                <style>{`
-                  .modal-overlay {
-                    position: fixed; inset: 0; z-index: 999999;
-                    background: rgba(0,0,0,0.5);
-                    display: flex; align-items: center; justify-content: center;
-                  }
-                  .modal-container {
-                    background: white; border-radius: 8px;
-                    width: 90%; max-width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                  }
-                  .modal-header {
-                    padding: 1.25rem 1.5rem; border-bottom: 1px solid #e5e7eb;
-                    display: flex; align-items: center; justify-content: space-between;
-                  }
-                  .modal-header h4 { margin: 0; font-size: 1rem; font-weight: 600; }
-                `}</style>
-                <div className="modal-container">
-                  <div className="modal-header">
+              <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 p-4">
+                <div className="bg-white rounded-sm shadow-xl overflow-hidden max-w-md w-full border border-gray-200 animate-in fade-in zoom-in-95 duration-200 flex flex-col font-sans">
+                  {/* Header */}
+                  <div className="px-6 pt-3.5 pb-2.5 border-b border-gray-200 bg-gray-50/80 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <XCircle size={20} className="text-red-500" />
-                      <h4>Cancel Task</h4>
+                      <XCircle className="w-5 h-5 text-red-500 shrink-0" />
+                      <span className="text-xl font-normal" style={{ color: "#676a6c" }}>
+                        Cancel Task
+                      </span>
                     </div>
                     <button
-                      className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-gray-100"
+                      type="button"
+                      className="text-gray-400 hover:text-gray-600 transition-colors w-6 h-6 flex items-center justify-center text-base"
                       onClick={() => setShowCancelModal(false)}
                     >
-                      <span className="text-lg text-white hover:text-blue-800">✕</span>
+                      ✕
                     </button>
                   </div>
-                  <div className="p-6">
-                    <p className="text-sm text-gray-600 mb-4">
-                      Are you sure you want to cancel this task? Please provide a reason.
+
+                  {/* Body */}
+                  <div className="p-6 space-y-3.5 bg-white">
+                    <p className="text-xs text-gray-500 font-normal">
+                      Are you sure you want to cancel this task? Please provide a reason below.
                     </p>
-                    <textarea
-                      value={cancelReason}
-                      onChange={(e) => setCancelReason(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-transparent resize-none"
-                      rows={3}
-                      placeholder="Reason for cancellation..."
-                    />
-                    <div className="flex gap-3 mt-6">
-                      <button
-                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={!cancelReason.trim()}
-                        onClick={() => {
-                          onCancelApproval?.(cancelReason);
-                          setShowCancelModal(false);
-                          setCancelReason("");
-                        }}
-                      >
-                        Confirm Cancel
-                      </button>
-                      <button
-                        className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors"
-                        onClick={() => {
-                          setShowCancelModal(false);
-                          setCancelReason("");
-                        }}
-                      >
-                        Go Back
-                      </button>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider block">
+                        Reason for cancellation <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        value={cancelReason}
+                        onChange={(e) => setCancelReason(e.target.value)}
+                        placeholder="Provide cancellation reason..."
+                        className="w-full p-2.5 border border-gray-300 rounded-sm text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 min-h-[90px] resize-none bg-white text-gray-900 placeholder:text-gray-400"
+                      />
                     </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-2.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowCancelModal(false);
+                        setCancelReason("");
+                      }}
+                      className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium h-8 px-4 rounded-sm !h-8"
+                      style={{ height: "32px", minHeight: "32px" }}
+                    >
+                      Go Back
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        onCancelApproval?.(cancelReason);
+                        setShowCancelModal(false);
+                        setCancelReason("");
+                      }}
+                      disabled={!cancelReason.trim()}
+                      className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium h-8 px-4 rounded-sm shadow-sm disabled:opacity-50 !h-8"
+                      style={{ height: "32px", minHeight: "32px" }}
+                    >
+                      Confirm Cancel
+                    </Button>
                   </div>
                 </div>
               </div>

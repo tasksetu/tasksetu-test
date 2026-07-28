@@ -1,9 +1,10 @@
 import { getTaskTypeInfo } from "../pages/TaskTypeUtils";
 
 export const getTaskType = (task) => {
-  if (task.isApprovalTask) return "Approval Task";
-  if (task.isRecurring || task.recurringFromTaskId) return "Recurring Task";
-  if (task.mainTaskType === "milestone") return "Milestone Task";
+  if (!task) return "Regular Task";
+  if (task.isApprovalTask || task.taskType === "approval") return "Approval Task";
+  if (task.isRecurring || task.recurringFromTaskId || task.taskType === "recurring") return "Recurring Task";
+  if (task.isMilestone || task.taskType === "milestone" || task.mainTaskType === "milestone") return "Milestone Task";
   return "Regular Task";
 };
 

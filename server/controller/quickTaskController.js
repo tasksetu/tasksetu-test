@@ -16,13 +16,8 @@ import * as licenseService from '../services/licenseService.js';
 // @access  Private
 const createQuickTask = async (req, res) => {
   try {
-    console.log('🚀 CREATE QUICK TASK - START');
-    console.log('📋 req.user:', JSON.stringify(req.user, null, 2));
-    console.log('📋 req.body:', JSON.stringify(req.body, null, 2));
-    console.log('📋 req.headers.authorization:', req.headers.authorization?.substring(0, 30) + '...');
 
     const userId = req.user?.id || req.user?._id;
-    console.log('👤 Extracted userId:', userId);
 
     const { title, priority, dueDate, notes, tags, reminder } = req.body;
 
@@ -40,7 +35,6 @@ const createQuickTask = async (req, res) => {
       });
     }
 
-    console.log('✅ User validation passed, userId:', userId);
 
 
     if (!title || title.trim().length === 0) {
@@ -75,7 +69,6 @@ const createQuickTask = async (req, res) => {
       createdByRole: Array.isArray(req.user.role) ? req.user.role : [req.user.role]
     };
 
-    console.log('📝 Quick Task Data to create:', JSON.stringify(quickTaskData, null, 2));
 
     // Add optional fields
 
@@ -92,19 +85,14 @@ const createQuickTask = async (req, res) => {
       quickTaskData.reminder = new Date(reminder);
     }
 
-    console.log('💾 Creating QuickTask with data...');
     const newQuickTask = new QuickTask(quickTaskData);
-    console.log('💾 QuickTask instance created, saving...');
     const savedTask = await newQuickTask.save();
-    console.log('✅ QuickTask saved successfully:', savedTask._id);
 
     // 📊 Track TASK_QUICK usage
     // ✅ FIXED: Use user_id instead of entity (updated for user-level licensing)
     const trackingUserId = req.featureUsage?.user_id || req.user?.id || req.user?._id;
     if (trackingUserId) {
       try {
-        console.log('📊 [USAGE TRACKING] Tracking TASK_QUICK usage');
-        console.log('📊 [USAGE TRACKING] User ID:', trackingUserId);
 
         const consumeResult = await licenseService.consumeFeature(
           trackingUserId,
@@ -113,7 +101,6 @@ const createQuickTask = async (req, res) => {
         );
 
         if (consumeResult.success) {
-          console.log('📊 [USAGE TRACKING] ✅ TASK_QUICK usage tracked successfully. New usage:', consumeResult.usage);
         } else {
           console.warn('📊 [USAGE TRACKING] ⚠️ Failed to track TASK_QUICK usage:', consumeResult.message);
         }
@@ -192,8 +179,6 @@ const getQuickTasks = async (req, res) => {
         { description: { $regex: search, $options: 'i' } }
       ];
     }
-
-    console.log('🔍 [QuickTasks GET] Query:', JSON.stringify(query));
     // Build sort object
     let sort = {};
     sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
@@ -209,7 +194,6 @@ const getQuickTasks = async (req, res) => {
         .limit(parseInt(limit)),
       QuickTask.countDocuments(query)
     ]);
-    console.log(`🔍 [QuickTasks GET] Found ${quickTasks.length} tasks for user ${userId}`);
 
     // Calculate pagination info
     const totalPages = Math.ceil(total / parseInt(limit));
@@ -286,20 +270,11 @@ const toggleQuickTaskStatus = async (req, res) => {
 
     // 🔔 Create notification for quick task completion
     try {
-      console.log('📊 Quick task status change:', {
-        currentStatus: quickTask.status,
-        previousStatus: previousStatus,
-        shouldCreateNotification: quickTask.status === 'done' && previousStatus !== 'done'
-      });
 
       if (quickTask.status === 'done' && previousStatus !== 'done') {
         const { TriggerEvent, NotificationPriority, ChannelType, EntityType } = await import('../modals/notificationModal.js');
         const { NotificationService } = await import('../services/notificationService.js');
 
-        console.log('🔔 Creating quick task completion notification for user:', quickTaskUserId);
-        console.log('   Trigger Event:', TriggerEvent.QUICK_TASK_COMPLETED);
-        console.log('   Quick Task ID:', quickTask._id);
-        console.log('   Quick Task Title:', quickTask.title);
 
         const notificationData = {
           user_id: quickTaskUserId,
@@ -318,21 +293,13 @@ const toggleQuickTaskStatus = async (req, res) => {
           }
         };
 
-        console.log('📤 Notification data:', JSON.stringify(notificationData, null, 2));
 
         const notification = await NotificationService.createNotification(notificationData);
 
         if (notification) {
-          console.log('✅ Quick task completion notification created successfully!');
-          console.log('   Notification ID:', notification._id);
-          console.log('   Title:', notification.title);
-          console.log('   Channels:', notification.channels.map(c => c.channel_type).join(', '));
         } else {
-          console.log('⚠️ Notification was NOT created - likely suppressed or disabled');
-          console.log('   Check user notification settings for user:', quickTaskUserId);
         }
       } else {
-        console.log('⏭️ Skipping notification creation (not a completion or already completed)');
       }
     } catch (notificationError) {
       console.error('❌ Error creating quick task completion notification:', notificationError);
@@ -477,19 +444,10 @@ const updateQuickTask = async (req, res) => {
     // 🔔 Create notification if status changed to done
     if (updates.status && quickTask.status === 'done' && previousStatus !== 'done') {
       try {
-        console.log('📊 Quick task status change (via update):', {
-          currentStatus: quickTask.status,
-          previousStatus: previousStatus,
-          shouldCreateNotification: true
-        });
 
         const { TriggerEvent, NotificationPriority, ChannelType, EntityType } = await import('../modals/notificationModal.js');
         const { NotificationService } = await import('../services/notificationService.js');
 
-        console.log('🔔 Creating quick task completion notification for user:', userId);
-        console.log('   Trigger Event:', TriggerEvent.QUICK_TASK_COMPLETED);
-        console.log('   Quick Task ID:', quickTask._id);
-        console.log('   Quick Task Title:', quickTask.title);
 
         const notificationData = {
           user_id: userId,
@@ -508,18 +466,11 @@ const updateQuickTask = async (req, res) => {
           }
         };
 
-        console.log('📤 Notification data:', JSON.stringify(notificationData, null, 2));
 
         const notification = await NotificationService.createNotification(notificationData);
 
         if (notification) {
-          console.log('✅ Quick task completion notification created successfully!');
-          console.log('   Notification ID:', notification._id);
-          console.log('   Title:', notification.title);
-          console.log('   Channels:', notification.channels.map(c => c.channel_type).join(', '));
         } else {
-          console.log('⚠️ Notification was NOT created - likely suppressed or disabled');
-          console.log('   Check user notification settings for user:', userId);
         }
       } catch (notificationError) {
         console.error('❌ Error creating quick task completion notification:', notificationError);
@@ -550,17 +501,10 @@ const updateQuickTask = async (req, res) => {
 // @access  Private
 const convertQuickTaskToRegular = async (req, res) => {
   try {
-    console.log('🔄 CONVERT QUICK TASK - START');
     const { id } = req.params;
     const userId = req.user?.id || req.user?._id;
     const { regularTaskId, taskType } = req.body;
 
-    console.log('📋 Convert Request:', {
-      quickTaskId: id,
-      userId,
-      regularTaskId,
-      taskType
-    });
 
     // Validate required fields
     if (!regularTaskId) {
@@ -647,15 +591,10 @@ const convertQuickTaskToRegular = async (req, res) => {
           convertedAt: quickTask.convertedToTask.convertedAt
         }
       });
-      console.log('🔔 Quick task converted notification sent');
     } catch (notifError) {
       console.error('⚠ Failed to send quick task conversion notification:', notifError.message);
     }
 
-    console.log('✅ Quick Task converted successfully:', {
-      quickTaskId: quickTask._id,
-      convertedToTaskId: regularTaskId
-    });
 
     res.json({
       success: true,

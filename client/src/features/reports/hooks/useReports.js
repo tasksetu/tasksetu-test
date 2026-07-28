@@ -67,7 +67,6 @@ const createReactQueryHook = (queryKeyPrefix, endpoint) => {
     return {
       // Return the 'data' field from the response for backward compatibility
       data: queryResult.data?.data || queryResult.data,
-      // Metadata like license from the top level
       license: queryResult.data?.license,
       loading: (queryResult.isLoading || queryResult.isFetching) && !queryResult.data,
       isFetching: queryResult.isFetching,

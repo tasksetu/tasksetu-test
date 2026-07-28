@@ -35,7 +35,6 @@ export const getBillingDetails = async (req, res) => {
             const user = await User.findById(userId);
 
             if (user && (user.license_code && user.license_code !== 'FREE')) {
-                console.log(`ℹ️ Auto-creating billing profile for user ${userId} with license ${user.license_code}`);
                 const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
                 const newDetail = await BillingDetails.create({
                     organization_id: organizationId || null,
@@ -61,8 +60,6 @@ export const getBillingDetails = async (req, res) => {
                 billingDetails = [newDetail];
             }
         }
-
-        console.log(`📋 Fetched ${billingDetails.length} billing details for ${organizationId ? 'org: ' + organizationId : 'user: ' + userId}`);
 
         return res.status(200).json({
             success: true,
@@ -139,8 +136,6 @@ export const createBillingDetails = async (req, res) => {
         });
 
         await newBillingDetails.save();
-
-        console.log(`✅ Created billing details: ${newBillingDetails._id}`);
 
         return res.status(201).json({
             success: true,
@@ -226,8 +221,6 @@ export const updateBillingDetails = async (req, res) => {
         billingDetails.updated_at = new Date();
         await billingDetails.save();
 
-        console.log(`✅ Updated billing details: ${billingDetailsId}`);
-
         return res.status(200).json({
             success: true,
             message: 'Billing details updated successfully',
@@ -282,8 +275,6 @@ export const deleteBillingDetails = async (req, res) => {
         // Soft delete
         billingDetails.is_active = false;
         await billingDetails.save();
-
-        console.log(`✅ Deleted billing details: ${billingDetailsId}`);
 
         return res.status(200).json({
             success: true,
@@ -371,8 +362,6 @@ export const setDefaultBillingDetails = async (req, res) => {
                 message: 'Billing details not found'
             });
         }
-
-        console.log(`✅ Set as default: ${billingDetailsId}`);
 
         return res.status(200).json({
             success: true,

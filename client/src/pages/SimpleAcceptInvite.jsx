@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { CheckCircle2, Eye, EyeOff, Loader2, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Loader2, XCircle, UserPlus } from "lucide-react";
 import { useShowToast } from "@/utils/ToastMessage";
 import {
   getPasswordRequirements,
@@ -270,29 +270,28 @@ export function SimpleAcceptInvite() {
   }
   console.log("Invite Data:", inviteData.role);
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-50 py-8 px-4">
-      <div className="max-w-lg w-full">
-        <Card className="shadow-xl border-0">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-50 py-8 px-4 font-sans text-gray-800">
+      <div className="max-w-2xl w-full">
+        <Card className="shadow-xl border border-gray-200 rounded-sm bg-white overflow-hidden p-0 gap-0">
           {/* Header Section */}
-          <CardHeader className="space-y-3 pb-6 border-b bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-t-lg">
-            <div className="text-center">
-              <CardTitle className="text-2xl font-bold">
-                Complete Registration
-              </CardTitle>
-              <CardDescription className="text-blue-100 mt-2">
-                You've been invited to join{" "}
-                <span className="font-semibold text-white">
-                  {inviteData.organizationName}
-                </span>
-              </CardDescription>
-            </div>
+          <CardHeader className="p-6 pb-4 border-b border-blue-700 bg-blue-600 text-white space-y-1.5 rounded-t-sm">
+            <CardTitle className="text-xl font-medium flex items-center gap-2.5 text-white">
+              <UserPlus size={22} className="text-white shrink-0" />
+              <span>Complete Registration</span>
+            </CardTitle>
+            <CardDescription className="text-xs text-blue-100 font-normal">
+              You've been invited to join{" "}
+              <span className="font-semibold text-white">
+                {inviteData.organizationName}
+              </span>
+            </CardDescription>
           </CardHeader>
 
-          <CardContent className="pt-6 space-y-3">
+          <CardContent className="p-6 space-y-4">
             {/* Invitation Details - Compact */}
-            <div className="bg-blue-50 rounded-sm p-4 space-y-2.5 border border-blue-100">
+            <div className="bg-gray-50/80 border border-gray-200/80 rounded-sm p-4 space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+                <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Email
                 </span>
                 <span className="text-sm font-semibold text-gray-900">
@@ -300,7 +299,7 @@ export function SimpleAcceptInvite() {
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+                <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Role
                 </span>
                 <div className="flex flex-wrap gap-1.5 justify-end">
@@ -310,7 +309,7 @@ export function SimpleAcceptInvite() {
                   ).map((r, i) => (
                     <span
                       key={i}
-                      className="px-2.5 py-1 text-xs font-medium rounded-full bg-blue-600 text-white capitalize"
+                      className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-600 text-white capitalize"
                     >
                       {r && r?.replace("_", " ")}
                     </span>
@@ -319,17 +318,17 @@ export function SimpleAcceptInvite() {
               </div>
             </div>
 
-            {/* Registration Form - Compact */}
-            <form onSubmit={handleSubmit} className="space-y-3">
+            {/* Registration Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
               {/* Password */}
-              <div>
+              <div className="space-y-1.5">
                 <Label
                   htmlFor="password"
-                  className="text-sm font-medium text-gray-700"
+                  className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
                 >
-                  Password
+                  Password <span className="text-red-500">*</span>
                 </Label>
-                <div className="relative mt-1.5">
+                <div className="relative">
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
@@ -338,11 +337,10 @@ export function SimpleAcceptInvite() {
                       handlePasswordChange("password", e.target.value)
                     }
                     placeholder="Create a secure password"
-                    className={`pr-10 ${
-                      errors.password
-                        ? "border-red-500 focus-visible:ring-red-500"
-                        : ""
+                    className={`bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500 text-sm !h-8 pr-10 ${
+                      errors.password ? "border-red-500 focus:border-red-500" : ""
                     }`}
+                    style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
                     aria-invalid={!!errors.password}
                     aria-describedby={
                       errors.password ? "password-error" : undefined
@@ -350,7 +348,7 @@ export function SimpleAcceptInvite() {
                   />
                   <button
                     type="button"
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 flex items-center justify-center"
                     onClick={() => setShowPassword(!showPassword)}
                   >
                     {showPassword ? (
@@ -363,7 +361,7 @@ export function SimpleAcceptInvite() {
                 {errors.password && (
                   <p
                     id="password-error"
-                    className="mt-1.5 text-xs text-red-600 flex items-center"
+                    className="mt-1 text-xs text-red-600 flex items-center"
                   >
                     <XCircle className="h-3 w-3 mr-1" />
                     {errors.password}
@@ -372,14 +370,14 @@ export function SimpleAcceptInvite() {
               </div>
 
               {/* Confirm Password */}
-              <div>
+              <div className="space-y-1.5">
                 <Label
                   htmlFor="confirmPassword"
-                  className="text-sm font-medium text-gray-700"
+                  className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
                 >
-                  Confirm Password
+                  Confirm Password <span className="text-red-500">*</span>
                 </Label>
-                <div className="relative mt-1.5">
+                <div className="relative">
                   <Input
                     id="confirmPassword"
                     type={showConfirmPassword ? "text" : "password"}
@@ -388,13 +386,14 @@ export function SimpleAcceptInvite() {
                       handlePasswordChange("confirmPassword", e.target.value)
                     }
                     placeholder="Confirm your password"
-                    className={`pr-10 ${
+                    className={`bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500 text-sm !h-8 pr-10 ${
                       errors.confirmPassword
-                        ? "border-red-500 focus-visible:ring-red-500"
+                        ? "border-red-500 focus:border-red-500"
                         : isConfirmMatch
-                          ? "border-green-500 focus-visible:ring-green-500"
+                          ? "border-green-500 focus:border-green-500"
                           : ""
                     }`}
+                    style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
                     aria-invalid={!!errors.confirmPassword}
                     aria-describedby={
                       errors.confirmPassword
@@ -404,7 +403,7 @@ export function SimpleAcceptInvite() {
                   />
                   <button
                     type="button"
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 flex items-center justify-center"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   >
                     {showConfirmPassword ? (
@@ -418,21 +417,21 @@ export function SimpleAcceptInvite() {
                 {errors.confirmPassword && (
                   <p
                     id="confirmPassword-error"
-                    className="mt-1.5 text-xs text-red-600 flex items-center"
+                    className="mt-1 text-xs text-red-600 flex items-center"
                   >
                     <XCircle className="h-3 w-3 mr-1" />
                     {errors.confirmPassword}
                   </p>
                 )}
                 {isConfirmMatch && (
-                  <p className="mt-1.5 text-xs text-green-600 flex items-center">
+                  <p className="mt-1 text-xs text-green-600 flex items-center">
                     <CheckCircle2 className="h-3 w-3 mr-1" />
                     Passwords match
                   </p>
                 )}
 
-                {/* Password Requirements - Compact */}
-                <div className="bg-gray-50 rounded-md p-3 mt-2 border border-gray-200">
+                {/* Password Requirements */}
+                <div className="bg-gray-50/80 rounded-sm p-3 mt-2 border border-gray-200">
                   <ul className="grid grid-cols-2 gap-1.5 text-xs">
                     {passwordRequirements.map((req) => (
                       <li key={req.id} className="flex items-center">
@@ -459,8 +458,9 @@ export function SimpleAcceptInvite() {
               {/* Submit Button */}
               <Button
                 type="submit"
-                className="w-full text-white bg-blue-600 hover:bg-blue-700 font-medium py-5 text-base shadow-md hover:shadow-lg transition-all duration-200 mt-6"
+                className="w-full text-white bg-blue-600 hover:bg-blue-700 font-medium text-sm h-8 px-4 rounded-sm shadow-sm disabled:opacity-50 flex items-center justify-center text-center leading-none py-0 mt-6"
                 disabled={completeInviteMutation.isPending || !isFormValid}
+                style={{ height: "32px", minHeight: "32px" }}
               >
                 {completeInviteMutation.isPending ? (
                   <>
@@ -473,8 +473,8 @@ export function SimpleAcceptInvite() {
               </Button>
             </form>
 
-            {/* Footer */}
-            <div className="text-center text-xs text-gray-500 border-t pt-4">
+            {/* Footer note */}
+            <div className="text-center text-xs text-gray-500 border-t border-gray-100 pt-3">
               By registering, you agree to TaskSetu's Terms of Service and
               Privacy Policy
             </div>
