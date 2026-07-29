@@ -8,14 +8,11 @@ import AssigneeSearchSelect from "../components/common/AssigneeSearchSelect";
 import { apiClient } from "../utils/apiClient";
 import { Button } from "@/components/ui/button";
 import {
-  CheckCircle,
   Clock,
   UserCheck,
   AlertCircle,
-  FileText,
-  Paperclip,
-  X,
-  Upload,
+  Info,
+  Users,
   Loader2,
 } from "lucide-react";
 import { useTaskPriorities } from "@/hooks/useTaskPriorities";
@@ -33,6 +30,13 @@ const ApprovalSubtaskForm = ({
   const [localApproverOptions, setLocalApproverOptions] = useState([]);
   const [localIsLoadingApprovers, setLocalIsLoadingApprovers] = useState(false);
   const [taskNameLength, setTaskNameLength] = useState(0);
+  const [approverOrder, setApproverOrder] = useState([]);
+
+  // Attachments state
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [attachmentSize, setAttachmentSize] = useState(0);
+  const [isDragActive, setIsDragActive] = useState(false);
+  const attachmentsInputRef = useRef(null);
 
   const hasFetchedApproversRef = useRef(false);
 
@@ -98,6 +102,12 @@ const ApprovalSubtaskForm = ({
         ];
   }, [taskPriorities]);
 
+  const approvalModeOptions = [
+    { value: "any", label: "Any One" },
+    { value: "all", label: "All Must Approve" },
+    { value: "sequential", label: "Sequential" },
+  ];
+
   const getTomorrowDateTime = () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -111,6 +121,8 @@ const ApprovalSubtaskForm = ({
 
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
+
+  const getTodayDate = () => new Date().toISOString().slice(0, 16);
 
   const {
     register,
@@ -130,15 +142,19 @@ const ApprovalSubtaskForm = ({
         : { value: "self", label: user?.name || "Self" },
       approvers: [],
       approvalMode: "any",
+      autoApproval: false,
+      autoApproveAfter: null,
       visibility: "private",
       collaborators: [],
-      attachments: [],
       status: "OPEN",
     },
   });
 
   const watchedTaskName = watch("taskName");
   const watchedApprovers = watch("approvers");
+  const watchedApprovalMode = watch("approvalMode");
+  const watchedAutoApproval = watch("autoApproval");
+  const watchedDueDate = watch("dueDate");
   const watchedPriority = watch("priority");
 
   useEffect(() => {
@@ -175,10 +191,103 @@ const ApprovalSubtaskForm = ({
     }
   }, [watchedPriority, setValue, taskPriorities]);
 
+  // Sync approver order when approvers change
+  useEffect(() => {
+    if (watchedApprovers && watchedApprovers.length > 0) {
+      setApproverOrder(
+        watchedApprovers.map((approver, index) => ({
+          ...approver,
+          order: index + 1,
+        })),
+      );
+    } else {
+      setApproverOrder([]);
+    }
+  }, [watchedApprovers]);
+
+  // Move approver up
+  const moveApproverUp = (index) => {
+    if (index > 0) {
+      const newOrder = [...approverOrder];
+      [newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]];
+      setApproverOrder(newOrder);
+      setValue("approvers", newOrder);
+    }
+  };
+
+  // Move approver down
+  const moveApproverDown = (index) => {
+    if (index < approverOrder.length - 1) {
+      const newOrder = [...approverOrder];
+      [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+      setApproverOrder(newOrder);
+      setValue("approvers", newOrder);
+    }
+  };
+
+  // Attachment helpers
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const processFiles = (files) => {
+    if (!files || files.length === 0) return;
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+    const currentSize = uploadedFiles.reduce((sum, f) => sum + f.file.size, 0);
+    if (currentSize + totalSize > 5 * 1024 * 1024) {
+      alert("Total file size cannot exceed 5MB");
+      return;
+    }
+    const newFiles = files.map((file) => ({
+      file,
+      name: file.name,
+      size: file.size,
+      id: Math.random().toString(36).substr(2, 9),
+    }));
+    setUploadedFiles((prev) => [...prev, ...newFiles]);
+    setAttachmentSize(currentSize + totalSize);
+  };
+
+  const handleFileUpload = (e) => {
+    processFiles(Array.from(e.target.files || []));
+    e.target.value = "";
+  };
+
+  const handleDragOver = (e) => { e.preventDefault(); setIsDragActive(true); };
+  const handleDragLeave = (e) => { e.preventDefault(); setIsDragActive(false); };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragActive(false);
+    processFiles(Array.from(e.dataTransfer?.files || []));
+  };
+
+  const removeFile = (fileId) => {
+    setUploadedFiles((prev) => {
+      const updated = prev.filter((f) => f.id !== fileId);
+      setAttachmentSize(updated.reduce((sum, f) => sum + f.file.size, 0));
+      return updated;
+    });
+  };
+
+  const selectStyles = {
+    control: (base, s) => ({
+      ...base,
+      borderColor: s.isFocused ? "#3b82f6" : "#d1d5db",
+      borderWidth: s.isFocused ? "2px" : "1px",
+      boxShadow: "none",
+      "&:hover": { borderColor: s.isFocused ? "#3b82f6" : "#d1d5db" },
+    }),
+  };
+
   const onFormSubmit = (data) => {
     const formattedData = {
       title: data.taskName,
       taskName: data.taskName,
+      description: data.description,
       taskType: "approval",
       mainTaskType: parentTask?.mainTaskType || parentTask?.taskType || "regular",
       dueDate: data.dueDate,
@@ -191,7 +300,13 @@ const ApprovalSubtaskForm = ({
       approverIds: data.approvers?.map((a) => a.value) || [],
       approvalMode: data.approvalMode || "any",
       approvalStatus: "pending",
+      autoApproveEnabled: data.autoApproval || false,
+      autoApproveAfter:
+        data.autoApproval && data.autoApproveAfter ? data.autoApproveAfter : null,
+      approverOrder:
+        data.approvalMode === "sequential" ? approverOrder : null,
       collaborators: data.collaborators?.map((c) => c.value) || [],
+      attachments: uploadedFiles,
     };
 
     onSubmit(formattedData);
@@ -270,7 +385,7 @@ const ApprovalSubtaskForm = ({
               isLoading={isLoadingCollaborators || localIsLoadingApprovers}
               className="react-select-container h-8-select-dynamic"
               classNamePrefix="react-select"
-              styles={{ control: (base, s) => ({ ...base, borderColor: s.isFocused ? "#3b82f6" : "#d1d5db", borderWidth: s.isFocused ? "2px" : "1px", boxShadow: "none", "&:hover": { borderColor: s.isFocused ? "#3b82f6" : "#d1d5db" } }) }}
+              styles={selectStyles}
               placeholder={
                 isLoadingCollaborators || localIsLoadingApprovers
                   ? "Loading approvers..."
@@ -292,6 +407,146 @@ const ApprovalSubtaskForm = ({
         )}
       </div>
 
+      {/* Row 1: Approval Mode — horizontal single line */}
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
+          Approval Mode <span className="text-red-500">*</span>
+          <div className="relative group ml-1">
+            <Info className="w-3.5 h-3.5 text-gray-400 cursor-help" />
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none w-64 z-10">
+              <div className="space-y-1">
+                <div><strong>Any One:</strong> First approver's decision is final</div>
+                <div><strong>All Must Approve:</strong> Every approver must approve</div>
+                <div><strong>Sequential:</strong> Approvers review in order</div>
+              </div>
+            </div>
+          </div>
+        </label>
+        <div className="flex items-center gap-6">
+          {approvalModeOptions.map((option) => (
+            <label key={option.value} className="flex items-center gap-2 cursor-pointer">
+              <input
+                {...register("approvalMode")}
+                type="radio"
+                value={option.value}
+                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-900">{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Row 2: Enable Auto-Approval + Auto-Approval Date side by side */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Enable Auto-Approval */}
+        <div className="flex items-center gap-2 pt-1">
+          <input
+            {...register("autoApproval")}
+            type="checkbox"
+            id="autoApprovalCheckbox"
+            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+          />
+          <label
+            htmlFor="autoApprovalCheckbox"
+            className="text-sm font-medium text-gray-900 select-none cursor-pointer"
+          >
+            Enable Auto-Approval
+          </label>
+        </div>
+
+        {/* Auto-Approval Date */}
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-1">
+            Auto-approval Date{" "}
+            {watchedAutoApproval && <span className="text-red-500">*</span>}
+          </label>
+          <input
+            {...register("autoApproveAfter", {
+              required: watchedAutoApproval
+                ? "Auto-approval date is required when auto-approval is enabled"
+                : false,
+              validate: (value) => {
+                if (!watchedAutoApproval) return true;
+                if (!value) return "Auto-approval date is required";
+                const autoDate = new Date(value);
+                const dueDate = new Date(watchedDueDate);
+                return (
+                  autoDate >= dueDate ||
+                  "Auto-approval date must be on or after the due date"
+                );
+              },
+            })}
+            type="datetime-local"
+            min={watchedDueDate || getTodayDate()}
+            disabled={!watchedAutoApproval}
+            className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:border-2 focus:border-blue-500 ${
+              watchedAutoApproval
+                ? "border-gray-300"
+                : "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
+            }`}
+          />
+          {errors.autoApproveAfter && (
+            <p className="text-red-500 text-xs mt-1 flex items-center">
+              <AlertCircle className="w-3 h-3 mr-1" />
+              {errors.autoApproveAfter.message}
+            </p>
+          )}
+          <p className="text-xs text-gray-500 mt-1">
+            Auto-approved if no approver action.
+          </p>
+        </div>
+      </div>
+
+      {/* Sequential Order - Only show if Sequential mode & approvers selected */}
+      {watchedApprovalMode === "sequential" && approverOrder.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-1">
+            Approval Order
+          </label>
+          <div className="space-y-1.5 bg-gray-50 p-3 rounded-md border border-gray-200">
+            {approverOrder.map((approver, index) => (
+              <div
+                key={approver.value}
+                className="flex items-center justify-between bg-white px-2 py-1.5 rounded-md border border-gray-200 shadow-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-semibold">
+                    {index + 1}
+                  </span>
+                  <span className="text-sm font-medium text-gray-800 truncate">
+                    {approver.label}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => moveApproverUp(index)}
+                    disabled={index === 0}
+                    className="p-1 text-gray-400 hover:text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm"
+                    title="Move Up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveApproverDown(index)}
+                    disabled={index === approverOrder.length - 1}
+                    className="p-1 text-gray-400 hover:text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm"
+                    title="Move Down"
+                  >
+                    ↓
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Approvers will review in this order. Use arrows to reorder.
+          </p>
+        </div>
+      )}
+
       {/* Due Date & Assignee Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Due Date */}
@@ -307,6 +562,12 @@ const ApprovalSubtaskForm = ({
             })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-2 focus:border-blue-500 text-sm"
           />
+          {errors.dueDate && (
+            <p className="text-red-500 text-xs mt-1 flex items-center">
+              <AlertCircle className="w-3 h-3 mr-1" />
+              {errors.dueDate.message}
+            </p>
+          )}
         </div>
 
         {/* Assignee */}
@@ -332,6 +593,12 @@ const ApprovalSubtaskForm = ({
               />
             )}
           />
+          {errors.assignedTo && (
+            <p className="text-red-500 text-xs mt-1 flex items-center">
+              <AlertCircle className="w-3 h-3 mr-1" />
+              {errors.assignedTo.message}
+            </p>
+          )}
         </div>
       </div>
 
@@ -352,7 +619,7 @@ const ApprovalSubtaskForm = ({
                 menuPlacement="auto"
                 className="react-select-container h-8-select-dynamic"
                 classNamePrefix="react-select"
-                styles={{ control: (base, s) => ({ ...base, borderColor: s.isFocused ? "#3b82f6" : "#d1d5db", borderWidth: s.isFocused ? "2px" : "1px", boxShadow: "none", "&:hover": { borderColor: s.isFocused ? "#3b82f6" : "#d1d5db" } }) }}
+                styles={selectStyles}
                 placeholder="Select priority..."
               />
             )}
@@ -361,7 +628,8 @@ const ApprovalSubtaskForm = ({
 
         {/* Collaborators */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-1">
+          <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
+            <Users className="w-4 h-4 text-gray-500" />
             Collaborators
           </label>
           <Controller
@@ -382,7 +650,7 @@ const ApprovalSubtaskForm = ({
                 isLoading={isLoadingCollaborators || localIsLoadingApprovers}
                 className="react-select-container h-8-select-dynamic"
                 classNamePrefix="react-select"
-                styles={{ control: (base, s) => ({ ...base, borderColor: s.isFocused ? "#3b82f6" : "#d1d5db", borderWidth: s.isFocused ? "2px" : "1px", boxShadow: "none", "&:hover": { borderColor: s.isFocused ? "#3b82f6" : "#d1d5db" } }) }}
+                styles={selectStyles}
                 placeholder={
                   isLoadingCollaborators || localIsLoadingApprovers
                     ? "Loading collaborators..."
@@ -421,6 +689,74 @@ const ApprovalSubtaskForm = ({
         </div>
       </div>
 
+      {/* Attachments */}
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-1">
+          Attachments{" "}
+          <span className="text-xs text-gray-500 ml-1">(Max 5MB total)</span>
+        </label>
+        <div
+          className={`w-full border-2 border-dashed p-4 text-center cursor-pointer rounded-md transition-colors ${
+            isDragActive ? "border-blue-500 bg-blue-50" : "border-blue-300 bg-white"
+          }`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => attachmentsInputRef.current?.click()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              attachmentsInputRef.current?.click();
+            }
+          }}
+        >
+          <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center bg-blue-100 text-blue-600 rounded">
+            +
+          </div>
+          <p className="text-sm font-semibold text-blue-600">Drag &amp; Drop files</p>
+          <p className="text-xs text-gray-500">PDF, DOC, images supported</p>
+        </div>
+        <input
+          ref={attachmentsInputRef}
+          type="file"
+          multiple
+          accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+
+        {uploadedFiles.length > 0 && (
+          <div className="mt-3 space-y-1">
+            {uploadedFiles.map((file) => (
+              <div
+                key={file.id}
+                className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded"
+              >
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span className="text-sm text-gray-700">{file.name}</span>
+                  <span className="text-xs text-gray-500">({formatFileSize(file.size)})</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeFile(file.id)}
+                  className="text-red-500 hover:text-red-700 text-sm"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <div className="text-xs text-gray-500">
+              Total size: {formatFileSize(attachmentSize)} / 5MB
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Submit Controls */}
       <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
         <Button
@@ -439,9 +775,12 @@ const ApprovalSubtaskForm = ({
         >
           {isSubmitting ? (
             <span className="flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
               Saving...
             </span>
-          ) : "Create Approval Subtask"}
+          ) : (
+            "Create Approval Subtask"
+          )}
         </Button>
       </div>
     </form>
