@@ -229,16 +229,19 @@ const taskSchema = new mongoose.Schema(
     estimatedHours: Number,
     actualHours: Number,
     // Advanced task fields for comprehensive task management
+    // Workflow Engine: taskType drives which configuration panels are shown
+    // and which services handle status transitions.
+    // Values: "regular" | "email" | "approval" | "milestone" | "recurring" | "subtask"
     taskType: {
       type: String,
-      enum: ["regular", "recurring", "milestone", "approval", "subtask"],
+      enum: ["regular", "recurring", "milestone", "approval", "subtask", "email"],
       default: "regular",
     },
     mainTaskType: {
       type: String,
-      enum: ["regular", "recurring", "milestone", "approval", "subtask"],
+      enum: ["regular", "recurring", "milestone", "approval", "subtask", "email"],
       default: "regular",
-    }, // Clear task category identification
+    }, // The top-level task type classification
     // Subtask specific fields
     parentTaskId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -530,6 +533,182 @@ const taskSchema = new mongoose.Schema(
 
     // Google Calendar Integration
     googleCalendarEventId: { type: String, default: null },
+
+    // ─── Workflow Engine Fields (Phase 2) ────────────────────────────────────
+
+    // The type of business process this parent task represents.
+    // Used as metadata only — the engine is fully generic.
+    // Example: "vendor_onboarding", "employee_onboarding", "procurement" etc.
+    workflowType: {
+      type: String,
+      enum: [
+        "vendor_onboarding",
+        "employee_onboarding",
+        "client_onboarding",
+        "procurement",
+        "purchase_approval",
+        "leave_approval",
+        "asset_allocation",
+        "it_request",
+        "legal_review",
+        "custom",
+      ],
+      default: null,
+    },
+
+    // Sequence/order of this task within its parent process.
+    // Used by the Linked Task Engine to determine eligibility.
+    sequence: {
+      type: Number,
+      default: 0,
+    },
+
+    // Single dependency link: this task cannot move to IN_PROGRESS
+    // until the linkedTaskId task is Completed.
+    // Separate from linkedTasks (which is the milestone array).
+    linkedTaskId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Task",
+      default: null,
+    },
+
+    // For Approval Tasks: the task that should be re-initiated
+    // when the approver chooses "Reject & Re-initiate".
+    contextTaskId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Task",
+      default: null,
+    },
+
+    // Timestamp when this task transitioned to IN_PROGRESS.
+    // Used for Auto-Complete and Auto-Initiate scheduling.
+    startedAt: {
+      type: Date,
+      default: null,
+    },
+
+    // Per-task workflow configuration object.
+    // Stored as a structured sub-document (not free-form Object)
+    // to allow indexed queries by the scheduler.
+    configuration: {
+      // Auto-Initiate: automatically move to IN_PROGRESS when linkedTask completes.
+      // Only valid when linkedTaskId is set.
+      autoInitiate: {
+        type: Boolean,
+        default: false,
+      },
+
+      // Auto-Complete: automatically mark Completed after N days of being IN_PROGRESS.
+      autoComplete: {
+        type: Boolean,
+        default: false,
+      },
+      autoCompleteAfterDays: {
+        type: Number,
+        default: null,
+      },
+
+      // Parent Cancellation Mode (set on parent/workflow tasks).
+      // cancel_on_rejection: Cancel parent if any subtask is Rejected/Cancelled.
+      // ignore_rejection: Default — parent continues regardless.
+      parentCancellationMode: {
+        type: String,
+        enum: ["cancel_on_rejection", "ignore_rejection"],
+        default: "ignore_rejection",
+      },
+    },
+
+    // ─── Email Task Configuration ─────────────────────────────────────────────
+    // Only populated when taskType === "email".
+    // Stored on the task itself so the WorkflowEngine can render/send without
+    // joining another collection.
+    emailConfig: {
+      // Email recipients — supports manual entry and form-field mapping.
+      recipients: [
+        {
+          name: { type: String },
+          email: { type: String },
+          // source: manual = typed in, form = mapped from form field,
+          //         previous_form = mapped from a previous task's form response,
+          //         form_submission = imported from form response submissions
+          source: {
+            type: String,
+            enum: ["manual", "form", "previous_form", "form_submission"],
+            default: "manual",
+          },
+          // Per-recipient custom variable key-value pairs (Case I & Case II)
+          variables: {
+            type: Map,
+            of: String,
+            default: {},
+          },
+          // For source=form: which form and field to pull the email from
+          formId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Form",
+            default: null,
+            set: (v) => (v === "" ? null : v),
+          },
+          fieldId: { type: String, default: null },
+          // For source=previous_form: which sibling task's form response
+          previousTaskId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Task",
+            default: null,
+            set: (v) => (v === "" ? null : v),
+          },
+        },
+      ],
+
+      // Email subject (can be the task name or a custom value)
+      subject: { type: String, default: null },
+
+      // HTML email body template.
+      // Supports dynamic variables: {variableKey}
+      body: { type: String, default: null },
+
+      // Variable definitions for template substitution.
+      // Maximum 10 variables per spec.
+      variables: [
+        {
+          key: { type: String },           // Template key, e.g. "VendorName"
+          label: { type: String },          // Display label
+          // Where to source the variable value from:
+          // "current_form" = current task's form, "form_library" = a specific form
+          mappedFrom: {
+            type: String,
+            enum: ["current_form", "form_library", "previous_form", "static"],
+            default: "static",
+          },
+          formId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Form",
+            default: null,
+            set: (v) => (v === "" ? null : v),
+          },
+          fieldId: { type: String, default: null },
+          staticValue: { type: String, default: null }, // for mappedFrom=static
+        },
+      ],
+
+      // If set, a secure public URL will be generated and appended to the email.
+      // Recipients can submit this form without a Tasksetu account.
+      attachedFormId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Form",
+        default: null,
+        set: (v) => (v === "" ? null : v),
+      },
+      formLinkEnabled: { type: Boolean, default: false },
+
+      // Auto-Complete this email task after N days (overrides task-level config).
+      autoComplete: { type: Boolean, default: false },
+      autoCompleteAfterDays: { type: Number, default: null },
+
+      // Tracks how many times the email has been sent/re-sent
+      sendCount: { type: Number, default: 0 },
+      lastSentAt: { type: Date, default: null },
+    },
   },
   {
     timestamps: true,
@@ -701,14 +880,207 @@ const usageTrackingSchema = new mongoose.Schema(
   },
 );
 
-// Create indexes
-
+// ─── Task Indexes ──────────────────────────────────────────────────────────
 taskSchema.index({ organization: 1 });
 taskSchema.index({ assignedTo: 1 });
 taskSchema.index({ createdBy: 1 });
 taskSchema.index({ dueDate: 1 });
+taskSchema.index({ linkedTaskId: 1 });                          // Linked Task Engine
+taskSchema.index({ "configuration.autoInitiate": 1 });          // Auto Initiate scheduler
+taskSchema.index({ "configuration.autoComplete": 1, status: 1 }); // Auto Complete scheduler
+taskSchema.index({ workflowType: 1, organization: 1 });          // Workflow type filtering
+taskSchema.index({ sequence: 1, parentTask: 1 });               // Sequence ordering
 taskCommentSchema.index({ task: 1 });
 usageTrackingSchema.index({ organization: 1, month: 1 }, { unique: true });
+
+// ─── TaskVisibility Schema ─────────────────────────────────────────────────
+// Stores which users can view a task beyond the assignee/collaborators.
+// Visible users get read-only access: view, comment, view attachments, view form data.
+const taskVisibilitySchema = new mongoose.Schema(
+  {
+    task: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Task",
+      required: true,
+    },
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    addedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    organization: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Organization",
+      required: true,
+    },
+    // Granular read-only permissions
+    canView: { type: Boolean, default: true },
+    canComment: { type: Boolean, default: true },
+    canViewAttachments: { type: Boolean, default: true },
+    canViewFormData: { type: Boolean, default: true },
+    // Cannot edit, complete, or reassign — enforced at API layer
+  },
+  { timestamps: true },
+);
+taskVisibilitySchema.index({ task: 1, user: 1 }, { unique: true });
+taskVisibilitySchema.index({ user: 1, organization: 1 });
+
+// ─── ApprovalHistory Schema ────────────────────────────────────────────────
+// Immutable audit trail of every approval decision across all cycles.
+// Never overwritten — new records are appended per decision.
+const approvalHistorySchema = new mongoose.Schema(
+  {
+    task: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Task",
+      required: true,
+    },
+    organization: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Organization",
+      required: true,
+    },
+    // Cycle number: increments each time the approval is re-initiated
+    cycle: {
+      type: Number,
+      required: true,
+      default: 1,
+    },
+    approver: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: ["approved", "rejected", "auto_approved", "pending"],
+      required: true,
+    },
+    reason: { type: String, default: null },
+    // Action taken on rejection
+    rejectionAction: {
+      type: String,
+      enum: ["terminate", "reinitiate", null],
+      default: null,
+    },
+    isAutoApproval: { type: Boolean, default: false },
+    decidedAt: { type: Date, default: Date.now },
+  },
+  { timestamps: true },
+);
+approvalHistorySchema.index({ task: 1, cycle: 1 });
+approvalHistorySchema.index({ task: 1, approver: 1 });
+approvalHistorySchema.index({ organization: 1 });
+
+// ─── EmailRecipientTracking Schema ────────────────────────────────────────
+// Per-recipient status tracking for Email Tasks.
+// One document per recipient per email task.
+const emailRecipientTrackingSchema = new mongoose.Schema(
+  {
+    task: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Task",
+      required: true,
+    },
+    organization: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Organization",
+      required: false,
+      default: null,
+    },
+    name: { type: String, default: null },
+    email: { type: String, required: true, lowercase: true, trim: true },
+    // Current status of this recipient
+    status: {
+      type: String,
+      enum: ["pending", "sent", "delivered", "opened", "submitted", "failed"],
+      default: "pending",
+    },
+    // Which send cycle this tracking record belongs to (1 = first send, 2 = re-send, etc.)
+    sendCycle: { type: Number, default: 1 },
+    sentAt: { type: Date, default: null },
+    openedAt: { type: Date, default: null },
+    submittedAt: { type: Date, default: null },
+    failedAt: { type: Date, default: null },
+    failureReason: { type: String, default: null },
+    // The secure form token generated for this recipient
+    formToken: { type: String, default: null },
+    // Reference to the form submission if the recipient submitted the form
+    formSubmissionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "FormSubmission",
+      default: null,
+    },
+  },
+  { timestamps: true },
+);
+emailRecipientTrackingSchema.index({ task: 1, email: 1 });
+emailRecipientTrackingSchema.index({ task: 1, status: 1 });
+emailRecipientTrackingSchema.index({ formToken: 1 }, { sparse: true });
+
+// ─── WorkflowFormToken Schema ──────────────────────────────────────────────
+// Secure, time-limited tokens for public form URLs.
+// Allows external recipients to submit forms without a Tasksetu account.
+// URL format: /public/forms/{token}
+const workflowFormTokenSchema = new mongoose.Schema(
+  {
+    // Cryptographically secure random token (UUID v4)
+    token: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+    // The Email Task this token belongs to
+    task: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Task",
+      required: true,
+    },
+    organization: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Organization",
+      required: false,
+      default: null,
+    },
+    // The Form to render for this token
+    form: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Form",
+      required: true,
+    },
+    // The specific recipient this token was generated for
+    recipientEmail: { type: String, lowercase: true, trim: true },
+    recipientName: { type: String, default: null },
+    // Reference to the EmailRecipientTracking record
+    recipientTrackingId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "EmailRecipientTracking",
+      default: null,
+    },
+    // Expiry: null = no expiry, otherwise the token is rejected after this date
+    expiresAt: { type: Date, default: null },
+    // Has this token already been used to submit?
+    isUsed: { type: Boolean, default: false },
+    usedAt: { type: Date, default: null },
+    // Configurable: allow multiple submissions or only one
+    allowMultipleSubmissions: { type: Boolean, default: false },
+    submissionCount: { type: Number, default: 0 },
+    // Reference to the form submission created by this token
+    formSubmissionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "FormSubmission",
+      default: null,
+    },
+  },
+  { timestamps: true },
+);
+workflowFormTokenSchema.index({ task: 1 });
+workflowFormTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0, sparse: true });
 
 // Export models
 // Form Category Schema (for organizing form templates)
@@ -1197,6 +1569,24 @@ export const FormResponse = mongoose.model("FormResponse", formResponseSchema);
 export const ProcessInstance = mongoose.model(
   "ProcessInstance",
   processInstanceSchema,
+);
+
+// ─── Workflow Engine Models (Phase 2) ─────────────────────────────────────
+export const TaskVisibility = mongoose.model(
+  "TaskVisibility",
+  taskVisibilitySchema,
+);
+export const ApprovalHistory = mongoose.model(
+  "ApprovalHistory",
+  approvalHistorySchema,
+);
+export const EmailRecipientTracking = mongoose.model(
+  "EmailRecipientTracking",
+  emailRecipientTrackingSchema,
+);
+export const WorkflowFormToken = mongoose.model(
+  "WorkflowFormToken",
+  workflowFormTokenSchema,
 );
 
 // Organization Hierarchy Schema

@@ -168,7 +168,6 @@ export const removeUser = async (req, res) => {
 
     // Release seat if user has one assigned (legacy support)
     if (user.seat_assigned === true) {
-
       try {
         await seatManagementService.releaseSeatFromUser(
           user.organization_id.toString(),

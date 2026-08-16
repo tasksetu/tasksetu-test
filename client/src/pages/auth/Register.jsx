@@ -352,7 +352,7 @@ export default function Register() {
               TS
             </div>
             <span className="text-2xl font-semibold text-gray-800">
-              TaskSetu -<span className="text-2xl text-blue-600"> UAT</span>
+              TaskSetu
             </span>
           </div>
 

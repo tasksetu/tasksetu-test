@@ -6,7 +6,6 @@
   "license": "MIT",
   "scripts": {
     "dev": "cross-env NODE_ENV=development nodemon --exec tsx server/index.ts",
-    "build": "vite build && npm run build:server",
     "build:server": "esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "cross-env NODE_ENV=production node dist/index.js",
     "preview": "npm run build && npm run start",
@@ -154,7 +153,6 @@
     "autoprefixer": "^10.4.20",
     "cross-env": "^7.0.3",
     "esbuild": "^0.25.9",
-    "markdown-pdf": "^11.0.0",
     "nodemon": "^3.1.10",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.17",

@@ -16,6 +16,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useTaskPriorities } from "@/hooks/useTaskPriorities";
+import LinkedTaskSelector from "../components/workflow/LinkedTaskSelector";
 
 const ApprovalSubtaskForm = ({
   user,
@@ -23,6 +24,7 @@ const ApprovalSubtaskForm = ({
   onCancel,
   isOrgUser = false,
   parentTask = null,
+  editData = null,
   collaboratorOptions = [],
   isLoadingCollaborators = false,
   isSubmitting = false,
@@ -31,6 +33,17 @@ const ApprovalSubtaskForm = ({
   const [localIsLoadingApprovers, setLocalIsLoadingApprovers] = useState(false);
   const [taskNameLength, setTaskNameLength] = useState(0);
   const [approverOrder, setApproverOrder] = useState([]);
+
+  // Linked task dependency state
+  const [linkedTaskId, setLinkedTaskId] = useState(editData?.linkedTaskId || null);
+  const [autoInitiate, setAutoInitiate] = useState(
+    editData?.configuration?.autoInitiate || editData?.autoInitiate || false
+  );
+
+  // Approval Context state
+  const [approvalContext, setApprovalContext] = useState(
+    editData?.approvalContext || editData?.context || ""
+  );
 
   // Attachments state
   const [uploadedFiles, setUploadedFiles] = useState([]);
@@ -307,6 +320,12 @@ const ApprovalSubtaskForm = ({
         data.approvalMode === "sequential" ? approverOrder : null,
       collaborators: data.collaborators?.map((c) => c.value) || [],
       attachments: uploadedFiles,
+      approvalContext: approvalContext,
+      context: approvalContext,
+      linkedTaskId: linkedTaskId || null,
+      configuration: {
+        autoInitiate: !!linkedTaskId && autoInitiate,
+      },
     };
 
     onSubmit(formattedData);
@@ -756,6 +775,19 @@ const ApprovalSubtaskForm = ({
           </div>
         )}
       </div>
+
+      {/* Context Task Dependency & Auto Initiate */}
+      <LinkedTaskSelector
+        parentTaskId={parentTask?._id || parentTask?.id}
+        sequence={(parentTask?.subtaskCount || 0) + 1}
+        excludeTaskId={editData?._id}
+        linkedTaskId={linkedTaskId}
+        onLinkedTaskChange={setLinkedTaskId}
+        autoInitiate={autoInitiate}
+        onAutoInitiateChange={setAutoInitiate}
+        disabled={isSubmitting}
+        label="Context Task (Prerequisite Dependency)"
+      />
 
       {/* Submit Controls */}
       <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">

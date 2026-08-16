@@ -34,7 +34,7 @@ export class AuthService {
         organizationId: user.organization_id,
       },
       this.JWT_SECRET,
-      { expiresIn: this.JWT_EXPIRES_IN }
+      { expiresIn: this.JWT_EXPIRES_IN },
     );
   }
 
@@ -76,7 +76,7 @@ export class AuthService {
     const existingUser = await storage.getUserByEmail(email);
     if (existingUser) {
       throw new Error(
-        "This email is already registered. Please Login or Reset Password."
+        "This email is already registered. Please Login or Reset Password.",
       );
     }
 
@@ -84,7 +84,7 @@ export class AuthService {
     const existingPendingUser = await storage.getPendingUserByEmail(email);
     if (existingPendingUser) {
       throw new Error(
-        "This email is already registered. Please Login or Reset Password."
+        "This email is already registered. Please Login or Reset Password.",
       );
     }
 
@@ -119,7 +119,7 @@ export class AuthService {
     // Normal flow with email verification - use secure token instead of OTP
     const verificationToken = this.generateResetToken(); // Uses crypto.randomBytes for security
     const verificationExpires = new Date(
-      Date.now() + this.VERIFICATION_TOKEN_EXPIRES
+      Date.now() + this.VERIFICATION_TOKEN_EXPIRES,
     );
 
     // Create pending user
@@ -151,7 +151,7 @@ export class AuthService {
     const existingUser = await storage.getUserByEmail(email);
     if (existingUser) {
       throw new Error(
-        "This email is already registered. Please Login or Reset Password."
+        "This email is already registered. Please Login or Reset Password.",
       );
     }
 
@@ -159,7 +159,7 @@ export class AuthService {
     const existingPendingUser = await storage.getPendingUserByEmail(email);
     if (existingPendingUser) {
       throw new Error(
-        "This email is already registered. Please Login or Reset Password."
+        "This email is already registered. Please Login or Reset Password.",
       );
     }
 
@@ -174,7 +174,7 @@ export class AuthService {
     // Validate slug format
     if (!/^[a-z0-9-]+$/.test(orgSlug) || orgSlug.length < 3) {
       throw new Error(
-        "Organization URL must be at least 3 characters and contain only lowercase letters, numbers, and hyphens"
+        "Organization URL must be at least 3 characters and contain only lowercase letters, numbers, and hyphens",
       );
     }
 
@@ -230,7 +230,7 @@ export class AuthService {
     // Normal flow with email verification - use secure token instead of OTP
     const verificationToken = this.generateResetToken(); // Uses crypto.randomBytes for security
     const verificationExpires = new Date(
-      Date.now() + this.VERIFICATION_TOKEN_EXPIRES
+      Date.now() + this.VERIFICATION_TOKEN_EXPIRES,
     );
 
     // Create pending user with organization data
@@ -251,7 +251,7 @@ export class AuthService {
       email,
       verificationToken,
       firstName,
-      organizationName
+      organizationName,
     );
 
     return {
@@ -322,10 +322,13 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
-        phone: user.phone || null
+        phone: user.phone || null,
       });
     } catch (error) {
-      console.error('⚠️ Failed to notify super admins about user registration:', error);
+      console.error(
+        "⚠️ Failed to notify super admins about user registration:",
+        error,
+      );
       // Don't fail the registration if notification fails
     }
 
@@ -369,7 +372,8 @@ export class AuthService {
     });
 
     // Initialize trial subscription for organization
-    const { OrganizationSubscription } = await import('../modals/organizationSubscriptionModal.js');
+    const { OrganizationSubscription } =
+      await import("../modals/organizationSubscriptionModal.js");
     await OrganizationSubscription.initializeTrial(organization._id);
 
     // Calculate trial expiration date
@@ -387,9 +391,9 @@ export class AuthService {
       isActive: true,
       emailVerified: true,
       isPrimaryAdmin: true, // Primary admin creator
-      license_code: 'EXPLORE',
+      license_code: "EXPLORE",
       assigned_license: {
-        license_code: 'EXPLORE',
+        license_code: "EXPLORE",
         purchase_id: null, // Primary admin trial - no pool instance required
         assigned_date: new Date(),
         expiration_date: expirationDate,
@@ -442,10 +446,13 @@ export class AuthService {
       await superAdminNotification.notifyNewOrganization({
         name: organization.name,
         adminName: `${user.firstName} ${user.lastName}`,
-        adminEmail: user.email
+        adminEmail: user.email,
       });
     } catch (error) {
-      console.error('⚠️ Failed to notify super admins about organization registration:', error);
+      console.error(
+        "⚠️ Failed to notify super admins about organization registration:",
+        error,
+      );
       // Don't fail the registration if notification fails
     }
 
@@ -481,7 +488,7 @@ export class AuthService {
         } else {
           // Still locked
           const timeLeft = Math.ceil(
-            (loginAttempt.lockoutExpiresAt - Date.now()) / 1000
+            (loginAttempt.lockoutExpiresAt - Date.now()) / 1000,
           );
           return {
             locked: true,
@@ -534,7 +541,7 @@ export class AuthService {
           if (existingAttempt.attemptCount >= this.MAX_LOGIN_ATTEMPTS) {
             existingAttempt.isLocked = true;
             existingAttempt.lockoutExpiresAt = new Date(
-              now.getTime() + this.LOCKOUT_TIME
+              now.getTime() + this.LOCKOUT_TIME,
             );
           }
         }
@@ -561,7 +568,7 @@ export class AuthService {
     const lockoutStatus = await this.isUserLockedOut(email);
     if (lockoutStatus.locked) {
       const error = new Error(
-        "Account temporarily locked due to too many failed login attempts. Please try again later."
+        "Account temporarily locked due to too many failed login attempts. Please try again later.",
       );
       error.isLockout = true;
       error.timeLeft = lockoutStatus.timeLeft;
@@ -578,7 +585,7 @@ export class AuthService {
     // ADD THIS CHECK:
     if (user.status !== "active") {
       throw new Error(
-        "Account is not active. Please contact your administrator."
+        "Account is not active. Please contact your administrator.",
       );
     }
 
@@ -607,16 +614,20 @@ export class AuthService {
 
     if (user.organization_id || user.organization) {
       const roles = Array.isArray(user.role) ? user.role : [user.role];
-      const isOrgAdmin = roles.includes('org_admin') || user.isPrimaryAdmin === true;
+      const isOrgAdmin =
+        roles.includes("org_admin") || user.isPrimaryAdmin === true;
 
       try {
-        const { default: LicenseInstance } = await import('../modals/licenseInstanceModal.js');
-        const { License } = await import('../modals/licenseModal.js');
-        const { User: UserModel } = await import('../modals/userModal.js');
-        const { getUserLicenseInfo } = await import('./licenseService.js');
-        const mongoose = (await import('mongoose')).default;
+        const { default: LicenseInstance } =
+          await import("../modals/licenseInstanceModal.js");
+        const { License } = await import("../modals/licenseModal.js");
+        const { User: UserModel } = await import("../modals/userModal.js");
+        const { getUserLicenseInfo } = await import("./licenseService.js");
+        const mongoose = (await import("mongoose")).default;
 
-        const orgId = new mongoose.Types.ObjectId(user.organization_id || user.organization);
+        const orgId = new mongoose.Types.ObjectId(
+          user.organization_id || user.organization,
+        );
         const now = new Date();
 
         // ── 0. Ensure logging-in user's own license is up to date (triggering auto-downgrade if expired) ──
@@ -631,13 +642,14 @@ export class AuthService {
         // ── 1. Calculate active paid seats by license type (not expired past grace period) ──
         const paidInstances = await LicenseInstance.find({
           organization_id: orgId,
-          license_code: { $in: ['PLAN', 'EXECUTE', 'OPTIMIZE'] },
-          status: { $in: ['AVAILABLE', 'ASSIGNED'] }
-        }).select('license_code renewal_date');
+          license_code: { $in: ["PLAN", "EXECUTE", "OPTIMIZE"] },
+          status: { $in: ["AVAILABLE", "ASSIGNED"] },
+        }).select("license_code renewal_date");
 
         // Fetch grace periods
-        const licenseDefs = await License.find({ license_code: { $in: ['PLAN', 'EXECUTE', 'OPTIMIZE'] } })
-          .select('license_code grace_period_days');
+        const licenseDefs = await License.find({
+          license_code: { $in: ["PLAN", "EXECUTE", "OPTIMIZE"] },
+        }).select("license_code grace_period_days");
         const graceMap = {};
         for (const def of licenseDefs) {
           graceMap[def.license_code] = def.grace_period_days || 0;
@@ -656,22 +668,27 @@ export class AuthService {
           seatsByCode[inst.license_code]++;
         }
 
-        const totalPaidSeats = seatsByCode.PLAN + seatsByCode.EXECUTE + seatsByCode.OPTIMIZE;
+        const totalPaidSeats =
+          seatsByCode.PLAN + seatsByCode.EXECUTE + seatsByCode.OPTIMIZE;
         const base = totalPaidSeats > 0 ? 0 : 1;
-        const entitled = base +
-          (seatsByCode.PLAN * 2) +
-          (seatsByCode.EXECUTE * 3) +
-          (seatsByCode.OPTIMIZE * 4);
+        const entitled =
+          base +
+          seatsByCode.PLAN * 2 +
+          seatsByCode.EXECUTE * 3 +
+          seatsByCode.OPTIMIZE * 4;
 
         // ── 2. Count current free (EXPLORE) users in the organization ──
         const orgUsers = await UserModel.find({
           organization_id: orgId,
-          status: { $in: ['active', 'invited', 'pending'] }
-        }).populate('license_instance_id').select('license_code license_instance_id role isPrimaryAdmin');
+          status: { $in: ["active", "invited", "pending"] },
+        })
+          .populate("license_instance_id")
+          .select("license_code license_instance_id role isPrimaryAdmin");
 
         let used = 0;
         for (const u of orgUsers) {
-          let userLicenseCode = u.license_instance_id?.license_code || u.license_code || 'EXPLORE';
+          let userLicenseCode =
+            u.license_instance_id?.license_code || u.license_code || "EXPLORE";
 
           // Check if the assigned license is expired past its grace period
           if (u.license_instance_id) {
@@ -681,15 +698,16 @@ export class AuthService {
               const graceEnd = new Date(inst.renewal_date);
               graceEnd.setDate(graceEnd.getDate() + graceDays);
               if (now > graceEnd) {
-                userLicenseCode = 'EXPIRED'; // Treat as EXPIRED (free) user
+                userLicenseCode = "EXPIRED"; // Treat as EXPIRED (free) user
               }
             }
           }
 
-          if (userLicenseCode === 'EXPLORE' || userLicenseCode === 'EXPIRED') {
+          if (userLicenseCode === "EXPLORE" || userLicenseCode === "EXPIRED") {
             if (totalPaidSeats === 0) {
               const roles = Array.isArray(u.role) ? u.role : [u.role];
-              const isUserOrgAdmin = roles.includes('org_admin') || u.isPrimaryAdmin === true;
+              const isUserOrgAdmin =
+                roles.includes("org_admin") || u.isPrimaryAdmin === true;
               if (isUserOrgAdmin) {
                 continue;
               }
@@ -709,12 +727,15 @@ export class AuthService {
           } else {
             // Non-admin free user → block login if their own license is free/explore/expired
             const userLicense = await getUserLicenseInfo(user._id);
-            const userLicenseCode = userLicense.license_code || 'EXPLORE';
-            const isFreeUser = userLicenseCode === 'EXPLORE' || userLicense.status === 'EXPIRED' || userLicense.is_expired === true;
+            const userLicenseCode = userLicense.license_code || "EXPLORE";
+            const isFreeUser =
+              userLicenseCode === "EXPLORE" ||
+              userLicense.status === "EXPIRED" ||
+              userLicense.is_expired === true;
 
             if (isFreeUser) {
               throw new Error(
-                `Your organisation's free user limit has been exceeded (${used} of ${entitled} allowed). Please ask your administrator to upgrade the plan to restore access.`
+                `Your organisation's free user limit has been exceeded (${used} of ${entitled} allowed). Please ask your administrator to upgrade the plan to restore access.`,
               );
             }
           }
@@ -722,26 +743,28 @@ export class AuthService {
       } catch (licenseCheckError) {
         // Re-throw login-block errors; swallow infrastructure errors silently
         if (
-          licenseCheckError.message.includes('free user limit') ||
-          licenseCheckError.message.includes('limit has been exceeded')
+          licenseCheckError.message.includes("free user limit") ||
+          licenseCheckError.message.includes("limit has been exceeded")
         ) {
           throw licenseCheckError;
         }
-        console.error('⚠️ License expiry login check failed (non-fatal):', licenseCheckError.message);
+        console.error(
+          "⚠️ License expiry login check failed (non-fatal):",
+          licenseCheckError.message,
+        );
       }
     }
     // ────────────────────────────────────────────────────────────────────────
 
-
     if (!user.passwordHash) {
       throw new Error(
-        "Password not set. Please complete email verification first."
+        "Password not set. Please complete email verification first.",
       );
     }
 
     const isValidPassword = await this.verifyPassword(
       password,
-      user.passwordHash
+      user.passwordHash,
     );
     if (!isValidPassword) {
       await this.recordFailedAttempt(email, ipAddress, userAgent);
@@ -753,7 +776,7 @@ export class AuthService {
 
       if (remainingAttempts <= 0) {
         const error = new Error(
-          "Account temporarily locked due to too many failed login attempts. Please try again in 15 minutes."
+          "Account temporarily locked due to too many failed login attempts. Please try again in 15 minutes.",
         );
         error.isLockout = true;
         error.timeLeft = 15 * 60; // 15 minutes in seconds
@@ -762,8 +785,9 @@ export class AuthService {
       }
 
       const error = new Error(
-        `Invalid email or password. ${remainingAttempts} attempt${remainingAttempts === 1 ? "" : "s"
-        } remaining.`
+        `Invalid email or password. ${remainingAttempts} attempt${
+          remainingAttempts === 1 ? "" : "s"
+        } remaining.`,
       );
       error.remainingAttempts = remainingAttempts;
       throw error;
@@ -820,10 +844,10 @@ export class AuthService {
         isPrimaryAdmin: user.isPrimaryAdmin || false,
         organization: organizationInfo
           ? {
-            id: organizationInfo._id,
-            name: organizationInfo.name,
-            slug: organizationInfo.slug,
-          }
+              id: organizationInfo._id,
+              name: organizationInfo.name,
+              slug: organizationInfo.slug,
+            }
           : null,
       },
     };
@@ -862,7 +886,7 @@ export class AuthService {
       const emailSent = await this.sendPasswordResetEmail(
         email,
         resetToken,
-        userName
+        userName,
       );
       if (!emailSent) {
         console.error("Failed to send password reset email to:", email);
@@ -885,7 +909,7 @@ export class AuthService {
         (u) =>
           u.passwordResetToken === token &&
           u.passwordResetExpires &&
-          u.passwordResetExpires > new Date()
+          u.passwordResetExpires > new Date(),
       );
 
       if (!userWithToken) {
@@ -913,7 +937,7 @@ export class AuthService {
         (u) =>
           u.passwordResetToken === token &&
           u.passwordResetExpires &&
-          u.passwordResetExpires > new Date()
+          u.passwordResetExpires > new Date(),
       );
 
       if (!userWithToken) {
@@ -964,7 +988,7 @@ export class AuthService {
     // Generate new verification code
     const verificationCode = this.generateVerificationCode();
     const verificationExpires = new Date(
-      Date.now() + this.VERIFICATION_TOKEN_EXPIRES
+      Date.now() + this.VERIFICATION_TOKEN_EXPIRES,
     );
 
     // Update pending user
@@ -978,7 +1002,7 @@ export class AuthService {
       email,
       verificationCode,
       pendingUser.firstName,
-      pendingUser.organizationName
+      pendingUser.organizationName,
     );
 
     return { message: "Verification code resent successfully" };
@@ -990,7 +1014,7 @@ export class AuthService {
       email,
       code,
       firstName,
-      organizationName
+      organizationName,
     );
   }
 
@@ -1004,7 +1028,7 @@ export class AuthService {
     // First try to find pending user by verification code (new registrations)
     const allPendingUsers = await storage.getAllPendingUsers();
     const pendingUser = allPendingUsers.find(
-      (user) => user.verificationCode === token
+      (user) => user.verificationCode === token,
     );
 
     if (pendingUser) {
@@ -1033,7 +1057,7 @@ export class AuthService {
         }
 
         const organization = await storage.getOrganization(
-          invitedUser.organization
+          invitedUser.organization,
         );
 
         return {
@@ -1067,7 +1091,7 @@ export class AuthService {
       // Handle pending user registration
       const allPendingUsers = await storage.getAllPendingUsers();
       const pendingUser = allPendingUsers.find(
-        (user) => user.verificationCode === token
+        (user) => user.verificationCode === token,
       );
 
       if (userInfo.type === "individual") {
@@ -1134,8 +1158,10 @@ export class AuthService {
       const invitedUser = await storage.getUserByInviteToken(token);
 
       // Get organization to determine license type
-      const organization = await storage.getOrganization(invitedUser.organization_id);
-      const orgLicenseCode = organization?.license_code || 'EXPLORE';
+      const organization = await storage.getOrganization(
+        invitedUser.organization_id,
+      );
+      const orgLicenseCode = organization?.license_code || "EXPLORE";
 
       // Update the invited user with password and activate account
       const updatedUser = await storage.updateUser(invitedUser._id, {
@@ -1148,7 +1174,7 @@ export class AuthService {
         inviteTokenExpiry: null,
         status: "active",
         license_code: orgLicenseCode, // Ensure license_code is set
-        licenseId: orgLicenseCode === 'PLAN' ? 'Plan' : orgLicenseCode, // Ensure licenseId matches
+        licenseId: orgLicenseCode === "PLAN" ? "Plan" : orgLicenseCode, // Ensure licenseId matches
       });
 
       return {

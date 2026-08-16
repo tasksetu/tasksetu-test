@@ -923,8 +923,8 @@ export default function Login() {
                   <div className="h-9 w-9 rounded bg-blue-600 text-white text-xl font-bold flex items-center justify-center">
                     TS
                   </div>
-                 <span className="text-2xl font-semibold text-gray-800">
-                    TaskSetu -<span className="text-2xl text-blue-600"> UAT</span>
+                  <span className="text-2xl font-semibold text-gray-800">
+                    TaskSetu
                   </span>
                 </div>
 

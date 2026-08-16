@@ -17,6 +17,9 @@ import {
 } from "lucide-react";
 import MilestoneSubtaskForm from "../../forms/MilestoneSubtaskForm";
 import ApprovalSubtaskForm from "../../forms/ApprovalSubtaskForm";
+import EmailSubtaskForm from "../../forms/EmailSubtaskForm";
+import LinkedTaskSelector from "../workflow/LinkedTaskSelector";
+import { Mail } from "lucide-react";
 import { useAuth } from "../../features/shared/hooks/useAuth";
 import CustomEditor from "../common/CustomEditor";
 import SimpleFileUploader from "../common/SimpleFileUploader";
@@ -33,6 +36,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -186,6 +190,26 @@ const createSubtask = async (parentTaskId, formData, token) => {
         .filter(Boolean);
       formDataObj.append("approverIds", JSON.stringify(approverIds));
     }
+  }
+
+  // Workflow Engine Phase 2 fields
+  if (formData.emailConfig) {
+    formDataObj.append("emailConfig", JSON.stringify(formData.emailConfig));
+  }
+  if (formData.linkedTaskId) {
+    formDataObj.append("linkedTaskId", formData.linkedTaskId);
+  }
+  if (formData.contextTaskId) {
+    formDataObj.append("contextTaskId", formData.contextTaskId);
+  }
+  if (formData.sequence !== undefined) {
+    formDataObj.append("sequence", formData.sequence);
+  }
+  if (formData.workflowType) {
+    formDataObj.append("workflowType", formData.workflowType);
+  }
+  if (formData.configuration) {
+    formDataObj.append("configuration", JSON.stringify(formData.configuration));
   }
 
   // Visibility: Send as-is (Private/Public) - backend expects capitalized format
@@ -374,6 +398,24 @@ function SubtaskForm({
     tags: [], // Tags inherited from parent or edited independently
   });
 
+  // Linked task dependency state for standard subtasks
+  const [linkedTaskId, setLinkedTaskId] = useState(editData?.linkedTaskId || null);
+  const [autoInitiate, setAutoInitiate] = useState(
+    editData?.configuration?.autoInitiate || editData?.autoInitiate || false
+  );
+
+  useEffect(() => {
+    if (editData) {
+      setLinkedTaskId(editData.linkedTaskId || null);
+      setAutoInitiate(
+        editData.configuration?.autoInitiate || editData.autoInitiate || false
+      );
+    } else {
+      setLinkedTaskId(null);
+      setAutoInitiate(false);
+    }
+  }, [editData]);
+
   const handleSpecialSubtaskSubmit = async (type, formPayload) => {
     try {
       setIsLoading(true);
@@ -398,9 +440,11 @@ function SubtaskForm({
         priority: priorityVal,
         status: statusVal,
         taskType: type,
+        mainTaskType: parentTask?.mainTaskType || parentTask?.taskType || "regular",
         isSubtask: true,
         isMilestone: type === "milestone",
         isApprovalTask: type === "approval",
+        isEmailTask: type === "email",
         parentTaskId: parentTask?._id || parentTask?.id,
       };
 
@@ -409,7 +453,7 @@ function SubtaskForm({
         await onSubmit(subtaskPayload);
       }
       showSuccessToast(
-        `${type === "milestone" ? "Milestone" : "Approval"} Subtask created successfully`,
+        `${type.charAt(0).toUpperCase() + type.slice(1)} Subtask created successfully`,
       );
       if (typeof refreshTask === "function") {
         await refreshTask();
@@ -1009,7 +1053,14 @@ function SubtaskForm({
         }
 
         console.log("📡 Calling createSubtask API...");
-        const result = await createSubtask(parentTaskId, formData, finalToken);
+        const subtaskPayload = {
+          ...formData,
+          linkedTaskId: linkedTaskId || null,
+          configuration: {
+            autoInitiate: !!linkedTaskId && autoInitiate,
+          },
+        };
+        const result = await createSubtask(parentTaskId, subtaskPayload, finalToken);
         console.log("✅ API call completed, result:", result);
 
         if (result.success) {
@@ -1497,6 +1548,7 @@ function SubtaskForm({
     setIsDragActive(false);
     processAttachmentFiles(event.dataTransfer?.files);
   };
+
   const handleCancel = () => {
     setFormData({
       title: "",
@@ -1545,6 +1597,9 @@ function SubtaskForm({
               <ListTodo className="w-5 h-5 text-indigo-600" />
               {mode === "edit" ? "Edit Sub-task" : "Add Sub-task"}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Form for creating or editing sub-tasks
+            </DialogDescription>
             <p
               className="text-xs text-blue-600 mt-0.5 font-medium truncate"
               title={`+ Parent Task : ${parentTask?.title || "Unknown"}`}
@@ -1566,6 +1621,18 @@ function SubtaskForm({
                 >
                   <ListTodo className="w-3.5 h-3.5 text-indigo-600" />
                   Standard Subtask
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubtaskType("email")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold rounded-md transition-all ${
+                    subtaskType === "email"
+                      ? "bg-white text-blue-700 shadow-sm border border-blue-200"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
+                >
+                  <Mail className="w-3.5 h-3.5 text-blue-600" />
+                  Email Subtask
                 </button>
                 <button
                   type="button"
@@ -1595,7 +1662,18 @@ function SubtaskForm({
             )}
           </DialogHeader>
 
-          {subtaskType === "milestone" ? (
+          {subtaskType === "email" ? (
+            <div className="flex-1 overflow-y-auto p-4 bg-white">
+              <EmailSubtaskForm
+                user={currentUser}
+                isOrgUser={isOrgUser}
+                parentTask={parentTask}
+                isSubmitting={isLoading}
+                onCancel={onClose}
+                onSubmit={(data) => handleSpecialSubtaskSubmit("email", data)}
+              />
+            </div>
+          ) : subtaskType === "milestone" ? (
             <div className="flex-1 overflow-y-auto p-4 bg-white">
               <MilestoneSubtaskForm
                 user={currentUser}
@@ -2174,6 +2252,18 @@ function SubtaskForm({
                 </Button>
               )}
             </div>
+
+            {/* Linked Task Dependency & Auto Initiate */}
+            <LinkedTaskSelector
+              parentTaskId={parentTask?._id || parentTask?.id}
+              sequence={(parentTask?.subtaskCount || 0) + 1}
+              excludeTaskId={editData?._id}
+              linkedTaskId={linkedTaskId}
+              onLinkedTaskChange={setLinkedTaskId}
+              autoInitiate={autoInitiate}
+              onAutoInitiateChange={setAutoInitiate}
+              disabled={isLoading}
+            />
 
             <DialogFooter className="border-t border-gray-200 pt-4 px-0 flex items-center justify-end gap-2">
               <Button

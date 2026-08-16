@@ -100,6 +100,7 @@ const TaskFilters = React.memo(function TaskFilters({
           options={[
             { value: "all", label: "All Task Types" },
             { value: "Regular Task", label: "Regular Task" },
+            { value: "Email Task", label: "Email Task" },
             { value: "Recurring Task", label: "Recurring Task" },
             { value: "Milestone Task", label: "Milestone Task" },
             ...(activeRole !== "individual"

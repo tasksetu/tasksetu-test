@@ -62,7 +62,7 @@ class EmailService {
   /**
    * Generic email sending function for custom emails using Resend API
    */
-  async sendEmail({ to, subject, html, text, from }) {
+  async sendEmail({ to, subject, html, text, from, attachments }) {
     await this.checkConfiguration();
 
     if (!this.isConfigured) {
@@ -85,6 +85,10 @@ class EmailService {
         html: html || text,
         text: text || "Email notification from TaskSetu",
       };
+
+      if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+        emailData.attachments = attachments;
+      }
 
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",

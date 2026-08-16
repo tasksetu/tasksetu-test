@@ -1687,7 +1687,7 @@ export async function registerRoutes(app) {
       clientIdLength: process.env.GOOGLE_CLIENT_ID?.length || 0,
       clientSecretLength: process.env.GOOGLE_CLIENT_SECRET?.length || 0,
       redirectUri: `${
-        process.env.CLIENT_URL || "https://tasksetu.shrawantravels.com"
+        process.env.CLIENT_URL || "https://tasksetu.app"
       }/google-calendar-callback`,
       clientIdPreview: process.env.GOOGLE_CLIENT_ID?.substring(0, 20) + "...",
       clientSecretPreview:

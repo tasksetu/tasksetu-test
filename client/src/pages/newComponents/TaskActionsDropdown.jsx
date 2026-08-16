@@ -1,7 +1,16 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import { Eye, Plus, Pause, AlertTriangle, CheckCircle, Trash2, Clock, XCircle } from "lucide-react";
-import { Button } from '@/components/ui/button';
+import {
+  Eye,
+  Plus,
+  Pause,
+  AlertTriangle,
+  CheckCircle,
+  Trash2,
+  Clock,
+  XCircle,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useSubtask } from "../../contexts/SubtaskContext";
 import { useView } from "../../contexts/ViewContext";
 import { useLocation } from "wouter";
@@ -16,10 +25,9 @@ import {
   SnoozeTaskModal,
   MarkRiskModal,
   MitigationModal,
-  MarkDoneModal
-} from '../../components/modals/TaskModals';
-import UpgradeRequiredModal from '../../components/modals/UpgradeRequiredModal';
-
+  MarkDoneModal,
+} from "../../components/modals/TaskModals";
+import UpgradeRequiredModal from "../../components/modals/UpgradeRequiredModal";
 
 export default function TaskActionsDropdown({
   task,
@@ -44,24 +52,39 @@ export default function TaskActionsDropdown({
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const [, navigate] = useLocation();
 
-  const userStr = localStorage.getItem('user');
+  const userStr = localStorage.getItem("user");
   const user = userStr ? JSON.parse(userStr) : null;
   const userId = user?.id || user?._id;
 
-  const isAdmin = ['org_admin', 'company-admin', 'admin', 'super-admin', 'tasksetu-admin'].includes(activeRole);
-  const isOrgAdmin = ['org_admin', 'org-admin'].includes(activeRole);
-  const isManager = activeRole === 'manager';
+  const isAdmin = [
+    "org_admin",
+    "company-admin",
+    "admin",
+    "super-admin",
+    "tasksetu-admin",
+  ].includes(activeRole);
+  const isOrgAdmin = ["org_admin", "org-admin"].includes(activeRole);
+  const isManager = activeRole === "manager";
 
   const getId = (id) => {
     if (!id) return null;
-    return typeof id === 'object' ? (id._id || id.id) : id;
+    return typeof id === "object" ? id._id || id.id : id;
   };
 
   const isAssignee = getId(task?.assignedTo) === userId;
   const isCreator = getId(task?.createdBy) === userId;
-  const isCollaborator = (task?.collaborators || task?.collaboratorIds)?.some(id => getId(id) === userId) || false;
+  const isCollaborator =
+    (task?.collaborators || task?.collaboratorIds)?.some(
+      (id) => getId(id) === userId,
+    ) || false;
 
-  const canMarkRisk = isAdmin || isOrgAdmin || isManager || isAssignee || isCreator || isCollaborator;
+  const canMarkRisk =
+    isAdmin ||
+    isOrgAdmin ||
+    isManager ||
+    isAssignee ||
+    isCreator ||
+    isCollaborator;
 
   const [showSnoozeModal, setShowSnoozeModal] = useState(false);
   const [showMarkRiskModal, setShowMarkRiskModal] = useState(false);
@@ -72,7 +95,10 @@ export default function TaskActionsDropdown({
   const [cancelReason, setCancelReason] = useState("");
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
-  const snoozedUntil = task?.snoozedUntil || task?.snoozeUntil ? new Date(task?.snoozedUntil || task?.snoozeUntil) : null;
+  const snoozedUntil =
+    task?.snoozedUntil || task?.snoozeUntil
+      ? new Date(task?.snoozedUntil || task?.snoozeUntil)
+      : null;
   const now = new Date();
   const isSnoozed = snoozedUntil && snoozedUntil > now;
 
@@ -107,7 +133,8 @@ export default function TaskActionsDropdown({
       const m = menuRef.current;
       if (
         isOpen &&
-        t && m &&
+        t &&
+        m &&
         !t.contains(event.target) &&
         !m.contains(event.target)
       ) {
@@ -140,17 +167,22 @@ export default function TaskActionsDropdown({
 
   const handleUnsnoozeTask = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const taskIdToUnsnooze = task?._id || task?.id;
       const response = await axios.patch(
         `/api/tasks/${taskIdToUnsnooze}/unsnooze`,
         {},
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
       );
       if (response.data.success) {
-        showSuccessToast('Task woken up');
+        showSuccessToast("Task woken up");
         if (onSnooze) {
-          onSnooze({ action: 'unsnooze' });
+          onSnooze({ action: "unsnooze" });
         }
       }
     } catch (error) {
@@ -160,19 +192,19 @@ export default function TaskActionsDropdown({
 
   const handleUnmarkRisk = async (reason) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const taskId = task?._id || task?.id;
 
       const response = await axios.patch(
         `/api/tasks/${taskId}/unmark-risk`,
         { mitigationReason: reason },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
       if (response.data.success) {
-        showSuccessToast('Task marked as mitigated');
+        showSuccessToast("Task marked as mitigated");
         if (onMarkAsRisk) {
-          onMarkAsRisk({ action: 'unmark', reason });
+          onMarkAsRisk({ action: "unmark", reason });
         }
       }
     } catch (error) {
@@ -186,22 +218,27 @@ export default function TaskActionsDropdown({
     // If parent explicitly hides subtask options (e.g. for recurring instances)
     if (hideSubtaskOptions) return false;
 
-    if (['approval', 'quick'].includes(task.taskType)) return false;
+    if (["approval", "quick"].includes(task.taskType)) return false;
 
-    if (task.taskType === 'milestone') return false;
+    if (task.taskType === "milestone") return false;
 
     // Hide for recurring pattern tasks
-    if (task.taskType === 'recurring' && task.isRecurringPattern) return false;
+    if (task.taskType === "recurring" && task.isRecurringPattern) return false;
 
     // CHANGE 2: Also hide for recurring instance tasks
     // (instances are recurring tasks that are NOT the pattern — they're the expanded children)
-    if (task.taskType === 'recurring' && task.isRecurring === true && !task.isRecurringPattern) return false;
+    if (
+      task.taskType === "recurring" &&
+      task.isRecurring === true &&
+      !task.isRecurringPattern
+    )
+      return false;
 
-    if (userRole === 'employee' && task.status === 'ONHOLD') {
+    if (userRole === "employee" && task.status === "ONHOLD") {
       return false;
     }
 
-    if (!['regular', 'recurring'].includes(task.taskType)) {
+    if (!["regular", "recurring"].includes(task.taskType)) {
       return false;
     }
 
@@ -212,27 +249,30 @@ export default function TaskActionsDropdown({
     if (!task.subtasks || task.subtasks.length === 0) {
       return false;
     }
-    return task.subtasks.some(subtask =>
-      subtask.status !== 'DONE' && subtask.status !== 'CANCELLED'
+    return task.subtasks.some(
+      (subtask) => subtask.status !== "DONE" && subtask.status !== "CANCELLED",
     );
   };
 
   const hasIncomplete = hasIncompleteSubtasks(task);
 
-  const isMilestoneTask = task?.taskType === 'milestone';
+  const isMilestoneTask = task?.taskType === "milestone";
   const incompleteLinkedTasks = isMilestoneTask
-    ? (task?.linkedTasks || []).filter(lt => lt.status !== 'DONE' && lt.status !== 'CANCELLED')
+    ? (task?.linkedTasks || []).filter(
+        (lt) => lt.status !== "DONE" && lt.status !== "CANCELLED",
+      )
     : [];
   const hasIncompleteLinkedTasks = incompleteLinkedTasks.length > 0;
 
   const canMarkAsDone = isMilestoneTask
     ? !hasIncompleteLinkedTasks
-    : (!hasIncomplete || isAdmin);
-  const incompleteSubtasksCount = task.subtasks?.filter(st =>
-    st.status !== 'DONE' && st.status !== 'CANCELLED'
-  ).length || 0;
+    : !hasIncomplete || isAdmin;
+  const incompleteSubtasksCount =
+    task.subtasks?.filter(
+      (st) => st.status !== "DONE" && st.status !== "CANCELLED",
+    ).length || 0;
 
-  const isTaskDone = task?.status === 'DONE';
+  const isTaskDone = task?.status === "DONE";
 
   const isApproval = isApprovalTask(task);
   const isApprovalCreator =
@@ -281,16 +321,21 @@ export default function TaskActionsDropdown({
               <span className="font-medium">View</span>
             </button>
 
-            {(task?.status !== "CANCELLED" && task?.status !== "REJECTED" && task?.status !== "APPROVED")
-              ? (isApproval ? (
+            {task?.status !== "CANCELLED" &&
+            task?.status !== "REJECTED" &&
+            task?.status !== "APPROVED" ? (
+              isApproval ? (
                 <>
                   {isApprovalCreator && (
                     <Button
                       variant="ghost"
-                      className={`w-full text-left px-4 py-2 text-sm flex items-center gap-3 transition-colors justify-start h-auto rounded-none ${isTaskDone
-                        ? 'cursor-not-allowed text-gray-400 bg-gray-50 opacity-60'
-                        : task?.isRisk ? 'cursor-pointer text-emerald-600 hover:bg-emerald-50' : 'cursor-pointer text-gray-700 hover:bg-gray-50'
-                        }`}
+                      className={`w-full text-left px-4 py-2 text-sm flex items-center gap-3 transition-colors justify-start h-auto rounded-none ${
+                        isTaskDone
+                          ? "cursor-not-allowed text-gray-400 bg-gray-50 opacity-60"
+                          : task?.isRisk
+                            ? "cursor-pointer text-emerald-600 hover:bg-emerald-50"
+                            : "cursor-pointer text-gray-700 hover:bg-gray-50"
+                      }`}
                       onClick={(e) => {
                         if (!isTaskDone) {
                           e.stopPropagation();
@@ -305,11 +350,23 @@ export default function TaskActionsDropdown({
                       disabled={isTaskDone}
                     >
                       {task?.isRisk ? (
-                        <CheckCircle size={16} className={isTaskDone ? 'text-gray-400' : 'text-emerald-600'} />
+                        <CheckCircle
+                          size={16}
+                          className={
+                            isTaskDone ? "text-gray-400" : "text-emerald-600"
+                          }
+                        />
                       ) : (
-                        <AlertTriangle size={16} className={isTaskDone ? 'text-gray-400' : 'text-gray-600'} />
+                        <AlertTriangle
+                          size={16}
+                          className={
+                            isTaskDone ? "text-gray-400" : "text-gray-600"
+                          }
+                        />
                       )}
-                      <span className="font-medium">{task?.isRisk ? 'Mark as Mitigate' : 'Mark as Risk'}</span>
+                      <span className="font-medium">
+                        {task?.isRisk ? "Mark as Mitigate" : "Mark as Risk"}
+                      </span>
                     </Button>
                   )}
                   {isApprovalApprover && (
@@ -317,8 +374,8 @@ export default function TaskActionsDropdown({
                       variant="ghost"
                       className={`w-full text-left px-4 py-2 text-sm flex items-center gap-3 transition-colors justify-start h-auto rounded-none ${
                         isTaskDone
-                          ? 'cursor-not-allowed text-gray-400 bg-gray-50 opacity-60'
-                          : 'cursor-pointer text-red-600 hover:bg-red-50'
+                          ? "cursor-not-allowed text-gray-400 bg-gray-50 opacity-60"
+                          : "cursor-pointer text-red-600 hover:bg-red-50"
                       }`}
                       onClick={(e) => {
                         if (!isTaskDone) {
@@ -330,7 +387,12 @@ export default function TaskActionsDropdown({
                       }}
                       disabled={isTaskDone}
                     >
-                      <XCircle size={16} className={isTaskDone ? 'text-gray-400' : 'text-red-600'} />
+                      <XCircle
+                        size={16}
+                        className={
+                          isTaskDone ? "text-gray-400" : "text-red-600"
+                        }
+                      />
                       <span className="font-medium">Cancel</span>
                     </Button>
                   )}
@@ -341,29 +403,44 @@ export default function TaskActionsDropdown({
                     <>
                       <Button
                         variant="ghost"
-                        className={`w-full text-left px-4 py-2 text-sm flex items-center gap-3 transition-colors justify-start h-auto rounded-none ${isTaskDone
-                          ? 'cursor-not-allowed text-gray-400 bg-gray-50 opacity-60'
-                          : 'cursor-pointer text-gray-700 hover:bg-gray-50'
-                          }`}
+                        className={`w-full text-left px-4 py-2 text-sm flex items-center gap-3 transition-colors justify-start h-auto rounded-none ${
+                          isTaskDone
+                            ? "cursor-not-allowed text-gray-400 bg-gray-50 opacity-60"
+                            : "cursor-pointer text-gray-700 hover:bg-gray-50"
+                        }`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (task?.status === 'DONE') {
-                            showErrorToast('Cannot create subtask: Task is already completed.');
+                          if (task?.status === "DONE") {
+                            showErrorToast(
+                              "Cannot create subtask: Task is already completed.",
+                            );
                             return;
                           }
                           if (task?.isSubtask === true || task?.parentTaskId) {
-                            showErrorToast('Nested subtasks are not allowed. Only 1 level of hierarchy is supported.');
+                            showErrorToast(
+                              "Nested subtasks are not allowed. Only 1 level of hierarchy is supported.",
+                            );
                             return;
                           }
-                          if (task?.taskType === 'approval' || task?.isApprovalTask === true) {
-                            showErrorToast('Subtasks are not allowed for Approval tasks.');
+                          if (
+                            task?.taskType === "approval" ||
+                            task?.isApprovalTask === true
+                          ) {
+                            showErrorToast(
+                              "Subtasks are not allowed for Approval tasks.",
+                            );
                             return;
                           }
-                          if (task?.taskType === 'quick' || task?.isQuickTask === true) {
-                            showErrorToast('Subtasks are not allowed for Quick tasks.');
+                          if (
+                            task?.taskType === "quick" ||
+                            task?.isQuickTask === true
+                          ) {
+                            showErrorToast(
+                              "Subtasks are not allowed for Quick tasks.",
+                            );
                             return;
                           }
-                          if (!checkFeature('TASK_SUB')) {
+                          if (!checkFeature("TASK_SUB")) {
                             setIsOpen(false);
                             setShowUpgradeModal(true);
                             return;
@@ -373,7 +450,12 @@ export default function TaskActionsDropdown({
                         }}
                         disabled={isTaskDone}
                       >
-                        <Plus size={16} className={isTaskDone ? 'text-gray-400' : 'text-gray-600'} />
+                        <Plus
+                          size={16}
+                          className={
+                            isTaskDone ? "text-gray-400" : "text-gray-600"
+                          }
+                        />
                         <span className="font-medium">Create Sub-task</span>
                       </Button>
 
@@ -383,7 +465,7 @@ export default function TaskActionsDropdown({
                         onClick={(e) => {
                           e.stopPropagation();
                           setIsOpen(false);
-                          if (!checkFeature('TASK_SUB')) {
+                          if (!checkFeature("TASK_SUB")) {
                             setIsOpen(false);
                             setShowUpgradeModal(true);
                             return;
@@ -430,7 +512,7 @@ export default function TaskActionsDropdown({
                   {canMarkRisk && !isTaskDone && (
                     <Button
                       variant="ghost"
-                      className={`w-full text-left cursor-pointer px-4 py-2 text-sm flex items-center gap-3 transition-colors justify-start h-auto rounded-none ${task?.isRisk ? 'text-emerald-600 hover:bg-emerald-50' : 'text-gray-700 hover:bg-gray-50'}`}
+                      className={`w-full text-left cursor-pointer px-4 py-2 text-sm flex items-center gap-3 transition-colors justify-start h-auto rounded-none ${task?.isRisk ? "text-emerald-600 hover:bg-emerald-50" : "text-gray-700 hover:bg-gray-50"}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         setIsOpen(false);
@@ -446,7 +528,9 @@ export default function TaskActionsDropdown({
                       ) : (
                         <AlertTriangle size={16} className="text-gray-600" />
                       )}
-                      <span className="font-medium">{task?.isRisk ? 'Mark as Mitigate' : 'Mark as Risk'}</span>
+                      <span className="font-medium">
+                        {task?.isRisk ? "Mark as Mitigate" : "Mark as Risk"}
+                      </span>
                     </Button>
                   )}
 
@@ -461,7 +545,9 @@ export default function TaskActionsDropdown({
                       }}
                     >
                       <CheckCircle size={16} className="text-green-600" />
-                      <span className="font-medium text-green-600">Mark as Done</span>
+                      <span className="font-medium text-green-600">
+                        Mark as Done
+                      </span>
                     </Button>
                   )}
 
@@ -481,13 +567,18 @@ export default function TaskActionsDropdown({
                     </Button>
                   )}
                 </>
-              ))
-              : null}
+              )
+            ) : null}
           </div>,
-          document.body
+          document.body,
         )}
 
-      {(showSnoozeModal || showMarkRiskModal || showMitigationModal || showMarkDoneModal || showDeleteModal || showCancelModal) &&
+      {(showSnoozeModal ||
+        showMarkRiskModal ||
+        showMitigationModal ||
+        showMarkDoneModal ||
+        showDeleteModal ||
+        showCancelModal) &&
         createPortal(
           <>
             <SnoozeTaskModal
@@ -547,7 +638,10 @@ export default function TaskActionsDropdown({
                   <div className="px-6 pt-3.5 pb-2.5 border-b border-gray-200 bg-gray-50/80 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <XCircle className="w-5 h-5 text-red-500 shrink-0" />
-                      <span className="text-xl font-normal" style={{ color: "#676a6c" }}>
+                      <span
+                        className="text-xl font-normal"
+                        style={{ color: "#676a6c" }}
+                      >
                         Cancel Task
                       </span>
                     </div>
@@ -563,12 +657,14 @@ export default function TaskActionsDropdown({
                   {/* Body */}
                   <div className="p-6 space-y-3.5 bg-white">
                     <p className="text-xs text-gray-500 font-normal">
-                      Are you sure you want to cancel this task? Please provide a reason below.
+                      Are you sure you want to cancel this task? Please provide
+                      a reason below.
                     </p>
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider block">
-                        Reason for cancellation <span className="text-red-500">*</span>
+                        Reason for cancellation{" "}
+                        <span className="text-red-500">*</span>
                       </label>
                       <textarea
                         value={cancelReason}
@@ -611,9 +707,8 @@ export default function TaskActionsDropdown({
               </div>
             )}
           </>,
-          document.body
-        )
-      }
+          document.body,
+        )}
 
       <UpgradeRequiredModal
         isOpen={showUpgradeModal}

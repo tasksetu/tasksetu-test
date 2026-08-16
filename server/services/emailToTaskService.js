@@ -189,12 +189,7 @@ class EmailToTaskService {
       });
 
       this.imap.once("error", (err) => {
-        console.error("📧 [EMAIL-TO-TASK] ❌ IMAP Error:", err.message);
-
-        // CRITICAL: We must resolve/reject so the server initialization can continue
-        // We resolve here because we want the main server to start even if IMAP fails
         resolve();
-
         this.scheduleReconnect();
       });
 

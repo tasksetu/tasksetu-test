@@ -24,6 +24,7 @@ import supportRoutes from "./routes/supportRoutes.js";
 import superAdminDashboardRoutes from "./routes/superAdminDashboardRoutes.js";
 import superAdminRoutes from "./routes/superAdminRoutes.js";
 import cronDebugRoutes from "./routes/cronDebugRoutes.js"; // ✅ NEW: Cron debug & test routes
+import workflowRoutes from "./routes/workflowRoutes.js"; // ✅ Workflow Engine routes
 // Import from centralized models.js to avoid duplicate model compilation
 import { FormCategory, FormTag } from "./models.js";
 import { FormVersion } from "./modals/formVersionModal.js";
@@ -321,7 +322,10 @@ const connectToMongoDB = async () => {
 
       // ✅ NEW: Cron debug & manual trigger routes (admin only)
       app.use("/api/cron", cronDebugRoutes);
-      // console.log("Support routes registered");
+
+      // ✅ Workflow Engine routes (Phases 3-13)
+      app.use("/api/workflow", workflowRoutes);
+      console.log("✅ Workflow Engine routes registered at /api/workflow");
     } catch (routeError) {
       console.error("Error registering routes:", routeError);
       throw routeError;
@@ -373,6 +377,21 @@ const connectToMongoDB = async () => {
     // Don't exit the process, just log the error
   }
 
+  // ✅ Workflow Engine Scheduler (Phase 9)
+  // Runs every hour: auto-complete tasks, auto-approve approval tasks
+  try {
+    const { SchedulerService } = await import("./workflow/SchedulerService.js");
+    cron.schedule("0 * * * *", async () => {
+      console.log("[WorkflowScheduler] Running hourly jobs...");
+      await SchedulerService.runAutoCompleteJob().catch(console.error);
+      await SchedulerService.runAutoApprovalJob().catch(console.error);
+      await SchedulerService.runEmailAutoCompleteJob().catch(console.error);
+    });
+    console.log("✅ Workflow Engine scheduler initialized (runs hourly)");
+  } catch (schedulerError) {
+    console.error("Failed to initialize workflow scheduler:", schedulerError);
+  }
+
   // Important: This setup is for production. In development, Vite will handle HMR.
   // Default to production if running from dist folder or NODE_ENV is not explicitly 'development'
   const isRunningFromDist = import.meta.dirname?.includes("dist") || false;
@@ -398,7 +417,7 @@ const connectToMongoDB = async () => {
       console.log("TaskSetu Server running on port:",PORT);
     })
     .on("error", (err) => {
-      console.error(`Failed to start server on port ${PORT}:`, err);
+      console.error(`Failed to start TaskSetu Server on port ${PORT}:`, err);
       process.exit(1);
     });
 })();

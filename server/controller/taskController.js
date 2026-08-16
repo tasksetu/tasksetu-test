@@ -56,6 +56,7 @@ import { User } from "../modals/userModal.js";
 import Task from "../modals/taskModal.js";
 import TaskStatusConfig from "../modals/taskStatusConfigModal.js";
 import TaskPriorityConfig from "../modals/taskPriorityConfigModal.js";
+import { LinkedTaskService } from "../workflow/LinkedTaskService.js";
 
 /**
  * 🔄 Recalculate and update parent task status & progress based on active subtasks
@@ -2473,6 +2474,27 @@ export const createSubtask = async (req, res) => {
       validLinkedTaskIds = [parentTaskId.toString()];
     }
 
+    // ✉️ Mandatory Email Task Validation
+    if (subtaskType === "email" || parsedTaskData.taskType === "email") {
+      let cfg = parsedTaskData.emailConfig;
+      if (typeof cfg === "string") {
+        try { cfg = JSON.parse(cfg); } catch(e) {}
+      }
+      const validRecs = (cfg?.recipients || []).filter((r) => r && r.email && r.email.trim() !== "");
+      if (!cfg || validRecs.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "At least one recipient with a valid email address is required for Email Tasks.",
+        });
+      }
+      if (!cfg.body || !cfg.body.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Email Body / Message is required for Email Tasks.",
+        });
+      }
+    }
+
     const finalMilestoneData = isMilestoneSubtask
       ? {
           type: finalMilestoneType,
@@ -2495,7 +2517,7 @@ export const createSubtask = async (req, res) => {
       startDate: parsedTaskData.startDate
         ? new Date(parsedTaskData.startDate)
         : null,
-      taskType: subtaskType, // ✅ Support explicit subtask taskType (regular / milestone / approval)
+      taskType: subtaskType, // ✅ Support explicit subtask taskType (regular / milestone / approval / email)
       mainTaskType: parentTask.mainTaskType || parentTask.taskType || "regular", // ✅ Inherit main task category from parent task
       parentTaskId,
       tags: parsedTaskData.tags,
@@ -2534,6 +2556,53 @@ export const createSubtask = async (req, res) => {
       approvalStatus: parsedTaskData.approvalStatus
         ? String(parsedTaskData.approvalStatus).toLowerCase()
         : (subtaskType === "approval" || parsedTaskData.isApprovalTask === true ? "pending" : undefined),
+      // ─── Workflow Engine Fields ──────────────────────────────────────────
+      workflowType: parsedTaskData.workflowType || null,
+      sequence: parsedTaskData.sequence !== undefined ? Number(parsedTaskData.sequence) : 0,
+      linkedTaskId: parsedTaskData.linkedTaskId || null,
+      contextTaskId: parsedTaskData.contextTaskId || null,
+      autoInitiate: parsedTaskData.autoInitiate !== undefined ? Boolean(parsedTaskData.autoInitiate) : false,
+      configuration: (function() {
+        let cfg = { autoInitiate: false, autoComplete: false, autoCompleteAfterDays: null, parentCancellationMode: "ignore_rejection" };
+        if (parsedTaskData.configuration) {
+          if (typeof parsedTaskData.configuration === "string") {
+            try { cfg = { ...cfg, ...JSON.parse(parsedTaskData.configuration) }; } catch(e) {}
+          } else if (typeof parsedTaskData.configuration === "object") {
+            cfg = { ...cfg, ...parsedTaskData.configuration };
+          }
+        }
+        if (parsedTaskData.autoInitiate !== undefined) {
+          cfg.autoInitiate = Boolean(parsedTaskData.autoInitiate);
+        }
+        return cfg;
+      })(),
+      emailConfig: (function() {
+        if (!parsedTaskData.emailConfig) return null;
+        let cfg = parsedTaskData.emailConfig;
+        if (typeof cfg === "string") {
+          try { cfg = JSON.parse(cfg); } catch(e) {}
+        }
+        if (cfg && typeof cfg === "object") {
+          if (!cfg.attachedFormId || cfg.attachedFormId === "") {
+            cfg.attachedFormId = null;
+          }
+          if (Array.isArray(cfg.recipients)) {
+            cfg.recipients = cfg.recipients.map((r) => ({
+              ...r,
+              formId: (!r.formId || r.formId === "") ? null : r.formId,
+              previousTaskId: (!r.previousTaskId || r.previousTaskId === "") ? null : r.previousTaskId,
+              source: r.source || "manual",
+            }));
+          }
+          if (Array.isArray(cfg.variables)) {
+            cfg.variables = cfg.variables.map((v) => ({
+              ...v,
+              formId: (!v.formId || v.formId === "") ? null : v.formId,
+            }));
+          }
+        }
+        return cfg;
+      })(),
       isArchived: false,
       isDeleted: false,
       createdAt: new Date(),
@@ -2545,6 +2614,21 @@ export const createSubtask = async (req, res) => {
     if (parentTask.companyId) subtaskData.companyId = parentTask.companyId;
 
     const createdSubtask = await storage.createTask(subtaskData);
+
+    // 📧 Trigger email send if this is an Email Task with recipients
+    if (
+      subtaskType === "email" &&
+      createdSubtask.emailConfig?.recipients?.length > 0
+    ) {
+      try {
+        const { EmailTaskService } = await import("../workflow/EmailTaskService.js");
+        EmailTaskService.sendEmailTask(createdSubtask).catch((err) =>
+          console.error("❌ [taskController] Email subtask send failed:", err),
+        );
+      } catch (emailErr) {
+        console.error("❌ [taskController] Failed to load EmailTaskService:", emailErr);
+      }
+    }
 
     // Bidirectional link for milestone subtasks with linked tasks
     if (isMilestoneSubtask && validLinkedTaskIds.length > 0) {
@@ -2972,11 +3056,29 @@ export const updateSubtask = async (req, res) => {
     // Track previous assignee for counter adjustments
     const prevAssignee = subtask.assignedTo?.toString();
 
+    // ❌ LINKED TASK DEPENDENCY VALIDATION: Prevent status change if prerequisite linked task is not completed
+    if (subtask.linkedTaskId && updates.status && String(updates.status).trim().toUpperCase() !== String(subtask.status || "").trim().toUpperCase()) {
+      try {
+        await LinkedTaskService.validateLinkedTaskCompletion(subtask);
+      } catch (depErr) {
+        return res.status(400).json({
+          success: false,
+          message: depErr.message,
+          error: "LINKED_TASK_NOT_COMPLETED",
+        });
+      }
+    }
+
     // Prepare update data - map 'assignee' to 'assignedTo' if present
     const updateData = {
       ...updates,
       updatedAt: new Date(),
     };
+
+    if (updates.autoInitiate !== undefined) {
+      updateData.autoInitiate = Boolean(updates.autoInitiate);
+      updateData["configuration.autoInitiate"] = Boolean(updates.autoInitiate);
+    }
 
     // Handle field name mapping: frontend sends 'assignee', backend uses 'assignedTo'
     if (updates.assignee) {
@@ -3087,6 +3189,13 @@ export const updateSubtask = async (req, res) => {
       updateData,
       user.id,
     );
+
+    // 🔗 Trigger Linked Task Engine auto-initiate if completed
+    if (["DONE", "COMPLETED"].includes(String(updatedSubtask?.status || "").toUpperCase())) {
+      await LinkedTaskService.onTaskCompleted(subtaskId).catch((err) =>
+        console.error("❌ Auto-initiate failed in updateSubtask:", err.message)
+      );
+    }
 
     // Recalculate counters for affected users (old and new assignee if changed)
     const newAssignee =
@@ -6739,6 +6848,19 @@ export const updateTask = async (req, res) => {
     if (updates.status !== undefined && updates.status !== null) {
       const normalized = String(updates.status).trim().toUpperCase();
 
+      // ❌ LINKED TASK DEPENDENCY VALIDATION: Prevent status change if prerequisite linked task is not completed
+      if (task.linkedTaskId && normalized !== String(task.status || "").trim().toUpperCase()) {
+        try {
+          await LinkedTaskService.validateLinkedTaskCompletion(task);
+        } catch (depErr) {
+          return res.status(400).json({
+            success: false,
+            message: depErr.message,
+            error: "LINKED_TASK_NOT_COMPLETED",
+          });
+        }
+      }
+
       // ✅ SUBTASK COMPLETION VALIDATION
       // Ensure all subtasks are completed before marking parent as DONE
       if (["DONE", "COMPLETED"].includes(normalized)) {
@@ -7059,6 +7181,13 @@ export const updateTask = async (req, res) => {
       }
     }
 
+    // 🔗 Trigger Linked Task Engine auto-initiate if completed
+    if (updates.status && ["DONE", "COMPLETED"].includes(String(updates.status).trim().toUpperCase())) {
+      await LinkedTaskService.onTaskCompleted(id).catch((err) =>
+        console.error("❌ Auto-initiate failed in updateTask:", err.message)
+      );
+    }
+
     // 📜 Log Audit Logs
     try {
       if (updates.status && prevStatus !== updates.status) {
@@ -7230,6 +7359,19 @@ export const updateTaskStatus = async (req, res) => {
         success: false,
         message: "Task not found",
       });
+    }
+
+    // ❌ LINKED TASK DEPENDENCY VALIDATION: Prevent status change if prerequisite linked task is not completed
+    if (task.linkedTaskId && normalizedStatus !== String(task.status || "").trim().toUpperCase()) {
+      try {
+        await LinkedTaskService.validateLinkedTaskCompletion(task);
+      } catch (depErr) {
+        return res.status(400).json({
+          success: false,
+          message: depErr.message,
+          error: "LINKED_TASK_NOT_COMPLETED",
+        });
+      }
     }
 
 
@@ -7501,6 +7643,12 @@ export const updateTaskStatus = async (req, res) => {
       }
       const Task = (await import("../modals/taskModal.js")).default;
       await Task.findByIdAndUpdate(id, updateData);
+
+      if (["DONE", "COMPLETED"].includes(normalizedStatus)) {
+        await LinkedTaskService.onTaskCompleted(id).catch((err) =>
+          console.error("❌ Auto-initiate failed in updateTaskStatus (subtask):", err.message)
+        );
+      }
 
       // After subtask update, fetch all siblings and auto-update parent
       const parentTask = await getParentTaskIfSubtask(task);
@@ -7790,6 +7938,12 @@ export const updateTaskStatus = async (req, res) => {
 
     // Update only the status
     const updatedTask = await storage.updateTask(id, updateData, user.id);
+
+    if (["DONE", "COMPLETED"].includes(normalizedStatus)) {
+      await LinkedTaskService.onTaskCompleted(id).catch((err) =>
+        console.error("❌ Auto-initiate failed in updateTaskStatus (task):", err.message)
+      );
+    }
 
     // 🔄 If this task is a subtask, recalculate parent task's status and progress
     if (updatedTask?.isSubtask && updatedTask?.parentTaskId) {
@@ -10590,6 +10744,11 @@ export const quickMarkAsDone = async (req, res) => {
       updatedBy: user.id,
       updatedAt: new Date(),
     });
+
+    // 🔗 Trigger Linked Task Engine auto-initiate if completed
+    await LinkedTaskService.onTaskCompleted(taskId).catch((err) =>
+      console.error("❌ Auto-initiate failed in quickMarkAsDone:", err.message)
+    );
 
     // Recalculate counters for current assignee
     await recalcUserTaskCounters(updatedTask?.assignedTo);

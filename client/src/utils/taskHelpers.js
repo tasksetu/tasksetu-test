@@ -2,6 +2,7 @@ import { getTaskTypeInfo } from "../pages/TaskTypeUtils";
 
 export const getTaskType = (task) => {
   if (!task) return "Regular Task";
+  if (task.taskType === "email") return "Email Task";
   if (task.isApprovalTask || task.taskType === "approval") return "Approval Task";
   if (task.isRecurring || task.recurringFromTaskId || task.taskType === "recurring") return "Recurring Task";
   if (task.isMilestone || task.taskType === "milestone" || task.mainTaskType === "milestone") return "Milestone Task";

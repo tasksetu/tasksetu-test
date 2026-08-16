@@ -33,11 +33,12 @@ export const authenticateToken = async (req, res, next) => {
     req.user = {
       id: user._id,
       userId: user._id,
-      _id: user._id,    
+      _id: user._id,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+      name:
+        `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email,
       role: user.role,
       phone: user.phone || "",
       phoneVerified: user.phoneVerified || false,
@@ -50,14 +51,14 @@ export const authenticateToken = async (req, res, next) => {
 
     next();
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
+    if (error.name === "TokenExpiredError") {
       console.log("Auth middleware - Token expired at:", error.expiredAt);
       return res.status(401).json({
         error: "Token expired",
         message: "Your session has expired. Please login again.",
-        expiredAt: error.expiredAt
+        expiredAt: error.expiredAt,
       });
-    } else if (error.name === 'JsonWebTokenError') {
+    } else if (error.name === "JsonWebTokenError") {
       console.log("Auth middleware - Invalid token:", error.message);
       return res.status(403).json({ error: "Invalid token" });
     } else {
@@ -70,16 +71,16 @@ export const authenticateToken = async (req, res, next) => {
 export const roleAuth = (allowedRoles) => (req, res, next) => {
   const userRole = req.user?.role;
   if (!userRole) {
-    return res.status(403).json({ message: 'Forbidden' });
+    return res.status(403).json({ message: "Forbidden" });
   }
   // Support both string and array roles
   if (Array.isArray(userRole)) {
-    if (!userRole.some(role => allowedRoles.includes(role))) {
-      return res.status(403).json({ message: 'Forbidden' });
+    if (!userRole.some((role) => allowedRoles.includes(role))) {
+      return res.status(403).json({ message: "Forbidden" });
     }
   } else {
     if (!allowedRoles.includes(userRole)) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: "Forbidden" });
     }
   }
   next();
@@ -93,11 +94,13 @@ export const requireRole = (allowedRoles) => {
     const userRole = req.user.role;
 
     // console.log('allowed role', userRole, allowedRoles)
-    if (userRole.some(role => allowedRoles.includes(role))) {
+    if (userRole.some((role) => allowedRoles.includes(role))) {
       return next();
     }
 
-    return res.status(403).json({ error: "Insufficient permissions debuger 2" });
+    return res
+      .status(403)
+      .json({ error: "Insufficient permissions debuger 2" });
   };
 };
 
@@ -123,7 +126,11 @@ export const requireOrgAdminOnly = (req, res, next) => {
   }
 
   // Allow 'org_admin', 'admin', and 'manager' roles for organization management
-  if (req.user.role !== "org_admin" && req.user.role !== "admin" && req.user.role !== "manager") {
+  if (
+    req.user.role !== "org_admin" &&
+    req.user.role !== "admin" &&
+    req.user.role !== "manager"
+  ) {
     return res.status(403).json({
       error:
         "Access denied. This feature is only available to organization administrators.",
@@ -137,16 +144,17 @@ export const requireOrgAdminOnly = (req, res, next) => {
 export const requireOrganizationManagement = (req, res, next) => {
   // Explicitly block individual users from organization management
   if (req.user && req.user.role === "individual") {
-    return res
-      .status(403)
-      .json({
-        error:
-          "Individual users cannot access organization management features",
-      });
+    return res.status(403).json({
+      error: "Individual users cannot access organization management features",
+    });
   }
 
   // Allow super_admin, org_admin, admin, and manager roles
-  return requireRole(["super_admin", "org_admin", "admin", "manager"])(req, res, next);
+  return requireRole(["super_admin", "org_admin", "admin", "manager"])(
+    req,
+    res,
+    next,
+  );
 };
 
 export const requireOrganizationAccess = async (req, res, next) => {
@@ -156,11 +164,9 @@ export const requireOrganizationAccess = async (req, res, next) => {
 
     // Individual users should not access organization features
     if (user.role === "individual") {
-      return res
-        .status(403)
-        .json({
-          error: "Individual users cannot access organization features",
-        });
+      return res.status(403).json({
+        error: "Individual users cannot access organization features",
+      });
     }
 
     // Super admins have access to all organizations

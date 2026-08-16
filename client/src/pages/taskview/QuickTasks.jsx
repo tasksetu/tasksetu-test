@@ -793,7 +793,7 @@ export default function QuickTasks() {
                   );
                   setNewTaskDueDate("");
                 }}
-                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium h-8 px-4 rounded-sm"
+                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium h-8 px-4 rounded-sm !h-8"
                 style={{ height: "32px", minHeight: "32px" }}
               >
                 Cancel
@@ -801,7 +801,7 @@ export default function QuickTasks() {
               <Button
                 type="submit"
                 disabled={!newTaskTitle.trim() || isCreating}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium h-8 px-4 rounded-sm shadow-sm disabled:opacity-50"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium h-8 px-4 rounded-sm shadow-sm disabled:opacity-50 !h-8"
                 style={{ height: "32px", minHeight: "32px" }}
               >
                 {isCreating ? "Creating..." : "Create Quick Task"}
@@ -935,7 +935,7 @@ export default function QuickTasks() {
                   );
                   setEditTaskDueDate("");
                 }}
-                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium h-8 px-4 rounded-sm"
+                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium h-8 px-4 rounded-sm !h-8"
                 style={{ height: "32px", minHeight: "32px" }}
               >
                 Cancel
@@ -943,7 +943,7 @@ export default function QuickTasks() {
               <Button
                 type="submit"
                 disabled={!editTaskTitle.trim() || isUpdating}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium h-8 px-4 rounded-sm shadow-sm disabled:opacity-50"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium h-8 px-4 rounded-sm shadow-sm disabled:opacity-50 !h-8"
                 style={{ height: "32px", minHeight: "32px" }}
               >
                 {isUpdating ? "Updating..." : "Save Changes"}

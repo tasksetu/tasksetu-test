@@ -1,4 +1,4 @@
-import { FileText, RotateCcw, Target, CheckCircle } from 'lucide-react';
+import { FileText, RotateCcw, Target, CheckCircle, Mail } from 'lucide-react';
 
 export const getTaskTypeInfo = (taskType) => {
   const taskTypes = {
@@ -9,6 +9,14 @@ export const getTaskTypeInfo = (taskType) => {
       bgColor: "bg-blue-50",
       borderColor: "border-blue-200",
       textColor: "text-blue-700",
+    },
+    email: {
+      iconName: "Mail",
+      label: "Email Task",
+      color: "#0EA5E9",
+      bgColor: "bg-sky-50",
+      borderColor: "border-sky-200",
+      textColor: "text-sky-700",
     },
     recurring: {
       iconName: "RotateCcw",
@@ -43,6 +51,8 @@ export const getTaskTypeIcon = (taskType, size = 16, className = "") => {
   const taskInfo = getTaskTypeInfo(taskType);
   
   switch(taskInfo.iconName) {
+    case "Mail":
+      return <Mail size={size} className={className || "text-sky-600"} />;
     case "FileText":
       return <FileText size={size} className={className || "text-blue-600"} />;
     case "RotateCcw":

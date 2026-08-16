@@ -322,16 +322,22 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
               : taskData.visibility || "Private",
           colorCode: taskData.colorCode || "#007bff",
           subtasks: subtasksData.map((subtask) => ({
+            ...subtask,
             id: subtask._id,
             _id: subtask._id,
             title: subtask.title,
             description: subtask.description,
+            taskType: subtask.taskType || "regular",
+            emailConfig: subtask.emailConfig || null,
+            attachments: subtask.attachments || [],
             status: subtask.status?.toUpperCase() || "TODO",
             priority: subtask.priority || "medium",
             assignee: subtask.assignedTo
-              ? `${subtask.assignedTo.firstName} ${subtask.assignedTo.lastName}`.trim()
+              ? (typeof subtask.assignedTo === "object"
+                  ? `${subtask.assignedTo.firstName || ""} ${subtask.assignedTo.lastName || ""}`.trim() || subtask.assignedTo.email
+                  : subtask.assignedTo)
               : "Unassigned",
-            assigneeId: subtask.assignedTo?._id || null,
+            assigneeId: subtask.assignedTo?._id || subtask.assignedTo || null,
             dueDate: subtask.dueDate
               ? new Date(subtask.dueDate)
                   .toLocaleDateString("en-GB", {
@@ -342,7 +348,9 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
                   .replace(",", "")
               : "No due date",
             createdBy: subtask.createdBy
-              ? `${subtask.createdBy.firstName} ${subtask.createdBy.lastName}`.trim()
+              ? (typeof subtask.createdBy === "object"
+                  ? `${subtask.createdBy.firstName || ""} ${subtask.createdBy.lastName || ""}`.trim() || subtask.createdBy.email
+                  : subtask.createdBy)
               : "Unknown",
             createdAt: subtask.createdAt,
             parentTaskId: subtask.parentTaskId,

@@ -565,10 +565,10 @@ export function MitigationModal({ isOpen, onClose, onConfirm, task }) {
           </div>
         </div>
 
-        <div className="modal-actions flex justify-between px-6 py-4 bg-gray-50 border-t border-gray-100">
-          <Button variant="outline" className="h-8" onClick={onClose}>Cancel</Button>
+        <div className="modal-actions flex flex-col gap-2.5 p-5 bg-gray-50/50 border-t border-gray-100">
+          <Button variant="outline" className="w-full h-10 bg-white border-gray-300 hover:bg-gray-50 text-gray-700 font-medium rounded-md" onClick={onClose}>Cancel</Button>
           <Button
-            className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white"
+            className="w-full h-10 bg-[#68d391] hover:bg-emerald-600 text-white font-medium rounded-md disabled:opacity-50"
             onClick={handleConfirm}
             disabled={!mitigationReason.trim()}
           >

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useLocation } from "wouter";
 import { createPortal } from "react-dom";
-import { AlertTriangle, CheckCircle, XCircle, Clock, Eye } from "lucide-react";
+import { AlertTriangle, CheckCircle, CheckCircle2, XCircle, Clock, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SnoozeTaskModal, MarkDoneModal } from "@/components/modals/TaskModals";
 import {
@@ -50,6 +50,9 @@ export default function SubtaskActionsDropdown({
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelLoading, setCancelLoading] = useState(false);
+
+  // Check risk state on subtask
+  const isSubtaskRisk = !!(subtask?.isRisk || subtask?.is_risk || subtask?.isAtRisk);
 
   // Handlers for status changes (Mark as Done / Cancel)
   const handleMarkDone = async () => {
@@ -375,22 +378,22 @@ export default function SubtaskActionsDropdown({
                   </Button>
                 )}
 
-                {!isTaskFinished && !subtask.isRisk && (
+                {!isTaskFinished && !isSubtaskRisk && (
                   <Button
                     variant="ghost"
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3 transition-colors justify-start h-auto rounded-none"
+                    className="w-full text-left px-4 py-2 text-sm text-amber-600 hover:bg-amber-50 flex items-center gap-3 transition-colors justify-start h-auto rounded-none"
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsOpen(false);
                       setShowRiskModal(true);
                     }}
                   >
-                    <AlertTriangle size={16} className="text-gray-600" />
-                    <span>Mark as Risk</span>
+                    <AlertTriangle size={16} className="text-amber-500" />
+                    <span className="font-medium text-amber-600">Mark as Risk</span>
                   </Button>
                 )}
 
-                {!isTaskFinished && subtask.isRisk && (
+                {!isTaskFinished && isSubtaskRisk && (
                   <Button
                     variant="ghost"
                     className="w-full text-left px-4 py-2 text-sm text-emerald-600 hover:bg-emerald-50 flex items-center gap-3 transition-colors justify-start h-auto rounded-none"
@@ -400,8 +403,8 @@ export default function SubtaskActionsDropdown({
                       setShowMitigationModal(true);
                     }}
                   >
-                    <CheckCircle size={16} className="text-emerald-600" />
-                    <span>Mark as Mitigated</span>
+                    <CheckCircle2 size={16} className="text-emerald-600" />
+                    <span className="font-medium text-emerald-600">Mark as Mitigated</span>
                   </Button>
                 )}
 
@@ -465,10 +468,10 @@ export default function SubtaskActionsDropdown({
                   </Button>
                 )}
 
-                {!isTaskFinished && !subtask.isRisk && (
+                {!isTaskFinished && !isSubtaskRisk && (
                   <Button
                     variant="ghost"
-                    className="w-full text-left px-4 py-2 text-sm text-yellow-600 hover:bg-yellow-50 flex items-center gap-3 transition-colors justify-start h-auto rounded-none"
+                    className="w-full text-left px-4 py-2 text-sm text-amber-600 hover:bg-amber-50 flex items-center gap-3 transition-colors justify-start h-auto rounded-none"
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsOpen(false);
@@ -476,21 +479,15 @@ export default function SubtaskActionsDropdown({
                     }}
                     title="Mark this subtask as a risk item"
                   >
-                    <svg
-                      className="w-4 h-4"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M10.5 1.5H9.5L1.5 16h17L10.5 1.5zM10 13a1 1 0 110-2 1 1 0 010 2zm0-4a1 1 0 100-2 1 1 0 000 2z" />
-                    </svg>
-                    Mark as Risk
+                    <AlertTriangle size={16} className="text-amber-500" />
+                    <span className="font-medium text-amber-600">Mark as Risk</span>
                   </Button>
                 )}
 
-                {!isTaskFinished && subtask.isRisk && (
+                {!isTaskFinished && isSubtaskRisk && (
                   <Button
                     variant="ghost"
-                    className="w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50 flex items-center gap-3 transition-colors justify-start h-auto rounded-none"
+                    className="w-full text-left px-4 py-2 text-sm text-emerald-600 hover:bg-emerald-50 flex items-center gap-3 transition-colors justify-start h-auto rounded-none"
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsOpen(false);
@@ -498,18 +495,8 @@ export default function SubtaskActionsDropdown({
                     }}
                     title="Mark this risk as mitigated"
                   >
-                    <svg
-                      className="w-4 h-4"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    Mark as Mitigated
+                    <CheckCircle2 size={16} className="text-emerald-600" />
+                    <span className="font-medium text-emerald-600">Mark as Mitigated</span>
                   </Button>
                 )}
 
@@ -635,59 +622,41 @@ export default function SubtaskActionsDropdown({
           open={showMitigationModal}
           onOpenChange={(open) => !open && setShowMitigationModal(false)}
         >
-          <DialogContent className="max-w-xl w-full sm:max-w-xl p-0 overflow-hidden bg-white border border-gray-200 shadow-xl rounded-sm font-sans text-gray-800 flex flex-col gap-0 z-[2000]">
+          <DialogContent className="max-w-xl w-full sm:max-w-xl p-0 overflow-hidden bg-white border border-gray-200 shadow-xl rounded-md font-sans text-gray-800 flex flex-col gap-0 z-[2000]">
             {/* Header */}
             <DialogHeader className="p-6 pb-4 border-b border-gray-100 bg-white space-y-1.5">
-              <DialogTitle
-                className="text-xl font-normal flex items-center gap-2.5"
-                style={{ color: "#676a6c" }}
-              >
-                <CheckCircle size={22} className="text-emerald-600 shrink-0" />
-                <span>Mark Risk as Mitigated: {subtask?.title}</span>
+              <DialogTitle className="text-xl font-normal flex items-center gap-2.5 text-gray-800">
+                <CheckCircle2 size={24} className="text-emerald-500 shrink-0" />
+                <span>Mark as Mitigated: {subtask?.title || subtask?.taskName}</span>
               </DialogTitle>
-              <p className="text-xs text-gray-500 font-normal">
-                Resolve the flagged risk for this subtask and describe the
-                mitigation action taken.
-              </p>
             </DialogHeader>
 
             {/* Body */}
-            <div className="p-6 space-y-5 min-h-[220px] max-h-[80vh] overflow-y-auto">
-              <div className="bg-amber-50/80 border border-amber-200/80 rounded-sm p-3.5 space-y-1">
-                <p className="text-xs font-semibold text-amber-800 uppercase tracking-wider">
-                  Current Active Risk
-                </p>
-                <p className="text-sm text-amber-900">
-                  {subtask.riskReason || "No details specified"}
-                  {subtask.riskLevel && (
-                    <span className="ml-2 text-xs font-bold uppercase px-2 py-0.5 bg-amber-200/70 text-amber-900 rounded">
-                      {subtask.riskLevel}
-                    </span>
-                  )}
-                </p>
-              </div>
-
+            <div className="p-6 space-y-4">
               {/* Mitigation Reason Textarea */}
               <div className="space-y-2">
                 <Label
                   htmlFor="subtaskMitigationReason"
-                  className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
+                  className="text-sm font-semibold text-gray-700 block"
                 >
-                  Mitigation Reason <span className="text-red-500">*</span>
+                  Mitigation Reason / Resolution Note:
                 </Label>
                 <Textarea
                   id="subtaskMitigationReason"
                   value={mitigationReason}
                   onChange={(e) => setMitigationReason(e.target.value)}
-                  placeholder="Describe how this risk has been mitigated..."
-                  className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:ring-emerald-500 text-sm resize-none"
+                  placeholder="How was this risk resolved or mitigated?"
+                  className="w-full bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:ring-emerald-500 text-sm resize-none rounded-md"
                   rows={4}
                 />
               </div>
+              <p className="text-xs text-gray-500 italic">
+                * This will remove the "At Risk" flag from the task.
+              </p>
             </div>
 
             {/* Actions / Footer */}
-            <DialogFooter className="p-4 px-6 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-3">
+            <DialogFooter className="p-5 border-t border-gray-100 bg-gray-50/50 flex flex-col gap-3">
               <Button
                 type="button"
                 variant="outline"
@@ -696,7 +665,7 @@ export default function SubtaskActionsDropdown({
                   setMitigationReason("");
                 }}
                 disabled={riskLoading}
-                className="bg-white border-gray-300 hover:bg-gray-50 text-gray-700 text-sm h-8 px-4 font-normal rounded-sm flex items-center justify-center text-center leading-none py-0"
+                className="w-full bg-white border-gray-300 hover:bg-gray-50 text-gray-700 text-sm h-10 font-medium rounded-md"
               >
                 Cancel
               </Button>
@@ -704,7 +673,7 @@ export default function SubtaskActionsDropdown({
                 type="button"
                 onClick={handleUnmarkRisk}
                 disabled={riskLoading || !mitigationReason.trim()}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm h-8 px-4 font-medium rounded-sm shadow-sm disabled:opacity-50 flex items-center justify-center text-center leading-none py-0"
+                className="w-full bg-[#68d391] hover:bg-emerald-600 text-white text-sm h-10 font-medium rounded-md shadow-sm disabled:opacity-50"
               >
                 {riskLoading ? "Saving..." : "Mark as Mitigated"}
               </Button>

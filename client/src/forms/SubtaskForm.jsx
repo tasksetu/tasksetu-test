@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Calendar, User, Tag, AlertCircle, Paperclip, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CustomEditor from '../common/CustomEditor';
+import LinkedTaskSelector from '../components/workflow/LinkedTaskSelector';
 
 function SubtaskForm({
   isOpen,
@@ -21,6 +22,11 @@ function SubtaskForm({
     description: ''
   });
 
+  const [linkedTaskId, setLinkedTaskId] = useState(editData?.linkedTaskId || null);
+  const [autoInitiate, setAutoInitiate] = useState(
+    editData?.configuration?.autoInitiate || editData?.autoInitiate || false
+  );
+
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [attachmentSize, setAttachmentSize] = useState(0);
 
@@ -36,13 +42,23 @@ function SubtaskForm({
         visibility: editData.visibility || 'Private',
         description: editData.description || ''
       });
+      setLinkedTaskId(editData.linkedTaskId || null);
+      setAutoInitiate(
+        editData.configuration?.autoInitiate || editData.autoInitiate || false
+      );
     }
   }, [editData, mode]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (formData.title.trim()) {
-      onSubmit(formData);
+      onSubmit({
+        ...formData,
+        linkedTaskId: linkedTaskId || null,
+        configuration: {
+          autoInitiate: !!linkedTaskId && autoInitiate,
+        },
+      });
       handleCancel();
     }
   };
@@ -313,6 +329,17 @@ function SubtaskForm({
                 <p>Max Length: Title 60 chars</p>
               </div>
             </div>
+
+            {/* Linked Task Dependency & Auto Initiate */}
+            <LinkedTaskSelector
+              parentTaskId={parentTask?._id || parentTask?.id}
+              sequence={(parentTask?.subtaskCount || 0) + 1}
+              excludeTaskId={editData?._id}
+              linkedTaskId={linkedTaskId}
+              onLinkedTaskChange={setLinkedTaskId}
+              autoInitiate={autoInitiate}
+              onAutoInitiateChange={setAutoInitiate}
+            />
 
             {/* Actions */}
             <div className="form-actions flex justify-end gap-3 pt-4">

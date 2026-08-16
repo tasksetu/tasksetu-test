@@ -139,6 +139,7 @@ import FormBuilder from "./components/forms/FormBuilder";
 import FormVersionHistory from "./components/forms/FormVersionHistory";
 import ProcessBuilderPage from "./pages/ProcessBuilderPage";
 import PublicForm from "./pages/PublicForm";
+import PublicFormPage from "./pages/PublicFormPage";
 import EditProfile from "./pages/EditProfile";
 import HelpSupport from "./pages/HelpSupport";
 import Documentation from "./pages/Documentation";
@@ -426,6 +427,7 @@ function App() {
             <Switch>
               {/* Public Form Submission Route - No Authentication Required */}
               <Route path="/forms/public/:token" component={PublicForm} />
+              <Route path="/public/forms/:token" component={PublicFormPage} />
 
               {/* Root Route - Role-based redirect */}
               <Route path="/" component={RoleBasedRedirect} />

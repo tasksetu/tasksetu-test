@@ -98,6 +98,7 @@ export default function AllTasks({
   // Task type detection function
   const getTaskType = (task) => {
     if (!task) return "Simple Task";
+    if (task.taskType === "email") return "Email Task";
     if (task.isApprovalTask || task.taskType === "approval") return "Approval Task";
     if (task.isRecurring || task.recurringFromTaskId || task.taskType === "recurring") return "Recurring Task";
     if (

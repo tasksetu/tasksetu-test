@@ -1,5 +1,27 @@
 import React, { useState, useEffect } from "react";
-import { Target, ShieldCheck, CheckCircle, XCircle, Check, Flag } from "lucide-react";
+import {
+  Target,
+  ShieldCheck,
+  CheckCircle,
+  XCircle,
+  Check,
+  Flag,
+  Mail,
+  ListTodo,
+  User,
+  UserCheck,
+  Calendar,
+  Clock,
+  Paperclip,
+  Users,
+  Edit3,
+  Trash2,
+  Link as LinkIcon,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  Award,
+} from "lucide-react";
 import { useSubtask } from "../../contexts/SubtaskContext";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
@@ -358,7 +380,8 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
 
   const handleSubtaskApproval = async (subtask, action) => {
     try {
-      const token = localStorage.getItem("token") || localStorage.getItem("auth_token");
+      const token =
+        localStorage.getItem("token") || localStorage.getItem("auth_token");
       const targetId = subtask.id || subtask._id;
       const res = await fetch(`/api/tasks/${targetId}/approve`, {
         method: "POST",
@@ -370,18 +393,23 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
       });
 
       if (res.ok) {
-        showSuccessToast(`Subtask ${action === "approve" ? "approved" : "rejected"} successfully`);
+        showSuccessToast(
+          `Subtask ${action === "approve" ? "approved" : "rejected"} successfully`,
+        );
       } else {
         const errorData = await res.json().catch(() => ({}));
         const newStatus = action === "approve" ? "DONE" : "CANCELLED";
-        const updateRes = await fetch(`/api/tasks/${parentTask?._id || parentTask?.id}/subtasks/${targetId}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
+        const updateRes = await fetch(
+          `/api/tasks/${parentTask?._id || parentTask?.id}/subtasks/${targetId}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ status: newStatus }),
           },
-          body: JSON.stringify({ status: newStatus }),
-        });
+        );
         if (updateRes.ok) {
           showSuccessToast(`Subtask status updated to ${newStatus}`);
         } else {
@@ -696,338 +724,562 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
         {/* Compact Content */}
         {!isCollapsed && (
           <div>
-            <div>
-              {filteredSubtasks.map((subtask, index) => (
-                <div key={subtask.id}>
-                  {/* Sub-task Row */}
+            <div className="space-y-3.5 p-3">
+              {filteredSubtasks.map((subtask, index) => {
+                const isExpanded = expandedSubtasks.includes(
+                  subtask.id || subtask._id,
+                );
+                const normStatus = String(subtask.status || "").toLowerCase();
+                const normApprovalStatus = String(
+                  subtask.approvalStatus || "",
+                ).toLowerCase();
+                const titleLower = String(subtask.title || "").toLowerCase();
+
+                const isApproval = subtask.taskType === "approval";
+
+                const isEmail =
+                  subtask.taskType === "email" ||
+                  subtask.mainTaskType === "email" ||
+                  !!subtask.emailConfig;
+                const isMilestone =
+                  subtask.taskType === "milestone" || subtask.isMilestone;
+
+                const isOverdue =
+                  subtask.dueDate &&
+                  new Date(subtask.dueDate) < new Date() &&
+                  !["done", "completed", "approved"].includes(normStatus) &&
+                  normApprovalStatus !== "approved";
+
+                // Format Assignee Name & Initials
+                const assigneeName = subtask.assignee || "Unassigned";
+                const assigneeInitials = assigneeName
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .substring(0, 2)
+                  .toUpperCase();
+
+                // Determine Task Type Badge
+                let typeBadge = (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200 shadow-xs">
+                    <ListTodo className="w-3.5 h-3.5 text-slate-500" /> Standard
+                    Subtask
+                  </span>
+                );
+                if (isEmail) {
+                  typeBadge = (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200 shadow-xs">
+                      <Mail className="w-3.5 h-3.5 text-sky-600" /> Email
+                      Subtask
+                    </span>
+                  );
+                } else if (isMilestone) {
+                  typeBadge = (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 shadow-xs">
+                      <Target className="w-3.5 h-3.5 text-amber-600" />{" "}
+                      Milestone Subtask
+                    </span>
+                  );
+                } else if (isApproval) {
+                  typeBadge = (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-800 border border-purple-200 shadow-xs">
+                      <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />{" "}
+                      Approval Subtask
+                    </span>
+                  );
+                }
+
+                // Determine Priority Badge
+                const priorityStr = String(
+                  subtask.priority || "Medium",
+                ).toLowerCase();
+                let priorityBadge = (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                    Medium Priority
+                  </span>
+                );
+                if (priorityStr === "low") {
+                  priorityBadge = (
+                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                      Low Priority
+                    </span>
+                  );
+                } else if (priorityStr === "high") {
+                  priorityBadge = (
+                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                      High Priority
+                    </span>
+                  );
+                } else if (priorityStr === "urgent") {
+                  priorityBadge = (
+                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-300">
+                      Urgent Priority
+                    </span>
+                  );
+                }
+
+                // Determine Status Badge
+                let statusBadge = (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    {getStatusLabel(subtask.status)}
+                  </span>
+                );
+                if (
+                  ["done", "completed"].includes(normStatus) ||
+                  (isApproval && normApprovalStatus === "approved")
+                ) {
+                  statusBadge = (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      {isApproval ? "Approved" : "Completed"}
+                    </span>
+                  );
+                } else if (
+                  ["cancelled", "canceled"].includes(normStatus) ||
+                  (isApproval && normApprovalStatus === "rejected")
+                ) {
+                  statusBadge = (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                      <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                      {isApproval ? "Rejected" : "Cancelled"}
+                    </span>
+                  );
+                }
+
+                return (
                   <div
-                    className={`border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${
-                      expandedSubtasks.includes(subtask.id)
-                        ? "bg-blue-50 border-l-2 border-l-blue-500"
-                        : ""
+                    key={subtask.id || subtask._id || index}
+                    className={`bg-white border rounded-xl shadow-xs transition-all duration-200 hover:shadow-md ${
+                      isExpanded
+                        ? "border-blue-400 ring-2 ring-blue-100"
+                        : "border-gray-200 hover:border-blue-300"
                     }`}
-                    onClick={() => {
-                      setExpandedSubtasks((prev) =>
-                        prev.includes(subtask.id)
-                          ? prev.filter((id) => id !== subtask.id)
-                          : [...prev, subtask.id],
-                      );
-                    }}
                   >
-                    <div className="flex items-center justify-between px-3 py-3">
-                      {/* Left side - Name & Type Badges */}
-                      <div className="flex-1 min-w-0 flex items-center gap-2">
-                        {subtask.taskType === "approval" || subtask.isApprovalTask ? (
-                          <span className="inline-flex items-center justify-center w-4.5 h-4.5 rounded-[4px] bg-gradient-to-b from-emerald-400 to-emerald-600 text-white shadow-sm flex-shrink-0" title="Approval Subtask">
-                            <Check className="w-3.5 h-3.5 stroke-[3]" />
-                          </span>
-                        ) : subtask.taskType === "milestone" || subtask.isMilestone ? (
-                          <span className="inline-flex items-center justify-center text-base flex-shrink-0 leading-none" title="Milestone Subtask">
-                            🎯
-                          </span>
-                        ) : (
-                          <span className="text-blue-500 font-bold">↳</span>
-                        )}
-                        <div
-                          className={`text-sm font-medium truncate text-gray-900`}
-                          title={subtask.title}
-                        >
-                          {subtask.title}
-                        </div>
-                        {(subtask.taskType === "milestone" || subtask.isMilestone) && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-200">
-                            <Target size={12} /> Milestone
-                          </span>
-                        )}
-                        {(subtask.taskType === "approval" || subtask.isApprovalTask) && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-                            <ShieldCheck size={12} /> Approval
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Center - Due Date */}
-                      <div className="flex-shrink-0 mx-4">
-                        <span
-                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            new Date(subtask.dueDate) < new Date() &&
-                            subtask.status !== "completed" &&
-                            subtask.status !== "DONE"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-gray-100 text-gray-800"
-                          }`}
-                        >
-                          {subtask.dueDate}
-                          {new Date(subtask.dueDate) < new Date() &&
-                            subtask.status !== "completed" &&
-                            subtask.status !== "DONE" && (
-                              <span className="ml-1">🔴</span>
-                            )}
-                        </span>
-                      </div>
-
-                      {/* Right side - Status & Assignee */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">
-                          {getStatusIcon(subtask.status)}
-                        </span>
-                        <span
-                          className="text-xs text-gray-600 truncate max-w-20"
-                          title={subtask.assignee}
-                        >
-                          {subtask.assignee}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Expanded Sub-task Details */}
-                  {expandedSubtasks.includes(subtask.id) && (
-                    <div className="border-b border-gray-100 bg-gray-50 px-6 py-4">
-                      <div className="grid grid-cols-3 gap-6">
-                        {/* Left column - Basic details */}
-                        <div className="space-y-3 text-sm">
-                          <div>
-                            <span className="font-medium text-gray-700">
-                              Status:
+                    {/* Card Header Bar */}
+                    <div
+                      className="p-4 cursor-pointer"
+                      onClick={() => {
+                        setExpandedSubtasks((prev) =>
+                          prev.includes(subtask.id)
+                            ? prev.filter((id) => id !== subtask.id)
+                            : [...prev, subtask.id],
+                        );
+                      }}
+                    >
+                      {/* Top Row: Task Type, Status, Priority & Expand Toggle */}
+                      <div className="flex items-center justify-between gap-2 mb-2.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {typeBadge}
+                          {statusBadge}
+                          {priorityBadge}
+                          {isOverdue && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-700 border border-red-200 animate-bounce">
+                              <AlertCircle className="w-3 h-3 text-red-600" />{" "}
+                              Overdue
                             </span>
-                            <span className="ml-2">
-                              {(() => {
-                                const normStatus = String(subtask.status || "").toLowerCase();
-                                const normApprovalStatus = String(subtask.approvalStatus || "").toLowerCase();
-                                const titleLower = String(subtask.title || "").toLowerCase();
-
-                                const isApproval =
-                                  subtask.taskType === "approval" ||
-                                  subtask.isApprovalTask ||
-                                  (Array.isArray(subtask.approvers) && subtask.approvers.length > 0) ||
-                                  (!!subtask.approvalStatus && subtask.approvalStatus !== "none") ||
-                                  titleLower.includes("approval");
-
-                                const isApproved =
-                                  normApprovalStatus === "approved" ||
-                                  normStatus === "done" ||
-                                  normStatus === "completed" ||
-                                  normStatus === "approved";
-
-                                const isRejected =
-                                  normApprovalStatus === "rejected" ||
-                                  normStatus === "cancelled" ||
-                                  normStatus === "canceled" ||
-                                  normStatus === "rejected";
-
-                                if (isApproval) {
-                                  return (
-                                    <span
-                                      className={`font-semibold ${
-                                        isApproved
-                                          ? "text-emerald-600"
-                                          : isRejected
-                                            ? "text-rose-600"
-                                            : "text-amber-600"
-                                      }`}
-                                    >
-                                      {isApproved
-                                        ? "Approved"
-                                        : isRejected
-                                          ? "Rejected"
-                                          : "Pending"}
-                                    </span>
-                                  );
-                                }
-                                return getStatusLabel(subtask.status);
-                              })()}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700">
-                              Assignee:
-                            </span>
-                            <span className="ml-2">{subtask.assignee}</span>
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700">
-                              Due Date:
-                            </span>
-                            <span className="ml-2">{subtask.dueDate}</span>
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700">
-                              Priority:
-                            </span>
-                            <span className="ml-2">
-                              {subtask.priority || "Medium"}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Right column - Description */}
-                        <div className="col-span-2">
-                          <div className="font-medium text-gray-700 mb-2">
-                            Description:
-                          </div>
-
-                          <div className="text-sm text-gray-700 leading-relaxed max-h-20 overflow-y-auto pr-2">
-                            {subtask.description ? (
-                              <div
-                                dangerouslySetInnerHTML={{
-                                  __html: subtask.description,
-                                }}
-                              />
-                            ) : (
-                              <span className="text-gray-400 italic">
-                                No description provided
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-2 mt-3">
-                        {(() => {
-                          const normStatus = String(subtask.status || "").toLowerCase();
-                          const normApprovalStatus = String(subtask.approvalStatus || "").toLowerCase();
-                          const titleLower = String(subtask.title || "").toLowerCase();
-
-                          const isApproval =
-                            subtask.taskType === "approval" ||
-                            subtask.isApprovalTask ||
-                            (Array.isArray(subtask.approvers) && subtask.approvers.length > 0) ||
-                            (!!subtask.approvalStatus && subtask.approvalStatus !== "none") ||
-                            titleLower.includes("approval");
-
-                          const isApprovedOrRejected =
-                            normApprovalStatus === "approved" ||
-                            normApprovalStatus === "rejected" ||
-                            normStatus === "done" ||
-                            normStatus === "completed" ||
-                            normStatus === "cancelled" ||
-                            normStatus === "canceled" ||
-                            normStatus === "rejected" ||
-                            normStatus === "approved";
-
-                          if (isApproval && !isApprovedOrRejected) {
-                            return (
-                              <>
-                                <Button
-                                  variant="outline"
-                                  className="h-8 text-xs bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 flex items-center gap-1 font-semibold"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSubtaskApproval(subtask, "approve");
-                                  }}
-                                >
-                                  <CheckCircle size={13} /> Approve
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  className="h-8 text-xs bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100 flex items-center gap-1 font-semibold"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSubtaskApproval(subtask, "reject");
-                                  }}
-                                >
-                                  <XCircle size={13} /> Reject
-                                </Button>
-                              </>
-                            );
-                          }
-                          return null;
-                        })()}
-                        {canEditSubtask(subtask) &&
-                          parentTask?.status !== "DONE" &&
-                          !["done", "completed", "cancelled", "canceled", "rejected", "approved"].includes(String(subtask?.status || "").toLowerCase()) &&
-                          !["approved", "rejected", "auto_approved"].includes(String(subtask?.approvalStatus || "").toLowerCase()) && (
-                            <Button
-                              variant="primary"
-                              className="h-9 text-xs"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                console.log(
-                                  "Edit subtask clicked:",
-                                  subtask.id,
-                                  subtask,
-                                );
-                                const transformedSubtask =
-                                  transformSubtaskForEdit(subtask);
-                                openSubtaskDrawer(
-                                  parentTask,
-                                  transformedSubtask,
-                                  refreshTask,
-                                );
-                              }}
-                            >
-                              Edit
-                            </Button>
                           )}
-                        {(() => {
-                          const normStatus = String(subtask.status || "").toLowerCase();
-                          const normApprovalStatus = String(subtask.approvalStatus || "").toLowerCase();
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-gray-400 hover:text-gray-700"
+                          >
+                            {isExpanded ? (
+                              <ChevronUp className="w-4 h-4" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
 
-                          const isApprovedOrRejected =
-                            normApprovalStatus === "approved" ||
-                            normApprovalStatus === "rejected" ||
-                            normStatus === "done" ||
-                            normStatus === "completed" ||
-                            normStatus === "cancelled" ||
-                            normStatus === "canceled" ||
-                            normStatus === "rejected" ||
-                            normStatus === "approved";
+                      {/* Subtask Title */}
+                      <h4 className="text-base font-bold text-gray-900 mb-1.5 leading-snug hover:text-blue-600 transition-colors">
+                        {subtask.title}
+                      </h4>
 
-                          // Hide delete button for completed, cancelled, approved, or rejected subtasks
-                          if (isApprovedOrRejected) {
-                            return null;
-                          }
+                      {/* Subtask Description */}
+                      {subtask.description ? (
+                        <div className="text-xs text-gray-600 line-clamp-2 my-2 bg-gray-50/70 p-2.5 rounded-lg border border-gray-100 leading-relaxed">
+                          {subtask.description.replace(/<[^>]*>?/gm, "")}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic my-1">
+                          No description provided
+                        </p>
+                      )}
 
-                          const canDeleteByPermission =
-                            canDeleteSubtask(subtask);
-                          const DELETABLE_STATUSES = [
-                            "open",
-                            "onhold",
-                            "pending",
-                            "to-do",
-                          ];
-                          const canDeleteByStatus = DELETABLE_STATUSES.includes(normStatus);
-                          const canDelete =
-                            canDeleteByPermission && canDeleteByStatus;
+                      {/* Key Details Row: Assignee, Due Date, Dependencies, Attachments */}
+                      <div className="flex items-center justify-between gap-3 text-xs text-gray-600 pt-2.5 mt-2 border-t border-gray-100 flex-wrap">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          {/* Assignee */}
+                          <div
+                            className="flex items-center gap-1.5 bg-gray-100/90 px-2.5 py-1 rounded-md text-gray-800 font-medium"
+                            title={`Assignee: ${assigneeName}`}
+                          >
+                            <div className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] flex items-center justify-center font-bold">
+                              {assigneeInitials}
+                            </div>
+                            <span>{assigneeName}</span>
+                          </div>
 
-                          const getDeleteTooltip = () => {
-                            if (!canDeleteByPermission)
-                              return "You do not have permission to delete this subtask";
-                            if (!canDeleteByStatus)
-                              return `Cannot delete subtask with status ${subtask?.status}. Only open subtasks can be deleted.`;
-                            return "";
-                          };
-
-                          return (
-                            <Button
-                              variant="destructive"
-                              className="h-9 text-xs"
-                              disabled={!canDelete}
-                              title={getDeleteTooltip()}
-                              style={
-                                !canDelete
-                                  ? { opacity: 0.5, cursor: "not-allowed" }
-                                  : {}
-                              }
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteSubtask(
-                                  subtask.id || subtask._id,
-                                  subtask.title,
-                                );
-                              }}
+                          {/* Due Date */}
+                          {subtask.dueDate && (
+                            <div
+                              className={`flex items-center gap-1 px-2.5 py-1 rounded-md font-medium ${isOverdue ? "bg-red-50 text-red-700 border border-red-200" : "bg-gray-100/80 text-gray-700"}`}
                             >
-                              Delete
-                            </Button>
-                          );
-                        })()}
+                              <Calendar className="w-3.5 h-3.5 text-gray-500" />
+                              <span>{subtask.dueDate}</span>
+                            </div>
+                          )}
+
+                          {/* Email Task Recipient Count */}
+                          {isEmail &&
+                            subtask.emailConfig?.recipients?.length > 0 && (
+                              <div className="flex items-center gap-1 bg-sky-50 text-sky-800 px-2.5 py-1 rounded-md font-medium border border-sky-200">
+                                <Users className="w-3.5 h-3.5 text-sky-600" />
+                                <span>
+                                  {subtask.emailConfig.recipients.length}{" "}
+                                  Recipient(s)
+                                </span>
+                              </div>
+                            )}
+
+                          {/* Attachments Count */}
+                          {subtask.attachments &&
+                            subtask.attachments.length > 0 && (
+                              <div className="flex items-center gap-1 bg-gray-100/80 px-2.5 py-1 rounded-md text-gray-700 font-medium">
+                                <Paperclip className="w-3.5 h-3.5 text-gray-500" />
+                                <span>
+                                  {subtask.attachments.length} file(s)
+                                </span>
+                              </div>
+                            )}
+
+                          {/* Linked Prerequisite Dependency */}
+                          {subtask.linkedTaskId && (
+                            <div className="flex items-center gap-1 bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-1 rounded-md font-medium">
+                              <LinkIcon className="w-3.5 h-3.5 text-purple-600" />
+                              <span>Prerequisite Linked</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div
+                          className="flex items-center gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Delete Subtask */}
+                          {(() => {
+                            const isApprovedOrRejected =
+                              normApprovalStatus === "approved" ||
+                              normApprovalStatus === "rejected" ||
+                              normStatus === "done" ||
+                              normStatus === "completed" ||
+                              normStatus === "cancelled" ||
+                              normStatus === "canceled" ||
+                              normStatus === "rejected" ||
+                              normStatus === "approved";
+
+                            if (isApprovedOrRejected) return null;
+
+                            const canDeleteByPermission =
+                              canDeleteSubtask(subtask);
+                            const DELETABLE_STATUSES = [
+                              "open",
+                              "onhold",
+                              "pending",
+                              "to-do",
+                            ];
+                            const canDeleteByStatus =
+                              DELETABLE_STATUSES.includes(normStatus);
+                            const canDelete =
+                              canDeleteByPermission && canDeleteByStatus;
+
+                            return (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={!canDelete}
+                                className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1 font-medium"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteSubtask(
+                                    subtask.id || subtask._id,
+                                    subtask.title,
+                                  );
+                                }}
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-red-500" />{" "}
+                                Delete
+                              </Button>
+                            );
+                          })()}
+                        </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {/* Expanded Rich Subtask Details */}
+                    {isExpanded && (
+                      <div className="border-t border-gray-100 bg-gray-50/50 p-4 space-y-4 rounded-b-xl text-xs">
+                        {/* Description Block */}
+                        <div>
+                          <h5 className="font-semibold text-gray-700 uppercase tracking-wider text-[11px] mb-1">
+                            Full Description
+                          </h5>
+                          {subtask.description ? (
+                            <div
+                              className="text-gray-800 bg-white p-3 rounded-lg border border-gray-200 leading-relaxed shadow-xs"
+                              dangerouslySetInnerHTML={{
+                                __html: subtask.description,
+                              }}
+                            />
+                          ) : (
+                            <p className="text-gray-400 italic">
+                              No description specified.
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Metadata Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 rounded-lg border border-gray-200 shadow-xs">
+                          <div>
+                            <span className="text-gray-400 text-[11px] block font-medium">
+                              Assigned To
+                            </span>
+                            <span className="font-semibold text-gray-800 flex items-center gap-1 mt-0.5">
+                              <User className="w-3 h-3 text-blue-500" />
+                              {typeof subtask.assignedTo === "object" &&
+                              subtask.assignedTo
+                                ? `${subtask.assignedTo.firstName || ""} ${subtask.assignedTo.lastName || ""}`.trim() ||
+                                  subtask.assignedTo.email
+                                : subtask.assignee || "Unassigned"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 text-[11px] block font-medium">
+                              Created By
+                            </span>
+                            <span className="font-semibold text-gray-800 flex items-center gap-1 mt-0.5">
+                              <UserCheck className="w-3 h-3 text-emerald-500" />
+                              {typeof subtask.createdBy === "object" &&
+                              subtask.createdBy
+                                ? `${subtask.createdBy.firstName || ""} ${subtask.createdBy.lastName || ""}`.trim() ||
+                                  subtask.createdBy.email
+                                : "System User"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 text-[11px] block font-medium">
+                              Due Date
+                            </span>
+                            <span className="font-semibold text-gray-800 flex items-center gap-1 mt-0.5">
+                              <Calendar className="w-3 h-3 text-amber-500" />
+                              {subtask.dueDate
+                                ? new Date(subtask.dueDate).toLocaleDateString(
+                                    "en-US",
+                                    {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                    },
+                                  )
+                                : "No due date"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 text-[11px] block font-medium">
+                              Created On
+                            </span>
+                            <span className="font-semibold text-gray-800 flex items-center gap-1 mt-0.5">
+                              <Clock className="w-3 h-3 text-purple-500" />
+                              {subtask.createdAt
+                                ? new Date(
+                                    subtask.createdAt,
+                                  ).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })
+                                : "N/A"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Email Subtask Specific Details */}
+                        {isEmail && subtask.emailConfig && (
+                          <div className="bg-sky-50/60 border border-sky-200 rounded-lg p-3 space-y-3">
+                            <div className="flex items-center justify-between border-b border-sky-200/60 pb-2">
+                              <h5 className="font-bold text-sky-900 flex items-center gap-1.5 text-xs">
+                                <Mail className="w-4 h-4 text-sky-600" /> Email
+                                Configuration & Recipients
+                              </h5>
+                              {subtask.emailConfig.lastSentAt && (
+                                <span className="text-[11px] text-sky-700 bg-sky-100 px-2 py-0.5 rounded-md font-medium">
+                                  Sent {subtask.emailConfig.sendCount || 1}{" "}
+                                  time(s) • Last:{" "}
+                                  {new Date(
+                                    subtask.emailConfig.lastSentAt,
+                                  ).toLocaleString("en-US", {
+                                    dateStyle: "short",
+                                    timeStyle: "short",
+                                  })}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Email Subject & Body Preview */}
+                            {subtask.emailConfig.subject && (
+                              <div>
+                                <span className="text-[11px] font-semibold text-sky-800 block">
+                                  Subject:
+                                </span>
+                                <span className="font-medium text-gray-900">
+                                  {subtask.emailConfig.subject}
+                                </span>
+                              </div>
+                            )}
+
+                            {subtask.emailConfig.body && (
+                              <div>
+                                <span className="text-[11px] font-semibold text-sky-800 block mb-1">
+                                  Message Body Template:
+                                </span>
+                                <pre className="text-xs bg-white p-2.5 rounded border border-sky-200 text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">
+                                  {subtask.emailConfig.body}
+                                </pre>
+                              </div>
+                            )}
+
+                            {/* Recipients & Custom Variables Table */}
+                            {Array.isArray(subtask.emailConfig.recipients) &&
+                              subtask.emailConfig.recipients.length > 0 && (
+                                <div>
+                                  <span className="text-[11px] font-semibold text-sky-800 block mb-1.5">
+                                    Recipients (
+                                    {subtask.emailConfig.recipients.length}):
+                                  </span>
+                                  <div className="overflow-x-auto bg-white rounded-lg border border-sky-200">
+                                    <table className="w-full text-left border-collapse text-[11px]">
+                                      <thead>
+                                        <tr className="bg-sky-100/70 text-sky-900 border-b border-sky-200">
+                                          <th className="p-2 font-bold">
+                                            Recipient Name
+                                          </th>
+                                          <th className="p-2 font-bold">
+                                            Email Address
+                                          </th>
+                                          <th className="p-2 font-bold">
+                                            Per-Recipient Variable Overrides
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {subtask.emailConfig.recipients.map(
+                                          (rec, rIdx) => {
+                                            let varsObj = rec.variables || {};
+                                            if (
+                                              typeof varsObj.toObject ===
+                                              "function"
+                                            )
+                                              varsObj = varsObj.toObject();
+                                            else if (varsObj instanceof Map)
+                                              varsObj = Object.fromEntries(
+                                                varsObj.entries(),
+                                              );
+
+                                            const varEntries =
+                                              Object.entries(varsObj);
+
+                                            return (
+                                              <tr
+                                                key={rIdx}
+                                                className="border-b border-sky-100 hover:bg-sky-50/40"
+                                              >
+                                                <td className="p-2 font-medium text-gray-900">
+                                                  {rec.name || "—"}
+                                                </td>
+                                                <td className="p-2 text-sky-700 font-mono">
+                                                  {rec.email}
+                                                </td>
+                                                <td className="p-2">
+                                                  {varEntries.length > 0 ? (
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                      {varEntries.map(
+                                                        ([k, v]) => (
+                                                          <span
+                                                            key={k}
+                                                            className="bg-sky-50 text-sky-800 border border-sky-200 px-1.5 py-0.5 rounded text-[10px]"
+                                                          >
+                                                            <strong className="font-semibold">
+                                                              {k}:
+                                                            </strong>{" "}
+                                                            {String(v)}
+                                                          </span>
+                                                        ),
+                                                      )}
+                                                    </div>
+                                                  ) : (
+                                                    <span className="text-gray-400 italic">
+                                                      No variables
+                                                    </span>
+                                                  )}
+                                                </td>
+                                              </tr>
+                                            );
+                                          },
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                          </div>
+                        )}
+
+                        {/* Attachments Section */}
+                        {Array.isArray(subtask.attachments) &&
+                          subtask.attachments.length > 0 && (
+                            <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
+                              <h5 className="font-bold text-gray-800 flex items-center gap-1.5 text-xs">
+                                <Paperclip className="w-3.5 h-3.5 text-gray-600" />{" "}
+                                Attached Files ({subtask.attachments.length})
+                              </h5>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {subtask.attachments.map((att, aIdx) => (
+                                  <a
+                                    key={att._id || aIdx}
+                                    href={att.url || att.path}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center justify-between p-2 rounded-md bg-gray-50 border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-colors group"
+                                  >
+                                    <div className="flex items-center gap-2 truncate">
+                                      <Paperclip className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-600 shrink-0" />
+                                      <span className="text-xs font-medium text-gray-800 group-hover:text-blue-700 truncate">
+                                        {att.originalName ||
+                                          att.filename ||
+                                          "Attachment"}
+                                      </span>
+                                    </div>
+                                    {att.size && (
+                                      <span className="text-[10px] text-gray-400 shrink-0 ml-2">
+                                        {(att.size / 1024).toFixed(0)} KB
+                                      </span>
+                                    )}
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {filteredSubtasks.length === 0 && (

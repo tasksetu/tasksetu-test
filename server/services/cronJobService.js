@@ -152,21 +152,26 @@ export class CronJobService {
   }
 
   /**
-   * Generate daily task reminders - runs every hour, sends at 8 AM in user's timezone
+   * Generate daily task reminders - runs daily at 8:50 AM sharp
    */
   static scheduleDailyTaskReminders() {
-    // ⏰ Runs at minute 20 of every hour → fires at 10:20 AM IST (9-11 AM window)
-    cron.schedule("20 * * * *", async () => {
-      try {
-        await this.sendDailyTaskReminders();
-      } catch (error) {
-        console.error("Error in daily task reminders:", error);
-      }
-    });
-    this.registerJob("morning-briefing");
-    console.log(
-      "✓ Morning briefing scheduled (XX:20 every hour, fires for users in 9–11 AM window)",
+    // ⏰ Runs daily at 8:50 AM sharp for all users
+    cron.schedule(
+      "50 8 * * *",
+      async () => {
+        try {
+          await this.sendDailyTaskReminders();
+        } catch (error) {
+          console.error("Error in daily task reminders:", error);
+        }
+      },
+      {
+        scheduled: true,
+        timezone: "Asia/Kolkata",
+      },
     );
+    this.registerJob("morning-briefing");
+    console.log("✓ Morning briefing scheduled (8:50 AM daily)");
   }
 
   /**
@@ -666,18 +671,11 @@ export class CronJobService {
           );
           const userTimezone = settings?.timezone || "Asia/Kolkata"; // default IST
 
-          // ── 2. Check if it's 10 AM IST (window: 9–11) ──
           const userLocal = TimezoneHelper.getLocalTime(userTimezone);
-          const isCorrectHour = userLocal.hours >= 9 && userLocal.hours <= 11;
 
           console.log(
-            `⏰ User ${user.email} | TZ: ${userTimezone} | Local: ${userLocal.timeStr} | Hour ok: ${isCorrectHour}`,
+            `⏰ User ${user.email} | TZ: ${userTimezone} | Local: ${userLocal.timeStr}`,
           );
-
-          if (!isCorrectHour) {
-            skippedNotHour++;
-            continue;
-          }
 
           // ── 3. Skip if no email ───────────────────────────────────
           if (!user.email) {
@@ -773,43 +771,41 @@ export class CronJobService {
           );
           console.log(`⏰ Email result for ${user.email}:`, emailResult);
 
-          // ── 9. Send in-app notification ───────────────────────────
-          if (primaryTaskId) {
-            let message = `Good morning ${user.firstName || ""}! Here's your task summary:\n`;
-            if (overdueTasks.length > 0)
-              message += `• ${overdueTasks.length} overdue task(s)\n`;
-            if (dueToday.length > 0)
-              message += `• ${dueToday.length} task(s) due today\n`;
-            if (dueSoon.length > 0)
-              message += `• ${dueSoon.length} task(s) due within 3 days\n`;
-            if (pendingTasks.length === 0)
-              message += "• All caught up! No pending tasks.\n";
-            message += `\nTotal pending: ${pendingTasks.length} tasks`;
+          // ── 9. Send in-app notification & record DB entry for deduplication ──
+          let message = `Good morning ${user.firstName || ""}! Here's your task summary:\n`;
+          if (overdueTasks.length > 0)
+            message += `• ${overdueTasks.length} overdue task(s)\n`;
+          if (dueToday.length > 0)
+            message += `• ${dueToday.length} task(s) due today\n`;
+          if (dueSoon.length > 0)
+            message += `• ${dueSoon.length} task(s) due within 3 days\n`;
+          if (pendingTasks.length === 0)
+            message += "• All caught up! No pending tasks.\n";
+          message += `\nTotal pending: ${pendingTasks.length} tasks`;
 
-            await NotificationService.createNotification({
-              user_id: user._id,
-              trigger_event: TriggerEvent.TASK_REMINDER,
-              related_entity: {
-                entity_type: EntityType.TASK,
-                entity_id: primaryTaskId,
-              },
-              title: "☀️ Daily Task Summary",
-              message,
-              priority:
-                overdueTasks.length > 0
-                  ? NotificationPriority.URGENT
-                  : NotificationPriority.NORMAL,
-              channels: [ChannelType.IN_APP],
-              metadata: {
-                total_pending: pendingTasks.length,
-                overdue_count: overdueTasks.length,
-                due_today_count: dueToday.length,
-                due_soon_count: dueSoon.length,
-                reminder_type: "daily_summary",
-              },
-              expires_at: new Date(now.getTime() + 24 * 60 * 60 * 1000),
-            });
-          }
+          await NotificationService.createNotification({
+            user_id: user._id,
+            trigger_event: TriggerEvent.TASK_REMINDER,
+            related_entity: {
+              entity_type: primaryTaskId ? EntityType.TASK : EntityType.SYSTEM,
+              entity_id: primaryTaskId || user._id,
+            },
+            title: "☀️ Daily Task Summary",
+            message,
+            priority:
+              overdueTasks.length > 0
+                ? NotificationPriority.URGENT
+                : NotificationPriority.NORMAL,
+            channels: [ChannelType.IN_APP],
+            metadata: {
+              total_pending: pendingTasks.length,
+              overdue_count: overdueTasks.length,
+              due_today_count: dueToday.length,
+              due_soon_count: dueSoon.length,
+              reminder_type: "daily_summary",
+            },
+            expires_at: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+          });
 
           sentCount++;
           console.log(`⏰ ✅ Morning briefing complete for ${user.email}`);
@@ -1437,8 +1433,6 @@ export class CronJobService {
         .populate("collaborators", "firstName lastName email")
         .populate("organization", "name");
 
-      console.log(`Found ${expiredSnoozeTasks.length} expired snooze tasks`);
-
       for (const task of expiredSnoozeTasks) {
         try {
           // Unsnooze the task (wake-up)
@@ -1575,9 +1569,9 @@ export class CronJobService {
     const JOB_REGISTRY = [
       {
         name: "morning-briefing",
-        schedule: "0 * * * *",
+        schedule: "50 8 * * *",
         description:
-          "☀️  Morning briefing email — fires at 08:00 in each user's timezone (IST = 08:00)",
+          "☀️  Morning briefing email — fires at 08:50 AM daily for all users",
       },
       {
         name: "overdue-task-check",
@@ -1698,13 +1692,10 @@ export class CronJobService {
       serverUTCTime: new Date().toISOString(),
       istTime: nowIST,
       morningBriefingDiagnostic: {
-        currentISTHour: istHour,
-        firesAtISTHour: 8,
-        hoursUntilNextFire: hoursUntilBriefing,
-        status:
-          istHour === 8
-            ? "🟢 FIRING NOW (8 AM IST)"
-            : `⏳ Next fire in ~${hoursUntilBriefing}h at 08:00 IST`,
+        currentISTTime: nowIST,
+        firesAtTime: "08:50 AM",
+        schedule: "50 8 * * *",
+        status: "Scheduled daily at 8:50 AM",
       },
       jobs: JOB_REGISTRY.map((job) => ({
         name: job.name,
