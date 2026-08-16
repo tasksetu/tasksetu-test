@@ -6,6 +6,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "cross-env NODE_ENV=development nodemon --exec tsx server/index.ts",
+    "build": "vite build && npm run build:server",
     "build:server": "esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "cross-env NODE_ENV=production node dist/index.js",
     "preview": "npm run build && npm run start",
