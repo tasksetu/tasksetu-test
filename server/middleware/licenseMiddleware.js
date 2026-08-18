@@ -534,6 +534,113 @@ export const checkDynamicTaskFeature = () => {
 };
 
 /**
+ * Dynamic Subtask Feature Check Middleware
+ *
+ * Determines the correct subtask feature code based on subtask parameters in request body.
+ * Checks: TASK_SUB (regular subtask), SUBTASK_EMAIL (email subtask), SUBTASK_MILESTONE (milestone subtask), SUBTASK_APPROVAL (approval subtask)
+ */
+export const checkDynamicSubtaskFeature = () => {
+  return async (req, res, next) => {
+    try {
+      const userId = req.user?.id || req.user?._id || req.user?.userId;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required',
+          error: 'USER_REQUIRED',
+        });
+      }
+
+      let subtaskType = req.body?.subtaskType || req.body?.taskType;
+      let emailConfig = req.body?.emailConfig;
+      let isMilestone = req.body?.isMilestone || req.body?.isMilestoneSubtask;
+      let isApprovalTask = req.body?.isApprovalTask;
+
+      if (typeof emailConfig === 'string' && emailConfig) {
+        try {
+          emailConfig = JSON.parse(emailConfig);
+        } catch (e) {}
+      }
+      if (typeof isMilestone === 'string') {
+        isMilestone = isMilestone === 'true';
+      }
+      if (typeof isApprovalTask === 'string') {
+        isApprovalTask = isApprovalTask === 'true';
+      }
+
+      let featureCode = 'TASK_SUB'; // Default for regular subtasks
+
+      if (subtaskType === 'email' || (emailConfig && Object.keys(emailConfig).length > 0)) {
+        featureCode = 'SUBTASK_EMAIL';
+      } else if (subtaskType === 'milestone' || isMilestone) {
+        featureCode = 'SUBTASK_MILESTONE';
+      } else if (subtaskType === 'approval' || isApprovalTask) {
+        featureCode = 'SUBTASK_APPROVAL';
+      }
+
+      // Check feature access
+      const accessCheck = await licenseService.checkFeatureAccess(userId, featureCode);
+
+      if (!accessCheck.hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: accessCheck.message || `${licenseService.getFeatureDisplayName(featureCode)} is not available in your current plan`,
+          error: accessCheck.reason,
+          currentLicense: accessCheck.subscription?.license_code,
+          upgradeRequired: accessCheck.upgradeRequired,
+          showUpgradeModal: accessCheck.showUpgradeModal,
+          trialExpired: accessCheck.trialExpired,
+          feature: featureCode,
+        });
+      }
+
+      // Check feature limit
+      const limitCheck = await licenseService.checkFeatureLimit(userId, featureCode);
+
+      if (!limitCheck.canConsume) {
+        const featureDisplayName = licenseService.getFeatureDisplayName(featureCode);
+        return res.status(429).json({
+          success: false,
+          message: limitCheck.message || `Usage limit exceeded for ${featureDisplayName}`,
+          error: limitCheck.reason,
+          usage: limitCheck.usage,
+          limitType: limitCheck.limitType,
+          currentLicense: accessCheck.subscription?.license_code,
+          upgradePrompt: true,
+          showUpgradeModal: limitCheck.showUpgradeModal,
+          upgradeCTA: {
+            title: `Upgrade to unlock more ${featureDisplayName}`,
+            description: limitCheck.usage ? `You've used all ${limitCheck.usage.limit} ${featureDisplayName} this ${limitCheck.limitType?.toLowerCase()}` : '',
+            action: 'VIEW_PLANS',
+          },
+          feature: featureCode,
+        });
+      }
+
+      req.featureUsage = {
+        feature_code: featureCode,
+        user_id: userId,
+        usage_info: limitCheck.usage,
+        limit_type: limitCheck.limitType,
+      };
+
+      req.licenseInfo = accessCheck.subscription;
+      req.featureAccess = accessCheck;
+
+      next();
+    } catch (error) {
+      console.error('❌ Dynamic subtask feature check error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error checking feature access for subtask',
+        error: error.message,
+      });
+    }
+  };
+};
+
+/**
  * Helper function to get feature access summary for a user
  * Handles both individual and company accounts
  */

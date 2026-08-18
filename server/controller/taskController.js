@@ -2763,35 +2763,45 @@ export const createSubtask = async (req, res) => {
       // Don't fail subtask creation if notification fails
     }
 
-    // 📊 Track TASK_SUB feature usage
+    // 📊 Track subtask feature usage
     try {
-      // ✅ FIXED: Use user_id instead of entity (updated for user-level licensing)
       const userId = req.featureUsage?.user_id || req.user?.id || req.user?._id;
+      let featureCodeToConsume = req.featureUsage?.feature_code;
+
+      if (!featureCodeToConsume) {
+        if (subtaskType === "email" || (parsedTaskData.emailConfig && Object.keys(parsedTaskData.emailConfig).length > 0)) {
+          featureCodeToConsume = "SUBTASK_EMAIL";
+        } else if (subtaskType === "milestone" || isMilestoneSubtask) {
+          featureCodeToConsume = "SUBTASK_MILESTONE";
+        } else if (subtaskType === "approval" || parsedTaskData.isApprovalTask === true) {
+          featureCodeToConsume = "SUBTASK_APPROVAL";
+        } else {
+          featureCodeToConsume = "TASK_SUB";
+        }
+      }
 
       if (userId) {
-
         // Use licenseService.consumeFeature for proper usage tracking (USER-LEVEL)
         const consumeResult = await licenseService.consumeFeature(
           userId,
-          "TASK_SUB",
+          featureCodeToConsume,
           1,
         );
 
-        if (consumeResult.success) {
-        } else {
+        if (!consumeResult.success) {
           console.warn(
-            "⚠️ [USAGE TRACKING] Failed to track TASK_SUB usage:",
+            `⚠️ [USAGE TRACKING] Failed to track ${featureCodeToConsume} usage:`,
             consumeResult.message,
           );
         }
       } else {
         console.warn(
-          "⚠️ [USAGE TRACKING] No user ID found for TASK_SUB usage tracking",
+          "⚠️ [USAGE TRACKING] No user ID found for subtask usage tracking",
         );
       }
     } catch (trackingError) {
       console.error(
-        "❌ [USAGE TRACKING] Error tracking TASK_SUB usage:",
+        "❌ [USAGE TRACKING] Error tracking subtask usage:",
         trackingError,
       );
       // Don't fail subtask creation if tracking fails

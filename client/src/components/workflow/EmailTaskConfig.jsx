@@ -12,6 +12,8 @@
  */
 
 import React, { useState, useEffect } from "react";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
 import { Plus, Trash2, Mail, RefreshCw, Paperclip, Send, CheckCircle, Clock, AlertCircle, Users, Download, Table, Columns, Info, Loader2 } from "lucide-react";
 import { apiClient } from "../../utils/apiClient";
 import FormSubmissionRecipientModal from "./FormSubmissionRecipientModal";
@@ -65,54 +67,7 @@ export default function EmailTaskConfig({
     updateConfig({ ...config, variables: currentVars });
   };
 
-  // Auto-populate variables from form fields when attachedFormId changes
-  useEffect(() => {
-    if (config.attachedFormId) {
-      const foundInProps = (forms || []).find(
-        (f) => String(f._id || f.id || f.form_id) === String(config.attachedFormId)
-      );
-      if (foundInProps && Array.isArray(foundInProps.fields) && foundInProps.fields.length > 0) {
-        populateVariablesFromFields(foundInProps.fields);
-      } else {
-        fetchFormFields(config.attachedFormId);
-      }
-    }
-  }, [config.attachedFormId, forms]);
-
-  const fetchFormFields = async (formId) => {
-    try {
-      const res = await apiClient.get(`/api/forms/${formId}`);
-      const formData = res.data?.data || res.data?.form || res.data;
-      const fields = formData?.fields || formData?.form_fields || [];
-      populateVariablesFromFields(fields);
-    } catch (err) {
-      console.error("Failed to fetch form fields:", err);
-    }
-  };
-
-  const populateVariablesFromFields = (fields) => {
-    const displayOnlyTypes = ["title", "label", "qr_code"];
-    const existingVarKeysLower = new Set(
-      (config.variables || []).map((v) => (v.key || "").toLowerCase().trim())
-    );
-    const newVars = [...(config.variables || [])];
-    let currentActive = newVars.filter((v) => v.enabled !== false).length;
-
-    (fields || [])
-      .filter((f) => !displayOnlyTypes.includes(f.type))
-      .forEach((f) => {
-        const key = (f.label || f.field_code || f.name || "").trim();
-        const lowerKey = key.toLowerCase();
-        if (key && lowerKey !== "name" && lowerKey !== "email" && !existingVarKeysLower.has(lowerKey)) {
-          existingVarKeysLower.add(lowerKey);
-          const shouldEnable = currentActive < 10;
-          if (shouldEnable) currentActive++;
-          newVars.push({ key, staticValue: "", enabled: shouldEnable });
-        }
-      });
-
-    updateConfig({ ...config, variables: newVars });
-  };
+  // Note: Variables are populated when clicking "Import from Form Responses"
 
   const handleImportRecipients = (importedList) => {
     let currentList = (config.recipients || []).filter(
@@ -338,14 +293,22 @@ export default function EmailTaskConfig({
         <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
           Email Body / Message <span className="text-red-500">*</span>
         </label>
-        <textarea
-          rows={4}
-          value={config.body}
-          onChange={(e) => updateConfig({ ...config, body: e.target.value })}
+        <ReactQuill
+          theme="snow"
+          value={config.body || ""}
+          onChange={(content) => updateConfig({ ...config, body: content })}
+          readOnly={disabled}
           placeholder="Dear {VendorName},&#10;&#10;Please review the attached details and complete the form below."
-          disabled={disabled}
-          className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:border-2 bg-white font-mono ${
-            errors?.body ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"
+          modules={{
+            toolbar: [
+              ["bold", "italic", "underline"],
+              ["link"],
+              [{ list: "ordered" }, { list: "bullet" }],
+              ["clean"],
+            ],
+          }}
+          className={`bg-white rounded-md ${
+            errors?.body ? "border border-red-500 rounded-sm" : ""
           }`}
         />
         {errors?.body && (

@@ -1868,8 +1868,32 @@ export const getFormVersionById = async (req, res) => {
 
 
     // Find version by _id
-    const version = await FormVersion.findById(version_id)
-      .populate("published_by", "firstName lastName email");
+    let version = mongoose.Types.ObjectId.isValid(version_id)
+      ? await FormVersion.findById(version_id).populate("published_by", "firstName lastName email")
+      : null;
+
+    if (!version) {
+      // Fallback: check if version_id is a FormTemplate _id or form_id
+      const templateQuery = [];
+      if (mongoose.Types.ObjectId.isValid(version_id)) {
+        templateQuery.push({ _id: version_id });
+      }
+      templateQuery.push({ form_id: version_id });
+
+      const template = await FormTemplate.findOne({ $or: templateQuery });
+
+      if (template) {
+        if (template.current_published_version_id) {
+          version = await FormVersion.findById(template.current_published_version_id)
+            .populate("published_by", "firstName lastName email");
+        }
+        if (!version) {
+          version = await FormVersion.findOne({
+            $or: [{ form_template_id: template._id }, { form_id: template.form_id }]
+          }).sort({ version_number: -1 }).populate("published_by", "firstName lastName email");
+        }
+      }
+    }
 
     if (!version) {
       return res.status(404).json({
@@ -3836,19 +3860,79 @@ export const getMySubmissionsForTask = async (req, res) => {
       });
     }
 
-    // Find all submissions for current user
-    const submissions = await FormSubmission.find({
-      form_version_id,
-      submitted_by: req.user.id, // ✅ Fixed: use req.user.id
-      ...(task_id && { source_task_id: task_id }),
-      ...(subtask_id && { source_subtask_id: subtask_id })
-    })
-      .populate('form_id', 'title')
-      .populate('form_version_id', 'version_number snapshot_data')
-      .populate('submitted_by', 'firstName lastName email')
-      .sort({ submitted_at: -1 }); // Most recent first
+    const targetId = subtask_id || task_id;
 
-    // Keep field_ids (don't transform to labels)
+    // Check if form_version_id is ObjectId or template ID
+    const formIdConditions = [];
+    if (mongoose.Types.ObjectId.isValid(form_version_id)) {
+      formIdConditions.push({ form_version_id: form_version_id });
+      formIdConditions.push({ form_id: form_version_id });
+
+      // Find version to check form_template_id or template to check version IDs
+      const versionDoc = await FormVersion.findById(form_version_id);
+      if (versionDoc && versionDoc.form_template_id) {
+        formIdConditions.push({ form_id: versionDoc.form_template_id });
+      }
+
+      const templateDoc = await FormTemplate.findOne({
+        $or: [{ _id: form_version_id }, { form_id: form_version_id }]
+      });
+      if (templateDoc) {
+        formIdConditions.push({ form_id: templateDoc._id });
+        const versionDocs = await FormVersion.find({
+          $or: [{ form_template_id: templateDoc._id }, { form_id: templateDoc.form_id }]
+        }).select('_id');
+        const vIds = versionDocs.map(v => v._id);
+        if (vIds.length > 0) {
+          formIdConditions.push({ form_version_id: { $in: vIds } });
+        }
+      }
+    } else {
+      formIdConditions.push({ form_version_id });
+    }
+
+    // Build base query for form
+    const baseQuery = {
+      $or: formIdConditions
+    };
+
+    let submissions = [];
+
+    // If targetId is provided, first try matching submissions explicitly linked to this task/subtask
+    if (targetId && mongoose.Types.ObjectId.isValid(targetId)) {
+      const Task = (await import('../modals/taskModal.js')).default;
+      const taskDoc = await Task.findById(targetId).select('form_submission_id');
+      const taskFormSubmissionId = taskDoc?.form_submission_id || null;
+
+      const contextOr = [
+        { source_task_id: targetId },
+        { source_subtask_id: targetId }
+      ];
+      if (taskFormSubmissionId) {
+        contextOr.push({ _id: taskFormSubmissionId });
+      }
+
+      const taskSpecificQuery = {
+        ...baseQuery,
+        $and: [{ $or: contextOr }]
+      };
+
+      submissions = await FormSubmission.find(taskSpecificQuery)
+        .populate('form_id', 'title')
+        .populate('form_version_id', 'version_number snapshot_data')
+        .populate('submitted_by', 'firstName lastName email')
+        .sort({ submitted_at: -1, createdAt: -1 });
+    }
+
+    // Fallback: If no task-specific submissions found (e.g. external submissions or user submissions for this form), fetch all submissions for this form
+    if (submissions.length === 0) {
+      submissions = await FormSubmission.find(baseQuery)
+        .populate('form_id', 'title')
+        .populate('form_version_id', 'version_number snapshot_data')
+        .populate('submitted_by', 'firstName lastName email')
+        .sort({ submitted_at: -1, createdAt: -1 });
+    }
+
     const transformedSubmissions = submissions.map(submission => submission.toObject());
 
     res.json({

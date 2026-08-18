@@ -171,6 +171,7 @@ const createSubtask = async (parentTaskId, formData, token) => {
   const taskTypeVal = formData.taskType || "regular";
   const mainTaskTypeVal = formData.mainTaskType || "regular";
   formDataObj.append("taskType", taskTypeVal);
+  formDataObj.append("subtaskType", taskTypeVal);
   formDataObj.append("mainTaskType", mainTaskTypeVal);
 
   if (taskTypeVal === "milestone" || formData.isMilestone) {
@@ -316,31 +317,38 @@ const createSubtask = async (parentTaskId, formData, token) => {
 
 // Local YYYY-MM-DDTHH:mm for <input type="datetime-local">
 // Preserves literal hours and minutes from string to prevent timezone offset shifts
-const formatDateTimeToInput = (dateStr) => {
+const formatDateTimeToInput = (dateStr, dueTime = null) => {
   if (!dateStr) return "";
+  let baseFormatted = "";
   if (dateStr instanceof Date) {
     const pad = (n) => String(n).padStart(2, "0");
-    return `${dateStr.getFullYear()}-${pad(dateStr.getMonth() + 1)}-${pad(dateStr.getDate())}T${pad(dateStr.getHours())}:${pad(dateStr.getMinutes())}`;
-  }
-  if (typeof dateStr === "string") {
+    baseFormatted = `${dateStr.getFullYear()}-${pad(dateStr.getMonth() + 1)}-${pad(dateStr.getDate())}T${pad(dateStr.getHours())}:${pad(dateStr.getMinutes())}`;
+  } else if (typeof dateStr === "string") {
     // If string already has T (e.g. "2026-08-22T13:10:00.000Z"), extract date and time directly without timezone conversion
     if (dateStr.includes("T")) {
       const parts = dateStr.split("T");
       const datePart = parts[0];
       const timePart = parts[1].slice(0, 5); // HH:mm
-      return `${datePart}T${timePart}`;
-    }
-    // If dateStr is YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      return `${dateStr}T17:00`;
-    }
-    const d = new Date(dateStr);
-    if (!isNaN(d.getTime())) {
-      const pad = (n) => String(n).padStart(2, "0");
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      baseFormatted = `${datePart}T${timePart}`;
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      baseFormatted = `${dateStr}T17:00`;
+    } else {
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) {
+        const pad = (n) => String(n).padStart(2, "0");
+        baseFormatted = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      }
     }
   }
-  return "";
+
+  // If time part is 00:00 and dueTime argument exists (e.g. "13:05" or "11:44"), use dueTime
+  if (baseFormatted && dueTime && typeof dueTime === "string" && (baseFormatted.endsWith("T00:00") || !baseFormatted.includes("T"))) {
+    const dateOnly = baseFormatted.split("T")[0];
+    const timeOnly = dueTime.length >= 5 ? dueTime.slice(0, 5) : dueTime;
+    return `${dateOnly}T${timeOnly}`;
+  }
+
+  return baseFormatted;
 };
 
 // Current date-time in local format YYYY-MM-DDTHH:mm
@@ -381,8 +389,13 @@ function SubtaskForm({
 
   const priorityOptions = getPriorityOptions(taskPriorities);
 
-  // Subtask Type: 'regular' | 'milestone' | 'approval'
-  const [subtaskType, setSubtaskType] = useState(editData?.taskType || "regular");
+  // Subtask Type: 'regular' | 'milestone' | 'approval' | 'email'
+  const [subtaskType, setSubtaskType] = useState(() => {
+    if (editData?.taskType === "email" || editData?.isEmailTask || editData?.emailConfig) return "email";
+    if (editData?.taskType === "milestone" || editData?.isMilestone) return "milestone";
+    if (editData?.taskType === "approval" || editData?.isApprovalTask) return "approval";
+    return editData?.taskType || "regular";
+  });
 
   const [formData, setFormData] = useState({
     title: "",
@@ -448,19 +461,32 @@ function SubtaskForm({
         parentTaskId: parentTask?._id || parentTask?.id,
       };
 
-      await createSubtask(parentTask?._id || parentTask?.id, subtaskPayload, token);
+      const parentTaskId = parentTask?._id || parentTask?.id;
+      const subtaskId = editData?._id || editData?.id;
+
+      if (mode === "edit" && subtaskId) {
+        await apiClient.put(`/api/tasks/${parentTaskId}/subtasks/${subtaskId}`, subtaskPayload);
+        showSuccessToast(`${type.charAt(0).toUpperCase() + type.slice(1)} Subtask updated successfully`);
+      } else {
+        await createSubtask(parentTaskId, subtaskPayload, token);
+        showSuccessToast(`${type.charAt(0).toUpperCase() + type.slice(1)} Subtask created successfully`);
+      }
+
       if (onSubmit) {
         await onSubmit(subtaskPayload);
       }
-      showSuccessToast(
-        `${type.charAt(0).toUpperCase() + type.slice(1)} Subtask created successfully`,
+      queryClient.invalidateQueries({ queryKey: ["allTasks"] });
+      window.dispatchEvent(
+        new CustomEvent("subtaskUpdate", {
+          detail: { parentTaskId, subtaskId, formData: subtaskPayload, alreadyUpdated: true },
+        }),
       );
       if (typeof refreshTask === "function") {
         await refreshTask();
       }
       onClose();
     } catch (err) {
-      showErrorToast(err.message || "Failed to create subtask");
+      showErrorToast(err.message || `Failed to ${mode === "edit" ? "update" : "create"} subtask`);
     } finally {
       setIsLoading(false);
     }
@@ -585,6 +611,18 @@ function SubtaskForm({
   // Populate form when editing or reset with parent data
   useEffect(() => {
     if (editData && mode === "edit") {
+      let resolvedType = "regular";
+      if (editData.taskType === "email" || editData.isEmailTask || editData.emailConfig) {
+        resolvedType = "email";
+      } else if (editData.taskType === "milestone" || editData.isMilestone) {
+        resolvedType = "milestone";
+      } else if (editData.taskType === "approval" || editData.isApprovalTask) {
+        resolvedType = "approval";
+      } else if (editData.taskType) {
+        resolvedType = editData.taskType;
+      }
+      setSubtaskType(resolvedType);
+
       console.log("══════════════════════════════════════════════════════");
       console.log("🔧 [EDIT MODE] Starting form population");
       console.log("══════════════════════════════════════════════════════");
@@ -746,7 +784,7 @@ function SubtaskForm({
 
       // Format the due date and time for input field (YYYY-MM-DDTHH:mm)
       const formattedDueDate = editData.dueDate
-        ? formatDateTimeToInput(editData.dueDate)
+        ? formatDateTimeToInput(editData.dueDate, editData.dueTime)
         : "";
       console.log("📅 [EDIT] Due Date Formatting:", {
         original: editData.dueDate,
@@ -1269,11 +1307,12 @@ function SubtaskForm({
             .replace(" priority", "")
             .replace(" ", "-"),
         );
-        updateFormData.append(
-          "dueDate",
-          inputDateToLocalIso(formData.dueDate, formData.dueTime),
-        );
-        if (formData.dueTime) {
+        const isoDate = inputDateTimeToIso(formData.dueDate);
+        updateFormData.append("dueDate", isoDate);
+        if (formData.dueDate && formData.dueDate.includes("T")) {
+          const timePart = formData.dueDate.split("T")[1];
+          updateFormData.append("dueTime", timePart);
+        } else if (formData.dueTime) {
           updateFormData.append("dueTime", formData.dueTime);
         }
         updateFormData.append("visibility", formData.visibility);
@@ -1669,6 +1708,7 @@ function SubtaskForm({
                 isOrgUser={isOrgUser}
                 parentTask={parentTask}
                 isSubmitting={isLoading}
+                editData={editData}
                 onCancel={onClose}
                 onSubmit={(data) => handleSpecialSubtaskSubmit("email", data)}
               />
@@ -1680,6 +1720,7 @@ function SubtaskForm({
                 isOrgUser={isOrgUser}
                 parentTask={parentTask}
                 isSubmitting={isLoading}
+                editData={editData}
                 onCancel={onClose}
                 onSubmit={(data) => handleSpecialSubtaskSubmit("milestone", data)}
               />
@@ -1691,6 +1732,7 @@ function SubtaskForm({
                 isOrgUser={isOrgUser}
                 parentTask={parentTask}
                 isSubmitting={isLoading}
+                editData={editData}
                 onCancel={onClose}
                 onSubmit={(data) => handleSpecialSubtaskSubmit("approval", data)}
               />

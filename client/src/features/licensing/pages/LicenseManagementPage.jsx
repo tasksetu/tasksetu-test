@@ -36,6 +36,9 @@ import {
   Info,
   ShoppingCart,
   CheckCircle2,
+  CheckCircle,
+  List,
+  Mail,
   Building2,
   Award,
   Loader, // ✅ NEW: License icon
@@ -101,7 +104,7 @@ function LicenseDifferencesSection({
       }
       
       if (mapping.usage_limit === -1) {
-        const limitCodes = ["TASK_BASIC", "FORM_CREATE", "PROC_CREATE", "REPORT_BASIC"];
+        const limitCodes = ["TASK_BASIC", "TASK_SUB", "SUBTASK_EMAIL", "SUBTASK_MILESTONE", "SUBTASK_APPROVAL", "FORM_CREATE", "PROC_CREATE", "REPORT_BASIC"];
         if (limitCodes.includes(featureCode)) {
           return "Unlimited";
         }
@@ -111,7 +114,7 @@ function LicenseDifferencesSection({
       return true;
     };
 
-    const limitCodes = ["TASK_BASIC", "FORM_CREATE", "PROC_CREATE", "REPORT_BASIC"];
+    const limitCodes = ["TASK_BASIC", "TASK_SUB", "SUBTASK_EMAIL", "SUBTASK_MILESTONE", "SUBTASK_APPROVAL", "FORM_CREATE", "PROC_CREATE", "REPORT_BASIC"];
     const usageLimitsGroup = {
       category: "Usage Limits",
       icon: "📊",
@@ -903,6 +906,10 @@ export default function LicenseManagementPage() {
     // 1. Core feature codes that always have tracking
     const coreCodes = [
       "TASK_BASIC",
+      "TASK_SUB",
+      "SUBTASK_EMAIL",
+      "SUBTASK_MILESTONE",
+      "SUBTASK_APPROVAL",
       "FORM_CREATE",
       "PROC_CREATE",
       "REPORT_BASIC",
@@ -928,6 +935,26 @@ export default function LicenseManagementPage() {
             label: "Basic Tasks",
             icon: CheckSquare,
             desc: "Tasks created",
+          },
+          TASK_SUB: {
+            label: "Regular Subtasks",
+            icon: List,
+            desc: "Subtasks created",
+          },
+          SUBTASK_EMAIL: {
+            label: "Email Subtasks",
+            icon: Mail,
+            desc: "Email subtasks",
+          },
+          SUBTASK_MILESTONE: {
+            label: "Milestone Subtasks",
+            icon: Flag,
+            desc: "Milestone subtasks",
+          },
+          SUBTASK_APPROVAL: {
+            label: "Approval Subtasks",
+            icon: CheckCircle,
+            desc: "Approval subtasks",
           },
           FORM_CREATE: {
             label: "Create Forms",
@@ -1597,6 +1624,10 @@ export default function LicenseManagementPage() {
           (() => {
             const nearLimitFeatures = [
               { key: "TASK_BASIC", label: "tasks" },
+              { key: "TASK_SUB", label: "regular subtasks" },
+              { key: "SUBTASK_EMAIL", label: "email subtasks" },
+              { key: "SUBTASK_MILESTONE", label: "milestone subtasks" },
+              { key: "SUBTASK_APPROVAL", label: "approval subtasks" },
               { key: "FORM_CREATE", label: "forms" },
               { key: "PROC_CREATE", label: "processes" },
               { key: "REPORT_BASIC", label: "reports" },

@@ -1761,12 +1761,19 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
   const shouldShowAttachedFormsTab = () => {
     if (!task || !rawTaskData) return false;
 
-    // Check if main task has attached form
-    if (rawTaskData.attached_form_version_id) return true;
+    // Check if task has attached form (regular or email)
+    if (
+      rawTaskData.attached_form_version_id ||
+      rawTaskData.emailConfig?.attachedFormId
+    ) return true;
 
-    // Check if any subtask has attached form
+    // Check if any subtask has attached form (regular or email)
     if (rawTaskData.subtasks && rawTaskData.subtasks.length > 0) {
-      return rawTaskData.subtasks.some((st) => st.attached_form_version_id);
+      return rawTaskData.subtasks.some(
+        (st) =>
+          st.attached_form_version_id ||
+          st.emailConfig?.attachedFormId
+      );
     }
 
     return false;

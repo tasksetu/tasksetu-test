@@ -146,20 +146,25 @@ const ApprovalSubtaskForm = ({
     formState: { errors },
   } = useForm({
     defaultValues: {
-      taskName: "",
-      description: "",
-      dueDate: getTomorrowDateTime(),
-      priority: { value: "medium", label: "Medium" },
-      assignedTo: isOrgUser
-        ? null
-        : { value: "self", label: user?.name || "Self" },
-      approvers: [],
-      approvalMode: "any",
-      autoApproval: false,
-      autoApproveAfter: null,
-      visibility: "private",
-      collaborators: [],
-      status: "OPEN",
+      taskName: editData?.title || editData?.taskName || "",
+      description: editData?.description || "",
+      dueDate: editData?.dueDate
+        ? new Date(editData.dueDate).toISOString().slice(0, 16)
+        : getTomorrowDateTime(),
+      priority: editData?.priority
+        ? {
+            value: typeof editData.priority === "object" ? editData.priority.value : editData.priority,
+            label: typeof editData.priority === "object" ? editData.priority.label : String(editData.priority).toUpperCase(),
+          }
+        : { value: "medium", label: "Medium" },
+      assignedTo: editData?.assignedTo || (isOrgUser ? null : { value: "self", label: user?.name || "Self" }),
+      approvers: editData?.approvers || [],
+      approvalMode: editData?.approvalMode || "any",
+      autoApproval: editData?.autoApproval || false,
+      autoApproveAfter: editData?.autoApproveAfter || null,
+      visibility: editData?.visibility || "private",
+      collaborators: editData?.collaborators || [],
+      status: editData?.status || "OPEN",
     },
   });
 
@@ -382,7 +387,7 @@ const ApprovalSubtaskForm = ({
 
       {/* Approvers Selection */}
       <div className="bg-blue-50/50 p-3.5 rounded-md border border-blue-100">
-        <label className="block text-sm font-semibold text-blue-900 mb-2 flex items-center gap-1.5">
+        <label className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-1.5">
           <UserCheck className="w-4 h-4 text-blue-600" />
           Approvers <span className="text-red-500">*</span>
         </label>
@@ -428,7 +433,7 @@ const ApprovalSubtaskForm = ({
 
       {/* Row 1: Approval Mode — horizontal single line */}
       <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
+        <label className="text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
           Approval Mode <span className="text-red-500">*</span>
           <div className="relative group ml-1">
             <Info className="w-3.5 h-3.5 text-gray-400 cursor-help" />
@@ -570,7 +575,7 @@ const ApprovalSubtaskForm = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Due Date */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
+          <label className="text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
             <Clock className="w-4 h-4 text-gray-500" />
             Approval Deadline <span className="text-red-500">*</span>
           </label>
@@ -647,7 +652,7 @@ const ApprovalSubtaskForm = ({
 
         {/* Collaborators */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
+          <label className="text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
             <Users className="w-4 h-4 text-gray-500" />
             Collaborators
           </label>

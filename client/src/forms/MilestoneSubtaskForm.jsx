@@ -56,6 +56,7 @@ const MilestoneSubtaskForm = ({
   onCancel,
   isOrgUser,
   parentTask = null,
+  editData = null,
   collaboratorOptions = [],
   isLoadingCollaborators = false,
   isSubmitting = false,
@@ -180,19 +181,24 @@ const MilestoneSubtaskForm = ({
     formState: { errors },
   } = useForm({
     defaultValues: {
-      taskName: "",
-      description: "",
-      dueDate: getCurrentDateTime(),
-      milestoneType: "standalone",
-      linkedTasks: [],
-      autoDueDate: true,
-      priority: { value: "medium", label: "Medium" },
-      assignedTo: isOrgUser
-        ? null
-        : { value: "self", label: user?.name || "Self" },
-      visibility: "private",
-      collaborators: [],
-      status: "OPEN",
+      taskName: editData?.title || editData?.taskName || "",
+      description: editData?.description || "",
+      dueDate: editData?.dueDate
+        ? new Date(editData.dueDate).toISOString().slice(0, 16)
+        : getCurrentDateTime(),
+      milestoneType: editData?.milestoneType || "standalone",
+      linkedTasks: editData?.linkedTasks || [],
+      autoDueDate: editData?.autoDueDate !== undefined ? editData.autoDueDate : true,
+      priority: editData?.priority
+        ? {
+            value: typeof editData.priority === "object" ? editData.priority.value : editData.priority,
+            label: typeof editData.priority === "object" ? editData.priority.label : String(editData.priority).toUpperCase(),
+          }
+        : { value: "medium", label: "Medium" },
+      assignedTo: editData?.assignedTo || (isOrgUser ? null : { value: "self", label: user?.name || "Self" }),
+      visibility: editData?.visibility || "private",
+      collaborators: editData?.collaborators || [],
+      status: editData?.status || "OPEN",
     },
   });
 

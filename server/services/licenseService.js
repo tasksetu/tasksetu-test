@@ -18,7 +18,11 @@ const FEATURE_DISPLAY_NAMES = {
   TASK_RECUR: "Recurring Tasks",
   TASK_APPROVAL: "Approval Tasks",
   TASK_MSTONE: "Milestone Tasks",
-  TASK_SUB: "Sub Tasks",
+  TASK_SUB: "Regular Subtasks",
+  SUBTASK_REGULAR: "Regular Subtasks",
+  SUBTASK_EMAIL: "Email Subtasks",
+  SUBTASK_MILESTONE: "Milestone Subtasks",
+  SUBTASK_APPROVAL: "Approval Subtasks",
   PROC_CREATE: "Processes",
   FORM_CREATE: "Forms",
 };

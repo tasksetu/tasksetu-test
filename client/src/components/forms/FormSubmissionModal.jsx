@@ -175,8 +175,20 @@ export default function FormSubmissionModal({
 
         if (submissionResponse.ok) {
           const submissionData = await submissionResponse.json();
-          setExistingSubmission(submissionData.data);
-          setFormValues(submissionData.data?.submission_data_json || {});
+          const subData = submissionData.data;
+          setExistingSubmission(subData);
+
+          const rawValues = subData?.submission_data_json || {};
+          const normalizedValues = { ...rawValues };
+          schema?.fields?.forEach((f) => {
+            if (f.field_code && rawValues[f.field_code] !== undefined) {
+              normalizedValues[f.field_id] = rawValues[f.field_code];
+            }
+            if (f.field_id && rawValues[f.field_id] !== undefined) {
+              normalizedValues[f.field_code] = rawValues[f.field_id];
+            }
+          });
+          setFormValues(normalizedValues);
         } else {
           throw new Error("Failed to load submission");
         }
@@ -607,8 +619,13 @@ export default function FormSubmissionModal({
       );
     }
 
-    // Get value for THIS specific field only
-    const value = formValues[fieldKey];
+    // Get value for THIS specific field only (supports both field_id and field_code keys)
+    const value =
+      formValues[field.field_id] !== undefined
+        ? formValues[field.field_id]
+        : formValues[field.field_code] !== undefined
+        ? formValues[field.field_code]
+        : formValues[fieldKey];
     const fieldErrors = validationErrors[fieldKey] || [];
     const hasError = fieldErrors.length > 0;
 
@@ -764,7 +781,7 @@ export default function FormSubmissionModal({
               theme="snow"
               value={value || field.default_value || ""}
               onChange={(content) => handleFieldChange(fieldKey, content)}
-              readOnly={field.read_only}
+              readOnly={field.read_only || readOnly}
               placeholder={field.placeholder || "Enter formatted text..."}
               modules={{
                 toolbar:

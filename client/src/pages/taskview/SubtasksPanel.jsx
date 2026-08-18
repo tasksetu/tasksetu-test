@@ -1148,9 +1148,12 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
                                 <span className="text-[11px] font-semibold text-sky-800 block mb-1">
                                   Message Body Template:
                                 </span>
-                                <pre className="text-xs bg-white p-2.5 rounded border border-sky-200 text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">
-                                  {subtask.emailConfig.body}
-                                </pre>
+                                <div
+                                  className="text-xs bg-white p-2.5 rounded border border-sky-200 text-gray-800 leading-relaxed prose max-w-none"
+                                  dangerouslySetInnerHTML={{
+                                    __html: subtask.emailConfig.body,
+                                  }}
+                                />
                               </div>
                             )}
 

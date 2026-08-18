@@ -424,15 +424,28 @@ class EmailTaskServiceClass {
     // Helper to safely escape regex special characters in variable keys
     const escapeRegExp = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+    // Helper to format variable values for inline HTML substitution
+    const formatVariableValueForInlineHtml = (val) => {
+      if (val === undefined || val === null) return "";
+      let strVal = String(val).trim();
+      // If variable value contains a single wrapping <p>...</p>, strip outer <p> and </p>
+      // so it embeds inline without breaking paragraph layout in email clients
+      if (/^<p\b[^>]*>(.*?)<\/p>$/is.test(strVal)) {
+        strVal = strVal.replace(/^<p\b[^>]*>(.*?)<\/p>$/is, "$1").trim();
+      }
+      return strVal;
+    };
+
     // 3. Replace User-Defined Template Variables (case-insensitive placeholder replacement)
     for (const variable of variables || []) {
       if (variable.key) {
         const regex = new RegExp(`\\{${escapeRegExp(variable.key)}\\}`, "gi");
         const perRecipientVal = getRecipientVarValue(variable.key);
-        let value = perRecipientVal !== undefined && perRecipientVal !== null
+        let rawVal = perRecipientVal !== undefined && perRecipientVal !== null
           ? perRecipientVal
           : (variable.staticValue || "");
-        resolved = resolved.replace(regex, String(value));
+        let value = formatVariableValueForInlineHtml(rawVal);
+        resolved = resolved.replace(regex, value);
       }
     }
 
@@ -448,7 +461,8 @@ class EmailTaskServiceClass {
         for (const [k, v] of Object.entries(varsObj)) {
           if (k && v !== undefined && v !== null) {
             const regex = new RegExp(`\\{${escapeRegExp(k)}\\}`, "gi");
-            resolved = resolved.replace(regex, String(v));
+            const formattedV = formatVariableValueForInlineHtml(v);
+            resolved = resolved.replace(regex, formattedV);
           }
         }
       }

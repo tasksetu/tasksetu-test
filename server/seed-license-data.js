@@ -86,11 +86,35 @@ const features = [
   },
   {
     feature_code: 'TASK_SUB',
-    name: 'Subtasks',
-    description: 'Break down tasks into subtasks',
+    name: 'Regular Subtasks',
+    description: 'Break down tasks into regular subtasks',
     category: 'CORE',
     icon: 'List',
     display_order: 2,
+  },
+  {
+    feature_code: 'SUBTASK_EMAIL',
+    name: 'Email Subtasks',
+    description: 'Create email subtasks under tasks',
+    category: 'CORE',
+    icon: 'Mail',
+    display_order: 2.1,
+  },
+  {
+    feature_code: 'SUBTASK_MILESTONE',
+    name: 'Milestone Subtasks',
+    description: 'Create milestone subtasks under tasks',
+    category: 'CORE',
+    icon: 'Flag',
+    display_order: 2.2,
+  },
+  {
+    feature_code: 'SUBTASK_APPROVAL',
+    name: 'Approval Subtasks',
+    description: 'Create approval subtasks under tasks',
+    category: 'CORE',
+    icon: 'CheckCircle',
+    display_order: 2.3,
   },
   {
     feature_code: 'TASK_QUICK',
@@ -279,7 +303,10 @@ const features = [
 ];
 const mappings = [
   { license_code: 'EXPLORE', feature_code: 'TASK_BASIC', usage_limit: 20, is_enabled: true, limit_type: 'MONTHLY' },      // Max 20 tasks
-  { license_code: 'EXPLORE', feature_code: 'TASK_SUB', usage_limit: 10, is_enabled: true, limit_type: 'MONTHLY' },        // Max 10 sub-tasks
+  { license_code: 'EXPLORE', feature_code: 'TASK_SUB', usage_limit: 10, is_enabled: true, limit_type: 'MONTHLY' },        // Max 10 regular sub-tasks
+  { license_code: 'EXPLORE', feature_code: 'SUBTASK_EMAIL', usage_limit: 10, is_enabled: true, limit_type: 'MONTHLY' },      // Max 10 email sub-tasks
+  { license_code: 'EXPLORE', feature_code: 'SUBTASK_MILESTONE', usage_limit: 5, is_enabled: true, limit_type: 'MONTHLY' },    // Max 5 milestone sub-tasks
+  { license_code: 'EXPLORE', feature_code: 'SUBTASK_APPROVAL', usage_limit: 5, is_enabled: true, limit_type: 'MONTHLY' },     // Max 5 approval sub-tasks
   { license_code: 'EXPLORE', feature_code: 'TASK_QUICK', usage_limit: 50, is_enabled: true, limit_type: 'MONTHLY' },      // Up to 50
   { license_code: 'EXPLORE', feature_code: 'NOTIF_BASIC', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },        // Included
   { license_code: 'EXPLORE', feature_code: 'REPORT_BASIC', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },       // Standard only
@@ -307,7 +334,10 @@ const mappings = [
 
   // PLAN license mappings (Individuals / small teams - higher caps per spec)
   { license_code: 'PLAN', feature_code: 'TASK_BASIC', usage_limit: 100, is_enabled: true, limit_type: 'MONTHLY' },        // 100 tasks/month
-  { license_code: 'PLAN', feature_code: 'TASK_SUB', usage_limit: 50, is_enabled: true, limit_type: 'MONTHLY' },           // 50/month
+  { license_code: 'PLAN', feature_code: 'TASK_SUB', usage_limit: 50, is_enabled: true, limit_type: 'MONTHLY' },           // 50 regular sub-tasks/month
+  { license_code: 'PLAN', feature_code: 'SUBTASK_EMAIL', usage_limit: 50, is_enabled: true, limit_type: 'MONTHLY' },      // 50 email sub-tasks/month
+  { license_code: 'PLAN', feature_code: 'SUBTASK_MILESTONE', usage_limit: 20, is_enabled: true, limit_type: 'MONTHLY' },    // 20 milestone sub-tasks/month
+  { license_code: 'PLAN', feature_code: 'SUBTASK_APPROVAL', usage_limit: 20, is_enabled: true, limit_type: 'MONTHLY' },     // 20 approval sub-tasks/month
   { license_code: 'PLAN', feature_code: 'TASK_QUICK', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },            // Unlimited
   { license_code: 'PLAN', feature_code: 'NOTIF_BASIC', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },           // Included
   { license_code: 'PLAN', feature_code: 'REPORT_BASIC', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },          // Included
@@ -336,6 +366,9 @@ const mappings = [
   // EXECUTE license mappings (Growing teams - unlimited on core features per spec)
   { license_code: 'EXECUTE', feature_code: 'TASK_BASIC', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },         // Unlimited
   { license_code: 'EXECUTE', feature_code: 'TASK_SUB', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },           // Unlimited
+  { license_code: 'EXECUTE', feature_code: 'SUBTASK_EMAIL', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },         // Unlimited
+  { license_code: 'EXECUTE', feature_code: 'SUBTASK_MILESTONE', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },     // Unlimited
+  { license_code: 'EXECUTE', feature_code: 'SUBTASK_APPROVAL', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },      // Unlimited
   { license_code: 'EXECUTE', feature_code: 'TASK_QUICK', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },         // Unlimited
   { license_code: 'EXECUTE', feature_code: 'NOTIF_BASIC', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },        // Included
   { license_code: 'EXECUTE', feature_code: 'REPORT_BASIC', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },       // Included
@@ -364,6 +397,9 @@ const mappings = [
   // OPTIMIZE license mappings (Large organizations - unlimited everything per spec)
   { license_code: 'OPTIMIZE', feature_code: 'TASK_BASIC', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },        // Unlimited
   { license_code: 'OPTIMIZE', feature_code: 'TASK_SUB', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },          // Unlimited
+  { license_code: 'OPTIMIZE', feature_code: 'SUBTASK_EMAIL', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },         // Unlimited
+  { license_code: 'OPTIMIZE', feature_code: 'SUBTASK_MILESTONE', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },     // Unlimited
+  { license_code: 'OPTIMIZE', feature_code: 'SUBTASK_APPROVAL', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },      // Unlimited
   { license_code: 'OPTIMIZE', feature_code: 'TASK_QUICK', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },        // Unlimited
   { license_code: 'OPTIMIZE', feature_code: 'NOTIF_BASIC', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },       // Included
   { license_code: 'OPTIMIZE', feature_code: 'REPORT_BASIC', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },      // Included
@@ -392,6 +428,9 @@ const mappings = [
   // EXPIRED license mappings (no access)
   { license_code: 'EXPIRED', feature_code: 'TASK_BASIC', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
   { license_code: 'EXPIRED', feature_code: 'TASK_SUB', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
+  { license_code: 'EXPIRED', feature_code: 'SUBTASK_EMAIL', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
+  { license_code: 'EXPIRED', feature_code: 'SUBTASK_MILESTONE', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
+  { license_code: 'EXPIRED', feature_code: 'SUBTASK_APPROVAL', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
   { license_code: 'EXPIRED', feature_code: 'TASK_QUICK', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
   { license_code: 'EXPIRED', feature_code: 'NOTIF_BASIC', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
   { license_code: 'EXPIRED', feature_code: 'REPORT_BASIC', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
@@ -424,29 +463,40 @@ async function seedLicenseData() {
     await mongoose.connect(MONGODB_URI);
     console.log('✅ Connected to MongoDB\n');
 
-    // Clear existing data
-    console.log('🗑️  Clearing existing data...');
-    await License.deleteMany({});
-    await Feature.deleteMany({});
-    await LicenseFeatureMapping.deleteMany({});
-    console.log('✅ Cleared existing data\n');
-
-    // Insert licenses
-    console.log('📝 Inserting licenses...');
-    const insertedLicenses = await License.insertMany(licenses);
-    console.log(`✅ Inserted ${insertedLicenses.length} licenses`);
-    insertedLicenses.forEach((license) => {
+    // Safe Non-Destructive Update
+    console.log('🛡️  Safely processing licenses (preserving live data)...');
+    let newLicensesCount = 0;
+    for (const lic of licenses) {
+      const res = await License.updateOne(
+        { license_code: lic.license_code },
+        { $setOnInsert: lic },
+        { upsert: true }
+      );
+      if (res.upsertedCount > 0) newLicensesCount++;
+    }
+    const allLicenses = await License.find({});
+    console.log(`✅ Licenses verified: Total ${allLicenses.length} (${newLicensesCount} new added, existing live licenses untouched)`);
+    allLicenses.forEach((license) => {
       console.log(`   - ${license.license_code}: ${license.name} (₹${license.price_monthly}/mo)`);
     });
     console.log('');
 
-    // Insert features
-    console.log('📝 Inserting features...');
-    const insertedFeatures = await Feature.insertMany(features);
-    console.log(`✅ Inserted ${insertedFeatures.length} features`);
+    // Safe Feature Upsert
+    console.log('🛡️  Safely processing features...');
+    let newFeaturesCount = 0;
+    for (const feat of features) {
+      const res = await Feature.updateOne(
+        { feature_code: feat.feature_code },
+        { $set: feat },
+        { upsert: true }
+      );
+      if (res.upsertedCount > 0) newFeaturesCount++;
+    }
+    const allFeatures = await Feature.find({});
+    console.log(`✅ Features verified: Total ${allFeatures.length} (${newFeaturesCount} new features added)`);
 
     const featuresByCategory = {};
-    insertedFeatures.forEach((feature) => {
+    allFeatures.forEach((feature) => {
       if (!featuresByCategory[feature.category]) {
         featuresByCategory[feature.category] = [];
       }
@@ -461,14 +511,23 @@ async function seedLicenseData() {
     });
     console.log('');
 
-    // Insert license-feature mappings
-    console.log('📝 Inserting license-feature mappings...');
-    const insertedMappings = await LicenseFeatureMapping.insertMany(mappings);
-    console.log(`✅ Inserted ${insertedMappings.length} mappings\n`);
+    // Safe Mapping Upsert
+    console.log('🛡️  Safely processing license-feature mappings...');
+    let newMappingsCount = 0;
+    for (const map of mappings) {
+      const res = await LicenseFeatureMapping.updateOne(
+        { license_code: map.license_code, feature_code: map.feature_code },
+        { $setOnInsert: map },
+        { upsert: true }
+      );
+      if (res.upsertedCount > 0) newMappingsCount++;
+    }
+    const allMappings = await LicenseFeatureMapping.find({});
+    console.log(`✅ Feature mappings verified: Total ${allMappings.length} (${newMappingsCount} new feature limits mapped, existing custom limits untouched)\n`);
 
     // Summary by license
     const mappingsByLicense = {};
-    insertedMappings.forEach((mapping) => {
+    allMappings.forEach((mapping) => {
       if (!mappingsByLicense[mapping.license_code]) {
         mappingsByLicense[mapping.license_code] = {
           enabled: 0,
@@ -500,9 +559,9 @@ async function seedLicenseData() {
 
     console.log('✅ Seed data inserted successfully!');
     console.log('\n📊 Summary:');
-    console.log(`   - Licenses: ${insertedLicenses.length}`);
-    console.log(`   - Features: ${insertedFeatures.length}`);
-    console.log(`   - Mappings: ${insertedMappings.length}`);
+    console.log(`   - Licenses: ${allLicenses.length}`);
+    console.log(`   - Features: ${allFeatures.length}`);
+    console.log(`   - Mappings: ${allMappings.length}`);
 
   } catch (error) {
     console.error('❌ Error seeding data:', error);

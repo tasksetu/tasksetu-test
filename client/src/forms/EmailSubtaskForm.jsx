@@ -57,6 +57,18 @@ export default function EmailSubtaskForm({
     },
   });
 
+  // Sync state when editData changes
+  useEffect(() => {
+    if (editData) {
+      if (editData.emailConfig) {
+        setEmailConfig(editData.emailConfig);
+      }
+      if (editData.linkedTaskId) setLinkedTaskId(editData.linkedTaskId);
+      if (editData.configuration?.autoInitiate) setAutoInitiate(editData.configuration.autoInitiate);
+      if (editData.attachments) setAttachments(editData.attachments);
+    }
+  }, [editData]);
+
   // Fetch users & form templates for dropdowns
   useEffect(() => {
     fetchOrgUsers();
@@ -151,7 +163,8 @@ export default function EmailSubtaskForm({
     if (validRecipients.length === 0) {
       errs.recipients = "At least one recipient email address is required.";
     }
-    if (!emailConfig?.body || !emailConfig.body.trim()) {
+    const cleanBody = (emailConfig?.body || "").replace(/<[^>]*>/g, "").trim();
+    if (!cleanBody) {
       errs.body = "Email Body / Message is required.";
     }
 

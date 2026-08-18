@@ -2,7 +2,7 @@ import express from "express";
 import multer from "multer";
 import { authenticateToken } from "../middleware/roleAuth.js";
 import { upload, commentUpload } from "../utils/upload.js";
-import { checkFeatureAccess, trackFeatureUsage, checkDynamicTaskFeature } from "../middleware/licenseMiddleware.js";
+import { checkFeatureAccess, trackFeatureUsage, checkDynamicTaskFeature, checkDynamicSubtaskFeature } from "../middleware/licenseMiddleware.js";
 
 // console.log('📦 [MODULE LOAD] taskRoutes.js is being loaded');
 // console.log('📦 [MODULE LOAD] checkFeatureAccess middleware imported:', typeof checkFeatureAccess);
@@ -564,7 +564,7 @@ router.post("/create-task",
  */
 router.post("/tasks/:parentTaskId/create-subtask",
   authenticateToken,
-  checkFeatureAccess('TASK_SUB'),  // Check license limits for subtask creation
+  checkDynamicSubtaskFeature(),  // Check license limits for subtask creation dynamically
   upload.array('attachments', 5),
   createSubtask  // Controller creates the subtask AND handles consumption internally
 );

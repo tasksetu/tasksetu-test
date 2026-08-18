@@ -41,12 +41,16 @@ export default function AttachedFormsTab({ task, taskId, onRefresh }) {
       setLoading(true);
       const allForms = [];
 
-      // Check if main task has attached form
-      if (task.attached_form_version_id) {
+      // Check if task itself has attached form (regular or email)
+      const rawMainFormVersionId =
+        task.attached_form_version_id ||
+        task.emailConfig?.attachedFormId;
+
+      if (rawMainFormVersionId) {
         const formVersionId =
-          typeof task.attached_form_version_id === "object"
-            ? task.attached_form_version_id._id
-            : task.attached_form_version_id;
+          typeof rawMainFormVersionId === "object"
+            ? rawMainFormVersionId._id
+            : rawMainFormVersionId;
 
         // Fetch form version details
         const versionResponse = await fetch(
@@ -56,12 +60,14 @@ export default function AttachedFormsTab({ task, taskId, onRefresh }) {
           },
         );
 
+        const isTaskASubtask = task.isSubtask || !!task.parentTaskId;
+
         // If user is not authorized to view this form version, add a restricted placeholder
         if (versionResponse.status === 403) {
           allForms.push({
             taskId: taskId,
             taskTitle: task.title,
-            isSubtask: false,
+            isSubtask: isTaskASubtask,
             formVersionId: formVersionId,
             formTitle: "Restricted Form (owner only)",
             formDescription: "",
@@ -73,12 +79,17 @@ export default function AttachedFormsTab({ task, taskId, onRefresh }) {
         } else if (versionResponse.ok) {
           const versionData = await versionResponse.json();
           const formVersion = versionData.data?.version || versionData.data;
+          const resolvedVersionId = formVersion?._id || formVersion?.id || formVersionId;
 
           // Fetch user's submissions for this form
           const params = new URLSearchParams({
-            form_version_id: formVersionId,
-            task_id: taskId,
+            form_version_id: resolvedVersionId,
           });
+          if (isTaskASubtask) {
+            params.append("subtask_id", taskId);
+          } else {
+            params.append("task_id", taskId);
+          }
 
           const submissionsResponse = await fetch(
             `/api/forms/submissions/my-submissions?${params}`,
@@ -96,10 +107,11 @@ export default function AttachedFormsTab({ task, taskId, onRefresh }) {
           allForms.push({
             taskId: taskId,
             taskTitle: task.title,
-            isSubtask: false,
-            formVersionId: formVersionId,
-            formTitle: formVersion.snapshot_data?.title || "Untitled Form",
-            formDescription: formVersion.snapshot_data?.description || "",
+            isSubtask: isTaskASubtask,
+            subtaskType: isTaskASubtask ? (task.subtaskType || task.taskType || (task.emailConfig ? "email" : "regular")) : undefined,
+            formVersionId: resolvedVersionId,
+            formTitle: formVersion.snapshot_data?.title || formVersion.title || "Untitled Form",
+            formDescription: formVersion.snapshot_data?.description || formVersion.description || "",
             versionNumber: formVersion.version_number || "N/A",
             publishedAt: formVersion.published_at,
             submissions: submissions,
@@ -110,13 +122,22 @@ export default function AttachedFormsTab({ task, taskId, onRefresh }) {
       // Check subtasks for attached forms
       if (task.subtasks && task.subtasks.length > 0) {
         for (const subtask of task.subtasks) {
-          if (subtask.attached_form_version_id) {
-            const formVersionId =
-              typeof subtask.attached_form_version_id === "object"
-                ? subtask.attached_form_version_id._id
-                : subtask.attached_form_version_id;
+          const rawFormVersionId =
+            subtask.attached_form_version_id ||
+            subtask.emailConfig?.attachedFormId;
 
-            const versionResponse = await fetch(
+          if (rawFormVersionId) {
+            const formVersionId =
+              typeof rawFormVersionId === "object"
+                ? rawFormVersionId._id
+                : rawFormVersionId;
+
+            const stType =
+              subtask.subtaskType ||
+              subtask.taskType ||
+              (subtask.emailConfig ? "email" : "regular");
+
+            let versionResponse = await fetch(
               `/api/forms/versions/${formVersionId}`,
               {
                 headers: { Authorization: `Bearer ${token}` },
@@ -128,6 +149,7 @@ export default function AttachedFormsTab({ task, taskId, onRefresh }) {
                 taskId: subtask._id,
                 taskTitle: subtask.title,
                 isSubtask: true,
+                subtaskType: stType,
                 formVersionId: formVersionId,
                 formTitle: "Restricted Form (owner only)",
                 formDescription: "",
@@ -139,9 +161,10 @@ export default function AttachedFormsTab({ task, taskId, onRefresh }) {
             } else if (versionResponse.ok) {
               const versionData = await versionResponse.json();
               const formVersion = versionData.data?.version || versionData.data;
+              const resolvedVersionId = formVersion?._id || formVersion?.id || formVersionId;
 
               const params = new URLSearchParams({
-                form_version_id: formVersionId,
+                form_version_id: resolvedVersionId,
                 subtask_id: subtask._id,
               });
 
@@ -162,9 +185,10 @@ export default function AttachedFormsTab({ task, taskId, onRefresh }) {
                 taskId: subtask._id,
                 taskTitle: subtask.title,
                 isSubtask: true,
-                formVersionId: formVersionId,
-                formTitle: formVersion.snapshot_data?.title || "Untitled Form",
-                formDescription: formVersion.snapshot_data?.description || "",
+                subtaskType: stType,
+                formVersionId: resolvedVersionId,
+                formTitle: formVersion.snapshot_data?.title || formVersion.title || "Untitled Form",
+                formDescription: formVersion.snapshot_data?.description || formVersion.description || "",
                 versionNumber: formVersion.version_number || "N/A",
                 publishedAt: formVersion.published_at,
                 submissions: submissions,
@@ -310,9 +334,14 @@ export default function AttachedFormsTab({ task, taskId, onRefresh }) {
                   </p>
                 )}
                 {form.isSubtask && (
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-gray-500 mt-2 flex items-center gap-2">
                     <span className="font-medium">Subtask:</span>{" "}
-                    {form.taskTitle}
+                    <span className="font-semibold text-gray-800">{form.taskTitle}</span>
+                    {form.subtaskType && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-100/80 text-blue-700 uppercase tracking-wider">
+                        {form.subtaskType} subtask
+                      </span>
+                    )}
                   </p>
                 )}
               </div>
@@ -390,21 +419,11 @@ export default function AttachedFormsTab({ task, taskId, onRefresh }) {
                         onClick={() =>
                           handleViewSubmission(form, submission._id)
                         }
-                        className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded border"
+                        className="flex items-center gap-1 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-50 rounded border border-blue-200 font-medium"
                         title="View submission"
                       >
                         <Eye size={14} />
                         View
-                      </button>
-                      <button
-                        onClick={() =>
-                          handleEditSubmission(form, submission._id)
-                        }
-                        className="flex items-center gap-1 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-50 rounded border border-blue-200"
-                        title="Edit submission"
-                      >
-                        <Edit size={14} />
-                        Edit
                       </button>
                     </div>
                   </div>
