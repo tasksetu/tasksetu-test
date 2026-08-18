@@ -369,79 +369,94 @@ userFeatureUsageSchema.statics.getUserCurrentUsage = async function (
 ) {
     const usageMap = {};
 
+    // ✅ BATCH OPTIMIZATION: Fetch ALL UserFeatureUsage records for this user in 1 single query
+    const allUserUsages = await this.find({ user_id: userId }).lean();
+
+    const usageByFeature = {};
+    for (const record of allUserUsages) {
+        const feat = record.feature_code.toUpperCase();
+        if (!usageByFeature[feat]) {
+            usageByFeature[feat] = [];
+        }
+        usageByFeature[feat].push(record);
+    }
+
+    // ✅ BATCH OPTIMIZATION: Fetch ALL legacy FeatureUsageTracking records for this user in 1 query if needed
+    let legacyByFeature = {};
+    try {
+        const { FeatureUsageTracking } = await import("./featureUsageTrackingModal.js");
+        const allLegacyUsages = await FeatureUsageTracking.find({ user_id: userId }).lean();
+        for (const record of allLegacyUsages) {
+            const feat = record.feature_code;
+            if (!legacyByFeature[feat]) {
+                legacyByFeature[feat] = [];
+            }
+            legacyByFeature[feat].push(record);
+        }
+    } catch (err) {
+        // Ignore if legacy model doesn't exist
+    }
+
+    const monthlyPeriodKey = this.getPeriodKey('MONTHLY');
+
     for (const mapping of featureMappings) {
         const limitType = mapping.limit_type || 'MONTHLY';
         const periodKey = this.getPeriodKey(limitType);
         const featureCodeUpper = mapping.feature_code.toUpperCase();
 
-        // First, check the new UserFeatureUsage model with current period_key
-        let usage = await this.findOne({
-            user_id: userId,
-            feature_code: featureCodeUpper,
-            period_key: periodKey,
-        }).lean();
+        const featureRecords = usageByFeature[featureCodeUpper] || [];
 
-        let used = usage?.used_count || 0;
+        let used = 0;
+        const currentPeriodRecord = featureRecords.find(r => r.period_key === periodKey);
+        if (currentPeriodRecord) {
+            used = currentPeriodRecord.used_count || 0;
+        }
 
-        // ✅ FIX: Check ALL period_keys to find the maximum usage
-        // This ensures usage is preserved regardless of license changes
-
-        // Check TOTAL period_key (for usage tracked with unlimited licenses)
+        // ✅ Check TOTAL period_key (for usage tracked with unlimited licenses)
         if (periodKey !== 'TOTAL') {
-            const totalUsage = await this.findOne({
-                user_id: userId,
-                feature_code: featureCodeUpper,
-                period_key: 'TOTAL',
-            }).lean();
-            if (totalUsage && totalUsage.used_count > used) {
-                used = totalUsage.used_count;
+            const totalRecord = featureRecords.find(r => r.period_key === 'TOTAL');
+            if (totalRecord && (totalRecord.used_count || 0) > used) {
+                used = totalRecord.used_count;
             }
         }
 
-        // Check current MONTHLY period_key (for usage tracked with limited licenses)
-        const monthlyPeriodKey = this.getPeriodKey('MONTHLY');
+        // ✅ Check current MONTHLY period_key (for usage tracked with limited licenses)
         if (periodKey !== monthlyPeriodKey) {
-            const monthlyUsage = await this.findOne({
-                user_id: userId,
-                feature_code: featureCodeUpper,
-                period_key: monthlyPeriodKey,
-            }).lean();
-            if (monthlyUsage && monthlyUsage.used_count > used) {
-                used = monthlyUsage.used_count;
+            const monthlyRecord = featureRecords.find(r => r.period_key === monthlyPeriodKey);
+            if (monthlyRecord && (monthlyRecord.used_count || 0) > used) {
+                used = monthlyRecord.used_count;
             }
         }
 
-        // ✅ FALLBACK: If no usage in new model, check legacy FeatureUsageTracking
+        // ✅ FALLBACK: If no usage in new model, check legacy FeatureUsageTracking in memory
         if (used === 0) {
-            try {
-                // ✅ IMPORTANT: Legacy model uses 'TOTAL' for both TOTAL and NONE limit types
+            const legacyRecords = legacyByFeature[mapping.feature_code] || [];
+            if (legacyRecords.length > 0) {
                 const legacyLimitType = (limitType === 'NONE') ? 'TOTAL' : limitType;
-                const { start, end } = FeatureUsageTracking.getCurrentPeriod(legacyLimitType);
-                const legacyUsage = await FeatureUsageTracking.findOne({
-                    user_id: userId,
-                    feature_code: mapping.feature_code,
-                    period_start: start,
-                    usage_period: legacyLimitType,
-                }).lean();
+                try {
+                    const { FeatureUsageTracking } = await import("./featureUsageTrackingModal.js");
+                    const { start } = FeatureUsageTracking.getCurrentPeriod(legacyLimitType);
+                    const legacyUsage = legacyRecords.find(r => {
+                        if (r.usage_period !== legacyLimitType) return false;
+                        if (!r.period_start) return false;
+                        const rTime = new Date(r.period_start).getTime();
+                        const sTime = new Date(start).getTime();
+                        return rTime === sTime;
+                    });
 
-                if (legacyUsage && legacyUsage.usage_count > 0) {
-                    used = legacyUsage.usage_count;
-                }
-
-                // ✅ FIX: Also check legacy TOTAL if current limit_type is MONTHLY
-                if (used === 0 && limitType === 'MONTHLY') {
-                    const legacyTotalUsage = await FeatureUsageTracking.findOne({
-                        user_id: userId,
-                        feature_code: mapping.feature_code,
-                        usage_period: 'TOTAL',
-                    }).lean();
-
-                    if (legacyTotalUsage && legacyTotalUsage.usage_count > 0) {
-                        used = legacyTotalUsage.usage_count;
+                    if (legacyUsage && legacyUsage.usage_count > 0) {
+                        used = legacyUsage.usage_count;
                     }
+
+                    if (used === 0 && limitType === 'MONTHLY') {
+                        const legacyTotalUsage = legacyRecords.find(r => r.usage_period === 'TOTAL');
+                        if (legacyTotalUsage && legacyTotalUsage.usage_count > 0) {
+                            used = legacyTotalUsage.usage_count;
+                        }
+                    }
+                } catch (err) {
+                    // Ignore errors
                 }
-            } catch (err) {
-                // Ignore errors from legacy model - it might not exist
             }
         }
 

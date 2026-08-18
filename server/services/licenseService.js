@@ -951,11 +951,12 @@ export const getLicenseSummary = async (entityOrUserId) => {
       }
     }
 
-    // Get feature access status
+    // Get feature access status in-memory (avoid 30+ sequential DB calls)
     const featuresList = {};
+    const isSuspendedOrCancelled =
+      userLicense.status === "SUSPENDED" || userLicense.status === "CANCELLED";
     for (const mapping of featureMappings) {
-      const allowed = await checkFeatureAccess(userId, mapping.feature_code);
-      featuresList[mapping.feature_code] = allowed.hasAccess;
+      featuresList[mapping.feature_code] = !isSuspendedOrCancelled;
     }
 
     // ✅ FIX: Derive accountType dynamically - individual users don't have an organization

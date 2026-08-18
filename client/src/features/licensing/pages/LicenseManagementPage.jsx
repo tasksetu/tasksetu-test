@@ -73,9 +73,11 @@ function LicenseDifferencesSection({
       if (!response.ok) throw new Error("Failed to fetch features list");
       return response.json();
     },
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   // Define feature categories with their limits per plan
@@ -604,9 +606,11 @@ export default function LicenseManagementPage() {
       if (!response.ok) throw new Error("Failed to fetch current license");
       return response.json();
     },
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   // Fetch dynamic license plans
@@ -621,9 +625,11 @@ export default function LicenseManagementPage() {
       if (!response.ok) throw new Error("Failed to fetch plans");
       return response.json();
     },
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   // Fetch current subscription data
@@ -642,9 +648,11 @@ export default function LicenseManagementPage() {
       if (!response.ok) throw new Error("Failed to fetch subscription");
       return response.json();
     },
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   // Fetch organization license info for real-time data
@@ -659,9 +667,11 @@ export default function LicenseManagementPage() {
       if (!response.ok) throw new Error("Failed to fetch license info");
       return response.json();
     },
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   // Features are already fetched from /api/license/organization/features
@@ -681,9 +691,11 @@ export default function LicenseManagementPage() {
         return response.json();
       },
       enabled: !isOrgAdmin, // Only fetch for non-admin users
-      staleTime: 0,
-      refetchOnMount: "always",
-      refetchOnWindowFocus: true,
+      staleTime: 5 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      placeholderData: (previousData) => previousData,
     },
   );
 

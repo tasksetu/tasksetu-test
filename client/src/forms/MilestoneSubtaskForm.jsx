@@ -85,7 +85,12 @@ const MilestoneSubtaskForm = ({
           );
 
           let subtasksList = [];
-          if (response.data?.success && Array.isArray(response.data?.data)) {
+          if (
+            response.data?.success &&
+            Array.isArray(response.data?.data?.subtasks)
+          ) {
+            subtasksList = response.data.data.subtasks;
+          } else if (response.data?.success && Array.isArray(response.data?.data)) {
             subtasksList = response.data.data;
           } else if (
             response.data?.success &&

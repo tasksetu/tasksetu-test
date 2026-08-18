@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
 import CustomEditor from "../components/common/CustomEditor";
 import "quill/dist/quill.snow.css";
@@ -21,7 +21,7 @@ const ApprovalTaskForm = ({
   user,
   onSubmit,
   isOrgUser,
-  approverOptions = [], // API data
+  approverOptions: rawApproverOptions = [], // API data
   collaboratorOptions = [], // API data
   isLoadingApprovers = false,
   isLoadingCollaborators = false,
@@ -187,6 +187,54 @@ const ApprovalTaskForm = ({
     { value: "all", label: "All Must Approve" },
     { value: "sequential", label: "Sequential" },
   ];
+
+  const selfOption = useMemo(() => {
+    const userId = user?.id || user?._id || "self";
+    const userName =
+      user?.name ||
+      `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+      user?.username ||
+      "User";
+    const emailStr = user?.email ? ` (${user.email})` : "";
+    const rawRole = Array.isArray(user?.role)
+      ? user.role.join(", ")
+      : user?.role || "";
+    const roleStr = rawRole ? ` - ${rawRole}` : "";
+
+    const label = `${userName}${emailStr}${roleStr}`;
+
+    return {
+      value: userId,
+      label,
+      name: userName,
+      email: user?.email,
+      role: user?.role,
+    };
+  }, [user]);
+
+  const effectiveApproverOptions = useMemo(() => {
+    let options =
+      Array.isArray(rawApproverOptions) && rawApproverOptions.length > 0
+        ? [...rawApproverOptions]
+        : Array.isArray(collaboratorOptions) && collaboratorOptions.length > 0
+          ? [...collaboratorOptions]
+          : [];
+
+    const currentUserId = user?.id || user?._id;
+    const hasSelf = options.some((opt) => {
+      if (!opt) return false;
+      const optVal = String(opt.value || opt.id || "");
+      return (
+        optVal === "self" ||
+        (currentUserId && optVal === String(currentUserId))
+      );
+    });
+
+    if (!hasSelf) {
+      options = [selfOption, ...options];
+    }
+    return options;
+  }, [rawApproverOptions, collaboratorOptions, selfOption, user]);
 
   // Assignment options (for org users) - Build from collaboratorOptions
   const assignmentOptions = isOrgUser
@@ -425,7 +473,7 @@ const ApprovalTaskForm = ({
               {...field}
               menuPlacement="auto"
               isMulti
-              options={approverOptions}
+              options={effectiveApproverOptions}
               isLoading={isLoadingApprovers}
               className="react-select-container h-8-select"
               classNamePrefix="react-select"

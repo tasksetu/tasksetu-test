@@ -564,8 +564,8 @@ router.post("/create-task",
  */
 router.post("/tasks/:parentTaskId/create-subtask",
   authenticateToken,
-  checkDynamicSubtaskFeature(),  // Check license limits for subtask creation dynamically
   upload.array('attachments', 5),
+  checkDynamicSubtaskFeature(),  // Check license limits for subtask creation dynamically after req.body is parsed by multer
   createSubtask  // Controller creates the subtask AND handles consumption internally
 );
 

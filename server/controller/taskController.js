@@ -1980,21 +1980,33 @@ export const createSubtask = async (req, res) => {
     // ✅ Individual users CAN now create subtasks on their OWN tasks
     // =====================================================================
     if (isIndividual) {
-      // Allow individual users to create subtasks only on their own tasks
       const parentTaskCreatedById =
         parentTask.createdBy?._id?.toString() ||
+        parentTask.createdBy?.id?.toString() ||
         parentTask.createdBy?.toString();
+      const parentTaskAssignedToId =
+        parentTask.assignedTo?._id?.toString() ||
+        parentTask.assignedTo?.id?.toString() ||
+        parentTask.assignedTo?.toString();
       const userId = user.id?.toString() || user._id?.toString();
-      const isOwnTask = parentTaskCreatedById === userId;
 
-      if (!isOwnTask) {
+      const isOwnTask = parentTaskCreatedById === userId;
+      const isAssignedToSelf = parentTaskAssignedToId === userId;
+      const isCollaborator =
+        Array.isArray(parentTask.collaborators) &&
+        parentTask.collaborators.some((collab) => {
+          const collabId =
+            collab?._id?.toString() || collab?.id?.toString() || collab?.toString();
+          return collabId === userId;
+        });
+
+      if (!isOwnTask && !isAssignedToSelf && !isCollaborator) {
         return res.status(403).json({
           success: false,
           message:
-            "Individual users can only create subtasks on their own tasks.",
+            "Individual users can only create subtasks on tasks they created, are assigned to, or are a collaborator on.",
         });
       }
-      // If it's their own task, allow subtask creation - continue to next checks
     }
 
     // 🚫 CONTRIBUTORS PERMISSION CHECK: Recurring task contributors cannot create subtasks
@@ -2151,8 +2163,8 @@ export const createSubtask = async (req, res) => {
     } else if (isManager) {
       const isTeamTask = true; // TODO: implement proper team check
       hasPermission = isOwnTask || isAssignedToSelf || isTeamTask;
-    } else if (isEmployee) {
-      // 🔹 Employees can create subtasks if they own the task or are assigned to it
+    } else if (isEmployee || isIndividual) {
+      // 🔹 Employees and Individual users can create subtasks if they own the task or are assigned to it
       // 🔹 For assignees: can create subtasks for regular and recurring tasks only
       if (isMilestoneTask) {
         hasPermission = false; // Milestone tasks cannot have subtasks
@@ -2551,7 +2563,7 @@ export const createSubtask = async (req, res) => {
         parsedTaskData.linkedToMilestone || parsedTaskData.linkedTaskId,
       milestoneUnit: parsedTaskData.milestoneUnit,
       milestoneTarget: parsedTaskData.milestoneTarget,
-      approvers: parsedTaskData.approverIds || [],
+      approvers: (parsedTaskData.approverIds || []).map((id) => (id === "self" ? user.id : id)),
       approvalMode: parsedTaskData.approvalMode || "any",
       approvalStatus: parsedTaskData.approvalStatus
         ? String(parsedTaskData.approvalStatus).toLowerCase()
@@ -2766,18 +2778,16 @@ export const createSubtask = async (req, res) => {
     // 📊 Track subtask feature usage
     try {
       const userId = req.featureUsage?.user_id || req.user?.id || req.user?._id;
-      let featureCodeToConsume = req.featureUsage?.feature_code;
+      let featureCodeToConsume;
 
-      if (!featureCodeToConsume) {
-        if (subtaskType === "email" || (parsedTaskData.emailConfig && Object.keys(parsedTaskData.emailConfig).length > 0)) {
-          featureCodeToConsume = "SUBTASK_EMAIL";
-        } else if (subtaskType === "milestone" || isMilestoneSubtask) {
-          featureCodeToConsume = "SUBTASK_MILESTONE";
-        } else if (subtaskType === "approval" || parsedTaskData.isApprovalTask === true) {
-          featureCodeToConsume = "SUBTASK_APPROVAL";
-        } else {
-          featureCodeToConsume = "TASK_SUB";
-        }
+      if (subtaskType === "email" || (parsedTaskData.emailConfig && Object.keys(parsedTaskData.emailConfig).length > 0)) {
+        featureCodeToConsume = "SUBTASK_EMAIL";
+      } else if (subtaskType === "milestone" || isMilestoneSubtask) {
+        featureCodeToConsume = "SUBTASK_MILESTONE";
+      } else if (subtaskType === "approval" || parsedTaskData.isApprovalTask === true) {
+        featureCodeToConsume = "SUBTASK_APPROVAL";
+      } else {
+        featureCodeToConsume = "TASK_SUB";
       }
 
       if (userId) {
@@ -2839,21 +2849,75 @@ export const getSubtasks = async (req, res) => {
     }
 
     // Check permissions
-    if (parentTask.organization && user.organizationId) {
-      const taskOrgId = getTaskOrganizationId(parentTask.organization);
-      const userOrgId = user.organizationId?.toString() || user.organizationId;
+    const roles = Array.isArray(user.role) ? user.role : [user.role || ""];
+    const isTasksetuAdmin =
+      roles.includes("tasksetu-admin") || roles.includes("super-admin");
+    const isOrgAdmin =
+      roles.includes("org_admin") ||
+      roles.includes("company-admin") ||
+      roles.includes("admin");
+    const isIndividualUser =
+      roles.includes("individual") || (!parentTask.organization && !user.organizationId);
 
-      if (taskOrgId !== userOrgId) {
-        return res.status(403).json({
-          success: false,
-          message: "Access denied",
+    const taskOrgId = getTaskOrganizationId(parentTask.organization);
+    const userOrgId = user.organizationId?.toString() || user.organizationId;
+
+    if (taskOrgId && userOrgId && taskOrgId !== userOrgId && !isTasksetuAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
+      });
+    }
+
+    if (!parentTask.organization || !user.organizationId || isIndividualUser) {
+      const parentTaskCreatedById =
+        parentTask.createdBy?._id?.toString() ||
+        parentTask.createdBy?.id?.toString() ||
+        parentTask.createdBy?.toString();
+      const parentTaskAssignedToId =
+        parentTask.assignedTo?._id?.toString() ||
+        parentTask.assignedTo?.id?.toString() ||
+        parentTask.assignedTo?.toString();
+      const userId = user.id?.toString() || user._id?.toString();
+
+      const isCreator = parentTaskCreatedById === userId;
+      const isAssignee = parentTaskAssignedToId === userId;
+      const isAssignees =
+        Array.isArray(parentTask.assignees) &&
+        parentTask.assignees.some((a) => {
+          const id = a?._id?.toString() || a?.id?.toString() || a?.toString();
+          return id === userId;
         });
-      }
-    } else if (!parentTask.organization && !user.organizationId) {
+      const isCollaborator =
+        Array.isArray(parentTask.collaborators) &&
+        parentTask.collaborators.some((collab) => {
+          const collabId =
+            collab?._id?.toString() || collab?.id?.toString() || collab?.toString();
+          return collabId === userId;
+        });
+      const isStakeholder =
+        Array.isArray(parentTask.stakeholders) &&
+        parentTask.stakeholders.some((s) => {
+          const sId = s?._id?.toString() || s?.id?.toString() || s?.toString();
+          return sId === userId;
+        });
+      const isApprover =
+        Array.isArray(parentTask.approvers) &&
+        parentTask.approvers.some((ap) => {
+          const apId = ap?._id?.toString() || ap?.id?.toString() || ap?.toString();
+          return apId === userId;
+        });
+
       if (
-        parentTask.createdBy &&
-        user.id &&
-        parentTask.createdBy.toString() !== user.id.toString()
+        !isCreator &&
+        !isAssignee &&
+        !isAssignees &&
+        !isCollaborator &&
+        !isStakeholder &&
+        !isApprover &&
+        !isTasksetuAdmin &&
+        !isOrgAdmin &&
+        !isIndividualUser
       ) {
         return res.status(403).json({
           success: false,

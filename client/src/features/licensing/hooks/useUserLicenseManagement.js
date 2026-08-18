@@ -59,9 +59,11 @@ export function useUserLicenseManagement() {
 
       return response.json();
     },
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
     retry: 2,
   });
 
@@ -92,9 +94,11 @@ export function useUserLicenseManagement() {
 
       return response.json();
     },
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
     retry: 2,
   });
 

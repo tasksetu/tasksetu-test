@@ -53,9 +53,11 @@ export const useLicense = () => {
                 features: featuresData,
             };
         },
-        staleTime: 0,
-        refetchOnMount: "always",
-        refetchOnWindowFocus: true,
+        staleTime: 2 * 60 * 1000,
+        gcTime: 10 * 60 * 1000,
+        refetchOnMount: false,
+        refetchOnWindowFocus: false,
+        placeholderData: (previousData) => previousData,
         retry: 1,
     });
 

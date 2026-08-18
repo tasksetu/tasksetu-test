@@ -92,10 +92,52 @@ const ApprovalSubtaskForm = ({
     }
   }, [isOrgUser, collaboratorOptions.length]);
 
-  const approverSourceOptions =
-    collaboratorOptions.length > 0
-      ? collaboratorOptions
-      : localApproverOptions;
+  const selfOption = useMemo(() => {
+    const userId = user?.id || user?._id || "self";
+    const userName =
+      user?.name ||
+      `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+      user?.username ||
+      "User";
+    const emailStr = user?.email ? ` (${user.email})` : "";
+    const rawRole = Array.isArray(user?.role)
+      ? user.role.join(", ")
+      : user?.role || "";
+    const roleStr = rawRole ? ` - ${rawRole}` : "";
+
+    const label = `${userName}${emailStr}${roleStr}`;
+
+    return {
+      value: userId,
+      label,
+      name: userName,
+      email: user?.email,
+      role: user?.role,
+    };
+  }, [user]);
+
+  const approverSourceOptions = useMemo(() => {
+    let options =
+      collaboratorOptions.length > 0
+        ? [...collaboratorOptions]
+        : [...localApproverOptions];
+
+    const currentUserId = user?.id || user?._id;
+    const hasSelf = options.some((opt) => {
+      if (!opt) return false;
+      const optVal = String(opt.value || opt.id || "");
+      return (
+        optVal === "self" ||
+        (currentUserId && optVal === String(currentUserId))
+      );
+    });
+
+    if (!hasSelf) {
+      options = [selfOption, ...options];
+    }
+
+    return options;
+  }, [collaboratorOptions, localApproverOptions, selfOption, user]);
 
   const { data: taskPriorities = [] } = useTaskPriorities();
 
@@ -158,7 +200,7 @@ const ApprovalSubtaskForm = ({
           }
         : { value: "medium", label: "Medium" },
       assignedTo: editData?.assignedTo || (isOrgUser ? null : { value: "self", label: user?.name || "Self" }),
-      approvers: editData?.approvers || [],
+      approvers: editData?.approvers || (!isOrgUser && selfOption ? [selfOption] : []),
       approvalMode: editData?.approvalMode || "any",
       autoApproval: editData?.autoApproval || false,
       autoApproveAfter: editData?.autoApproveAfter || null,
@@ -387,7 +429,7 @@ const ApprovalSubtaskForm = ({
 
       {/* Approvers Selection */}
       <div className="bg-blue-50/50 p-3.5 rounded-md border border-blue-100">
-        <label className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-1.5">
+        <label className="block text-sm font-semibold text-blue-900 mb-2 flex items-center gap-1.5">
           <UserCheck className="w-4 h-4 text-blue-600" />
           Approvers <span className="text-red-500">*</span>
         </label>
@@ -403,9 +445,7 @@ const ApprovalSubtaskForm = ({
               {...field}
               isMulti
               menuPlacement="auto"
-              options={approverSourceOptions.filter(
-                (opt) => opt.value !== "self",
-              )}
+              options={approverSourceOptions}
               isLoading={isLoadingCollaborators || localIsLoadingApprovers}
               className="react-select-container h-8-select-dynamic"
               classNamePrefix="react-select"
@@ -433,7 +473,7 @@ const ApprovalSubtaskForm = ({
 
       {/* Row 1: Approval Mode — horizontal single line */}
       <div>
-        <label className="text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
+        <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
           Approval Mode <span className="text-red-500">*</span>
           <div className="relative group ml-1">
             <Info className="w-3.5 h-3.5 text-gray-400 cursor-help" />
@@ -575,7 +615,7 @@ const ApprovalSubtaskForm = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Due Date */}
         <div>
-          <label className="text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
+          <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
             <Clock className="w-4 h-4 text-gray-500" />
             Approval Deadline <span className="text-red-500">*</span>
           </label>
@@ -652,7 +692,7 @@ const ApprovalSubtaskForm = ({
 
         {/* Collaborators */}
         <div>
-          <label className="text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
+          <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
             <Users className="w-4 h-4 text-gray-500" />
             Collaborators
           </label>
