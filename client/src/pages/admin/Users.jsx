@@ -1047,6 +1047,7 @@ export default function Users() {
                       {(() => {
                         const licenseCode =
                           (user.license_code && user.license_code !== "No license" ? user.license_code : null) ||
+                          (user.license_instance_id?.license_code && user.license_instance_id.license_code !== "No license" ? user.license_instance_id.license_code : null) ||
                           (user.licenseId && user.licenseId !== "No license" ? user.licenseId : null) ||
                           "EXPLORE";
                         const licenseStyles = {

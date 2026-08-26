@@ -7,7 +7,7 @@ import { useTaskPriorities } from "@/hooks/useTaskPriorities";
 import { getPriorityOptions } from "@/utils/priorityUtils";
 import { format } from "date-fns";
 import axios from "axios";
-import { canAssignToOthers } from "../../utils/taskPermissions";
+import { canAssignToOthers, isOrgUserRole } from "../../utils/taskPermissions";
 import {
   ClipboardList,
   CheckSquare,
@@ -358,6 +358,7 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
           })),
           linkedItems: taskData.linkedTasks || [],
           linkedToMilestone: taskData.linkedToMilestone || null,
+          linkedTaskId: taskData.linkedTaskId || null,
           collaborators: taskData.collaborators || [], // Keep original objects with id field, don't convert to strings!
           contributors: taskData.contributors || [], // Keep original objects
           forms: [],
@@ -1732,28 +1733,41 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
   };
 
   // Helper function to check if Linked Items tab should be shown
-  // ✅ Only milestone tasks can have linked items
+  // ✅ Milestone tasks or any task with linked prerequisite items
   const shouldShowLinkedItemsTab = () => {
-    if (!task) return false;
+    if (!task && !rawTaskData) return false;
 
-    const taskType = task?.taskType?.toLowerCase() || "";
-    const mainTaskType = task?.mainTaskType?.toLowerCase() || "";
-    const type = task?.type?.toLowerCase() || "";
+    const t = rawTaskData || task;
+    const taskType = (t?.taskType || t?.type || "").toLowerCase();
+    const mainTaskType = (t?.mainTaskType || "").toLowerCase();
 
-    // ✅ Only show linked items tab for milestone tasks
+    // 1. Milestone tasks always have access to linked items
     const isMilestone =
       taskType === "milestone" ||
       mainTaskType === "milestone" ||
-      type === "milestone";
+      t?.isMilestone;
 
-    console.log("DEBUG - shouldShowLinkedItemsTab:", {
-      taskType,
-      mainTaskType,
-      type,
-      isMilestone,
-    });
+    if (isMilestone) return true;
 
-    return isMilestone;
+    // 2. Any task that has linked tasks (linkedTaskId, linkedToMilestone, linkedItems, linkedTasks, linkedTaskIds)
+    const hasLinkedItems =
+      !!t?.linkedTaskId ||
+      !!t?.linkedToMilestone ||
+      (Array.isArray(t?.linkedItems) && t.linkedItems.length > 0) ||
+      (Array.isArray(t?.linkedTasks) && t.linkedTasks.length > 0) ||
+      (Array.isArray(t?.linkedTaskIds) && t.linkedTaskIds.length > 0);
+
+    return hasLinkedItems;
+  };
+
+  const getLinkedItemsCount = () => {
+    const t = rawTaskData || task;
+    if (!t) return 0;
+    if (Array.isArray(t.linkedItems) && t.linkedItems.length > 0) return t.linkedItems.length;
+    if (Array.isArray(t.linkedTasks) && t.linkedTasks.length > 0) return t.linkedTasks.length;
+    if (Array.isArray(t.linkedTaskIds) && t.linkedTaskIds.length > 0) return t.linkedTaskIds.length;
+    if (t.linkedTaskId || t.linkedToMilestone) return 1;
+    return 0;
   };
 
   // Helper function to check if Attached Forms tab should be shown
@@ -1803,14 +1817,14 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
     { id: "files", label: "Files & Links", icon: Paperclip, hasIcon: true },
     { id: "activity", label: "Activity Feed", icon: Activity, hasIcon: true },
 
-    // ✅ Only show Linked Items tab for milestone tasks
+    // ✅ Show Linked Items tab for milestone tasks or any task with linked items
     ...(shouldShowLinkedItemsTab()
       ? [
           {
             id: "linked",
             label: "Linked Items",
             icon: Link,
-            count: task?.linkedItems?.length || 0,
+            count: getLinkedItemsCount(),
             hasIcon: true,
           },
         ]
@@ -4836,6 +4850,7 @@ ${task.collaborators?.join(", ") || "No collaborators"}
           <LinkedTasksTab
             task={task}
             taskId={taskId}
+            rawTaskData={rawTaskData}
             onRefresh={fetchTaskData}
             currentUser={currentUser}
           />
@@ -4858,7 +4873,7 @@ ${task.collaborators?.join(", ") || "No collaborators"}
         parentTask={task}
         mode="create"
         refreshTask={fetchTaskData}
-        isOrgUser={canAssignToOthers(activeRole || "individual")}
+        isOrgUser={isOrgUserRole(activeRole || currentUser?.role || "individual")}
       />
 
       {showCancelModal && (
@@ -5057,7 +5072,7 @@ ${task.collaborators?.join(", ") || "No collaborators"}
 }
 
 // LinkedTasksTab Component
-function LinkedTasksTab({ task, taskId, onRefresh, currentUser }) {
+function LinkedTasksTab({ task, taskId, rawTaskData, onRefresh, currentUser }) {
   const { showSuccessToast, showErrorToast } = useShowToast();
   const [linkedTasks, setLinkedTasks] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -5072,23 +5087,46 @@ function LinkedTasksTab({ task, taskId, onRefresh, currentUser }) {
     form: null,
   });
 
-  // Fetch linked tasks if this is a milestone
+  // Fetch linked tasks when component mounts or task changes
   useEffect(() => {
-    if (
-      task?.taskType === "Milestone" ||
-      task?.taskType === "milestone" ||
-      task?.isMilestone ||
-      task?.mainTaskType === "milestone"
-    ) {
-      fetchLinkedTasks();
-    }
-  }, [task, taskId]);
+    fetchLinkedTasks();
+  }, [task, taskId, rawTaskData]);
 
   const fetchLinkedTasks = async () => {
     try {
       setIsLoading(true);
       setError(null);
       const token = localStorage.getItem("token");
+
+      const t = rawTaskData || task;
+      const directLinkedId =
+        t?.linkedTaskId?._id ||
+        t?.linkedTaskId ||
+        t?.linkedToMilestone?._id ||
+        t?.linkedToMilestone;
+
+      // If task has a direct linkedTaskId/linkedToMilestone and is not a milestone master
+      if (
+        directLinkedId &&
+        typeof directLinkedId === "string" &&
+        t?.taskType !== "milestone" &&
+        t?.taskType !== "Milestone" &&
+        !t?.isMilestone
+      ) {
+        try {
+          const res = await axios.get(`/api/tasks/${directLinkedId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.data?.success && res.data?.data) {
+            setLinkedTasks([res.data.data]);
+            setIsLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.log("Direct linked task fetch fallback:", err);
+        }
+      }
+
       const response = await axios.get(
         `/api/milestones/${taskId}/linked-tasks`,
         {

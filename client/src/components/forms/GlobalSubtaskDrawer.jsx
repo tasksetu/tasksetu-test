@@ -2,14 +2,14 @@ import React from 'react';
 import { useSubtask } from '../../contexts/SubtaskContext';
 import SubtaskForm from './SubtaskForm';
 import { useActiveRole } from '../RoleSwitcher';
-import { canAssignToOthers } from '../../utils/taskPermissions';
+import { isOrgUserRole } from '../../utils/taskPermissions';
 
 const GlobalSubtaskDrawer = () => {
   const { isSubtaskDrawerOpen, parentTask, editData, mode, closeSubtaskDrawer, onUpdateSubtask, refreshCallback } = useSubtask();
   const { activeRole } = useActiveRole();
 
-  // Determine if user can assign subtasks to others based on active role
-  const isOrgUser = canAssignToOthers(activeRole || 'individual');
+  // Determine if user is an organization user based on active role
+  const isOrgUser = isOrgUserRole(activeRole || 'individual');
 
   if (!isSubtaskDrawerOpen || !parentTask) {
     return null;

@@ -236,6 +236,18 @@ export const canAssignToOthers = (role) => {
 };
 
 /**
+ * Check if a role belongs to an organization user (not an individual account)
+ * @param {string|string[]} role - User's role or roles array
+ * @returns {boolean}
+ */
+export const isOrgUserRole = (role) => {
+  if (!role) return false;
+  const roleStr = Array.isArray(role) ? role[0] : String(role);
+  const nonOrgRoles = ['individual-user', 'individual', 'member'];
+  return !nonOrgRoles.includes(roleStr.toLowerCase());
+};
+
+/**
  * Get assignment scope for a role
  * @param {string} role - User's role
  * @returns {string} - 'self-only', 'team', 'organization', or 'platform'
@@ -412,6 +424,7 @@ export default {
   TASK_TYPE_PERMISSIONS,
   canCreateTaskType,
   canAssignToOthers,
+  isOrgUserRole,
   getAssignmentScope,
   getAllowedTaskTypes,
   getPermissionDescription,

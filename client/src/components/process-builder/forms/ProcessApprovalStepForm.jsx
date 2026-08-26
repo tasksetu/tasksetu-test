@@ -1,11 +1,9 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
-import CustomEditor from "../components/common/CustomEditor";
-import "quill/dist/quill.snow.css";
-import "../styles/quill-custom.css";
+import CustomEditor from "../../common/CustomEditor";
 import Select from "react-select";
-import AssigneeSearchSelect from "../components/common/AssigneeSearchSelect";
-import { apiClient } from "../utils/apiClient";
+import AssigneeSearchSelect from "../../common/AssigneeSearchSelect";
+import { apiClient } from "../../../utils/apiClient";
 import { Button } from "@/components/ui/button";
 import {
   Clock,
@@ -14,48 +12,54 @@ import {
   Info,
   Users,
   Loader2,
+  Paperclip,
+  Upload,
+  X,
+  ShieldCheck,
 } from "lucide-react";
+import { useOrgUsers } from "@/hooks/useProcessBuilder";
 import { useTaskPriorities } from "@/hooks/useTaskPriorities";
-import LinkedTaskSelector from "../components/workflow/LinkedTaskSelector";
+import LinkedTaskSelector from "../../workflow/LinkedTaskSelector";
 
-const ApprovalSubtaskForm = ({
-  user,
+export default function ProcessApprovalStepForm({
+  stepToEdit = null,
+  onClose,
   onSubmit,
-  onCancel,
-  isOrgUser = false,
+  user = null,
+  isOrgUser = true,
   parentTask = null,
-  editData = null,
   collaboratorOptions = [],
   isLoadingCollaborators = false,
   isSubmitting = false,
-}) => {
+  previousSteps = [],
+}) {
   const [localApproverOptions, setLocalApproverOptions] = useState([]);
   const [localIsLoadingApprovers, setLocalIsLoadingApprovers] = useState(false);
   const [taskNameLength, setTaskNameLength] = useState(0);
-  const [approverOrder, setApproverOrder] = useState([]);
+  const [approverOrder, setApproverOrder] = useState(stepToEdit?.approverOrder || []);
 
-  // Linked task dependency state
-  const [linkedTaskId, setLinkedTaskId] = useState(editData?.linkedTaskId || null);
+  const [linkedTaskId, setLinkedTaskId] = useState(stepToEdit?.linkedTaskId || null);
   const [contextTaskError, setContextTaskError] = useState("");
   const [autoInitiate, setAutoInitiate] = useState(
-    editData?.configuration?.autoInitiate || editData?.autoInitiate || false
+    stepToEdit?.configuration?.autoInitiate || stepToEdit?.autoInitiate || false
   );
 
-  // Approval Context state
   const [approvalContext, setApprovalContext] = useState(
-    editData?.approvalContext || editData?.context || ""
+    stepToEdit?.approvalContext || stepToEdit?.context || stepToEdit?.approvalInstructions || ""
   );
 
-  // Attachments state
-  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [uploadedFiles, setUploadedFiles] = useState(stepToEdit?.attachments || []);
   const [attachmentSize, setAttachmentSize] = useState(0);
   const [isDragActive, setIsDragActive] = useState(false);
   const attachmentsInputRef = useRef(null);
 
+  const { data: orgUsers = [] } = useOrgUsers();
+  const { data: taskPriorities = [] } = useTaskPriorities();
+
   const hasFetchedApproversRef = useRef(false);
 
   const fetchApprovers = async () => {
-    if (!isOrgUser || collaboratorOptions.length > 0 || hasFetchedApproversRef.current) return;
+    if (collaboratorOptions.length > 0 || hasFetchedApproversRef.current) return;
     hasFetchedApproversRef.current = true;
 
     try {
@@ -80,7 +84,7 @@ const ApprovalSubtaskForm = ({
         setLocalApproverOptions(formattedApprovers);
       }
     } catch (error) {
-      console.error("Error fetching approvers in ApprovalSubtaskForm:", error);
+      console.error("Error fetching approvers in ProcessApprovalStepForm:", error);
       setLocalApproverOptions([]);
     } finally {
       setLocalIsLoadingApprovers(false);
@@ -88,59 +92,21 @@ const ApprovalSubtaskForm = ({
   };
 
   useEffect(() => {
-    if (isOrgUser && collaboratorOptions.length === 0 && !hasFetchedApproversRef.current) {
+    if (collaboratorOptions.length === 0 && !hasFetchedApproversRef.current) {
       fetchApprovers();
     }
-  }, [isOrgUser, collaboratorOptions.length]);
-
-  const selfOption = useMemo(() => {
-    const userId = user?.id || user?._id || "self";
-    const userName =
-      user?.name ||
-      `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-      user?.username ||
-      "User";
-    const emailStr = user?.email ? ` (${user.email})` : "";
-    const rawRole = Array.isArray(user?.role)
-      ? user.role.join(", ")
-      : user?.role || "";
-    const roleStr = rawRole ? ` - ${rawRole}` : "";
-
-    const label = `${userName}${emailStr}${roleStr}`;
-
-    return {
-      value: userId,
-      label,
-      name: userName,
-      email: user?.email,
-      role: user?.role,
-    };
-  }, [user]);
+  }, [collaboratorOptions.length]);
 
   const approverSourceOptions = useMemo(() => {
-    let options =
-      collaboratorOptions.length > 0
-        ? [...collaboratorOptions]
-        : [...localApproverOptions];
-
-    const currentUserId = user?.id || user?._id;
-    const hasSelf = options.some((opt) => {
-      if (!opt) return false;
-      const optVal = String(opt.value || opt.id || "");
-      return (
-        optVal === "self" ||
-        (currentUserId && optVal === String(currentUserId))
-      );
-    });
-
-    if (!hasSelf) {
-      options = [selfOption, ...options];
-    }
-
-    return options;
-  }, [collaboratorOptions, localApproverOptions, selfOption, user]);
-
-  const { data: taskPriorities = [] } = useTaskPriorities();
+    if (collaboratorOptions.length > 0) return collaboratorOptions;
+    if (localApproverOptions.length > 0) return localApproverOptions;
+    return orgUsers.map((u) => ({
+      value: u.id,
+      label: `${u.name} (${u.role || "User"})`,
+      name: u.name,
+      email: u.email,
+    }));
+  }, [collaboratorOptions, localApproverOptions, orgUsers]);
 
   const priorityOptions = useMemo(() => {
     const dynamic = (Array.isArray(taskPriorities) ? taskPriorities : [])
@@ -164,22 +130,6 @@ const ApprovalSubtaskForm = ({
     { value: "sequential", label: "Sequential" },
   ];
 
-  const getTomorrowDateTime = () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(17, 0, 0, 0);
-
-    const year = tomorrow.getFullYear();
-    const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
-    const day = String(tomorrow.getDate()).padStart(2, "0");
-    const hours = String(tomorrow.getHours()).padStart(2, "0");
-    const minutes = String(tomorrow.getMinutes()).padStart(2, "0");
-
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
-  };
-
-  const getTodayDate = () => new Date().toISOString().slice(0, 16);
-
   const {
     register,
     handleSubmit,
@@ -189,25 +139,23 @@ const ApprovalSubtaskForm = ({
     formState: { errors },
   } = useForm({
     defaultValues: {
-      taskName: editData?.title || editData?.taskName || "",
-      description: editData?.description || "",
-      dueDate: editData?.dueDate
-        ? new Date(editData.dueDate).toISOString().slice(0, 16)
-        : getTomorrowDateTime(),
-      priority: editData?.priority
+      taskName: stepToEdit?.name || stepToEdit?.title || stepToEdit?.taskName || "",
+      description: stepToEdit?.description || "",
+      dueDays: stepToEdit?.dueDays ?? 3,
+      priority: stepToEdit?.priority
         ? {
-            value: typeof editData.priority === "object" ? editData.priority.value : editData.priority,
-            label: typeof editData.priority === "object" ? editData.priority.label : String(editData.priority).toUpperCase(),
+            value: typeof stepToEdit.priority === "object" ? stepToEdit.priority.value : String(stepToEdit.priority).toLowerCase(),
+            label: typeof stepToEdit.priority === "object" ? stepToEdit.priority.label : String(stepToEdit.priority).toUpperCase(),
           }
         : { value: "medium", label: "Medium" },
-      assignedTo: editData?.assignedTo || (isOrgUser ? null : { value: "self", label: user?.name || "Self" }),
-      approvers: editData?.approvers || (!isOrgUser && selfOption ? [selfOption] : []),
-      approvalMode: editData?.approvalMode || "any",
-      autoApproval: editData?.autoApproval || false,
-      autoApproveAfter: editData?.autoApproveAfter || null,
-      visibility: editData?.visibility || "private",
-      collaborators: editData?.collaborators || [],
-      status: editData?.status || "OPEN",
+      assignedTo: stepToEdit?.assignedUserId ? String(stepToEdit.assignedUserId) : (orgUsers[0] ? String(orgUsers[0].id) : null),
+      approvers: stepToEdit?.approvers || [],
+      approvalMode: stepToEdit?.approvalMode || "any",
+      autoApproval: stepToEdit?.autoApproval || false,
+      autoApproveAfter: stepToEdit?.autoApproveAfter || null,
+      visibility: stepToEdit?.visibility || "private",
+      collaborators: stepToEdit?.collaborators || [],
+      status: stepToEdit?.status || "OPEN",
     },
   });
 
@@ -215,58 +163,24 @@ const ApprovalSubtaskForm = ({
   const watchedApprovers = watch("approvers");
   const watchedApprovalMode = watch("approvalMode");
   const watchedAutoApproval = watch("autoApproval");
-  const watchedDueDate = watch("dueDate");
-  const watchedPriority = watch("priority");
 
   useEffect(() => {
     setTaskNameLength(watchedTaskName?.length || 0);
   }, [watchedTaskName]);
 
   useEffect(() => {
-    if (watchedPriority?.value) {
-      const today = new Date();
-      const code = String(watchedPriority.value || "").toLowerCase();
-      const cfg = (Array.isArray(taskPriorities) ? taskPriorities : []).find(
-        (p) => p && p.code === code,
-      );
-      const daysToAdd = Number.isFinite(Number(cfg?.daysToDue))
-        ? Number(cfg.daysToDue)
-        : code === "critical"
-          ? 2
-          : code === "high"
-            ? 7
-            : code === "low"
-              ? 30
-              : 14;
-
-      const dueDate = new Date(today);
-      dueDate.setDate(today.getDate() + daysToAdd);
-
-      const year = dueDate.getFullYear();
-      const month = String(dueDate.getMonth() + 1).padStart(2, "0");
-      const day = String(dueDate.getDate()).padStart(2, "0");
-      const hours = String(dueDate.getHours()).padStart(2, "0");
-      const minutes = String(dueDate.getMinutes()).padStart(2, "0");
-
-      setValue("dueDate", `${year}-${month}-${day}T${hours}:${minutes}`);
-    }
-  }, [watchedPriority, setValue, taskPriorities]);
-
-  // Sync approver order when approvers change
-  useEffect(() => {
     if (watchedApprovers && watchedApprovers.length > 0) {
       setApproverOrder(
         watchedApprovers.map((approver, index) => ({
           ...approver,
           order: index + 1,
-        })),
+        }))
       );
     } else {
       setApproverOrder([]);
     }
   }, [watchedApprovers]);
 
-  // Move approver up
   const moveApproverUp = (index) => {
     if (index > 0) {
       const newOrder = [...approverOrder];
@@ -276,7 +190,6 @@ const ApprovalSubtaskForm = ({
     }
   };
 
-  // Move approver down
   const moveApproverDown = (index) => {
     if (index < approverOrder.length - 1) {
       const newOrder = [...approverOrder];
@@ -286,19 +199,10 @@ const ApprovalSubtaskForm = ({
     }
   };
 
-  // Attachment helpers
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
   const processFiles = (files) => {
     if (!files || files.length === 0) return;
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-    const currentSize = uploadedFiles.reduce((sum, f) => sum + f.file.size, 0);
+    const currentSize = uploadedFiles.reduce((sum, f) => sum + (f.size || f.file?.size || 0), 0);
     if (currentSize + totalSize > 5 * 1024 * 1024) {
       alert("Total file size cannot exceed 5MB");
       return;
@@ -329,7 +233,7 @@ const ApprovalSubtaskForm = ({
   const removeFile = (fileId) => {
     setUploadedFiles((prev) => {
       const updated = prev.filter((f) => f.id !== fileId);
-      setAttachmentSize(updated.reduce((sum, f) => sum + f.file.size, 0));
+      setAttachmentSize(updated.reduce((sum, f) => sum + (f.size || f.file?.size || 0), 0));
       return updated;
     });
   };
@@ -346,39 +250,48 @@ const ApprovalSubtaskForm = ({
 
   const onFormSubmit = (data) => {
     if (!linkedTaskId) {
-      setContextTaskError("Context Task (Prerequisite Dependency) is required for Approval Subtasks.");
+      setContextTaskError("Prerequisite context task is required for approval tasks.");
       return;
     }
     setContextTaskError("");
 
     const formattedData = {
+      id: stepToEdit?.id || `step_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       title: data.taskName,
+      name: data.taskName,
       taskName: data.taskName,
       description: data.description,
-      taskType: "approval",
-      mainTaskType: parentTask?.mainTaskType || parentTask?.taskType || "regular",
-      dueDate: data.dueDate,
-      priority: data.priority?.value || data.priority || "medium",
+      taskType: "Approval",
+      subtaskType: "approval",
+      mainTaskType: "regular",
+      isApprovalTask: true,
+      dueDays: Number(data.dueDays) || 3,
+      priority: typeof data.priority === "object" ? data.priority.value : data.priority,
       status: data.status || "OPEN",
-      visibility: data.visibility || "private",
-      assignee: data.assignedTo?.value || data.assignedTo || "self",
-      assignedTo: data.assignedTo?.value || data.assignedTo || "self",
-      approvers: data.approvers?.map((a) => a.value) || [],
-      approverIds: data.approvers?.map((a) => a.value) || [],
+      visibility: data.visibility || "Private",
+      assignee: data.assignedTo?.value || data.assignedTo || "",
+      assignedUserId: data.assignedTo?.value || data.assignedTo || "",
+      assignedTo: data.assignedTo?.value || data.assignedTo || "",
+      approvers: data.approvers?.map((a) => a.value || a) || [],
+      approverIds: data.approvers?.map((a) => a.value || a) || [],
       approvalMode: data.approvalMode || "any",
       approvalStatus: "pending",
       autoApproveEnabled: data.autoApproval || false,
-      autoApproveAfter:
-        data.autoApproval && data.autoApproveAfter ? data.autoApproveAfter : null,
-      approverOrder:
-        data.approvalMode === "sequential" ? approverOrder : null,
-      collaborators: data.collaborators?.map((c) => c.value) || [],
+      autoApproveAfter: data.autoApproval && data.autoApproveAfter ? data.autoApproveAfter : null,
+      approverOrder: data.approvalMode === "sequential" ? approverOrder : null,
+      collaborators: data.collaborators?.map((c) => c.value || c) || [],
       attachments: uploadedFiles,
       approvalContext: approvalContext,
+      approvalInstructions: approvalContext,
       context: approvalContext,
       linkedTaskId: linkedTaskId || null,
+      linkedToMilestone: linkedTaskId || null,
+      approvalRequired: true,
       configuration: {
         autoInitiate: !!linkedTaskId && autoInitiate,
+        autoComplete: false,
+        autoCompleteAfterDays: null,
+        parentCancellationMode: "ignore_rejection",
       },
     };
 
@@ -386,17 +299,18 @@ const ApprovalSubtaskForm = ({
   };
 
   return (
-    <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(onFormSubmit)} className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-left">
       {/* Task Name */}
       <div>
         <div className="flex justify-between items-center mb-1">
           <label className="block text-sm font-medium text-gray-900">
             Approval Task Name <span className="text-red-500">*</span>
           </label>
-          <span className="text-xs text-gray-400">{taskNameLength}/100</span>
+          <span className="text-xs text-gray-400 font-medium">{taskNameLength}/100</span>
         </div>
         <input
           type="text"
+          maxLength={100}
           {...register("taskName", {
             required: "Task name is required",
             maxLength: {
@@ -405,7 +319,7 @@ const ApprovalSubtaskForm = ({
             },
           })}
           placeholder="Enter approval task name..."
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-2 focus:border-blue-500 text-sm placeholder-gray-400"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-2 focus:border-blue-500 text-xs placeholder-gray-400"
         />
         {errors.taskName && (
           <p className="text-red-500 text-xs mt-1 flex items-center">
@@ -418,7 +332,7 @@ const ApprovalSubtaskForm = ({
       {/* Description */}
       <div>
         <label className="block text-sm font-medium text-gray-900 mb-1">
-          Approval Task Description
+         Approval Task Description
         </label>
         <Controller
           name="description"
@@ -427,7 +341,7 @@ const ApprovalSubtaskForm = ({
             <CustomEditor
               value={field.value}
               onChange={field.onChange}
-              className="milestone-task-compact-editor border border-gray-300 rounded-md focus:border-blue-500 transition-colors"
+              className="border border-gray-300 rounded-md focus:border-blue-500 transition-colors"
               placeholder="Provide details that approvers need to review..."
             />
           )}
@@ -454,18 +368,13 @@ const ApprovalSubtaskForm = ({
               menuPlacement="auto"
               options={approverSourceOptions}
               isLoading={isLoadingCollaborators || localIsLoadingApprovers}
-              className="react-select-container h-8-select-dynamic"
+              className="react-select-container text-xs"
               classNamePrefix="react-select"
               styles={selectStyles}
               placeholder={
                 isLoadingCollaborators || localIsLoadingApprovers
                   ? "Loading approvers..."
                   : "Search and select approvers..."
-              }
-              noOptionsMessage={() =>
-                isLoadingCollaborators || localIsLoadingApprovers
-                  ? "Loading..."
-                  : "No approvers available"
               }
             />
           )}
@@ -478,7 +387,7 @@ const ApprovalSubtaskForm = ({
         )}
       </div>
 
-      {/* Row 1: Approval Mode — horizontal single line */}
+      {/* Approval Mode */}
       <div>
         <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
           Approval Mode <span className="text-red-500">*</span>
@@ -508,9 +417,8 @@ const ApprovalSubtaskForm = ({
         </div>
       </div>
 
-      {/* Row 2: Enable Auto-Approval + Auto-Approval Date side by side */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Enable Auto-Approval */}
+      {/* Auto-Approval Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50/50 p-3 rounded-md border border-gray-200">
         <div className="flex items-center gap-2 pt-1">
           <input
             {...register("autoApproval")}
@@ -520,56 +428,35 @@ const ApprovalSubtaskForm = ({
           />
           <label
             htmlFor="autoApprovalCheckbox"
-            className="text-sm font-medium text-gray-900 select-none cursor-pointer"
+            className="text-xs font-medium text-gray-900 select-none cursor-pointer"
           >
             Enable Auto-Approval
           </label>
         </div>
 
-        {/* Auto-Approval Date */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-1">
-            Auto-approval Date{" "}
-            {watchedAutoApproval && <span className="text-red-500">*</span>}
+          <label className="block text-xs font-medium text-gray-900 mb-1">
+            Auto-approval Offset Days
           </label>
           <input
-            {...register("autoApproveAfter", {
-              required: watchedAutoApproval
-                ? "Auto-approval date is required when auto-approval is enabled"
-                : false,
-              validate: (value) => {
-                if (!watchedAutoApproval) return true;
-                if (!value) return "Auto-approval date is required";
-                const autoDate = new Date(value);
-                const dueDate = new Date(watchedDueDate);
-                return (
-                  autoDate >= dueDate ||
-                  "Auto-approval date must be on or after the due date"
-                );
-              },
-            })}
-            type="datetime-local"
-            min={watchedDueDate || getTodayDate()}
+            {...register("autoApproveAfter")}
+            type="number"
+            min={0}
             disabled={!watchedAutoApproval}
-            className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:border-2 focus:border-blue-500 ${
+            placeholder="Days after due date (e.g. 2)"
+            className={`w-full h-8 px-3 py-1 border rounded-md text-xs focus:outline-none focus:border-2 focus:border-blue-500 ${
               watchedAutoApproval
-                ? "border-gray-300"
+                ? "border-gray-300 bg-white"
                 : "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
             }`}
           />
-          {errors.autoApproveAfter && (
-            <p className="text-red-500 text-xs mt-1 flex items-center">
-              <AlertCircle className="w-3 h-3 mr-1" />
-              {errors.autoApproveAfter.message}
-            </p>
-          )}
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-[11px] text-gray-500 mt-1">
             Auto-approved if no approver action.
           </p>
         </div>
       </div>
 
-      {/* Sequential Order - Only show if Sequential mode & approvers selected */}
+      {/* Sequential Order List */}
       {watchedApprovalMode === "sequential" && approverOrder.length > 0 && (
         <div>
           <label className="block text-sm font-medium text-gray-900 mb-1">
@@ -578,14 +465,14 @@ const ApprovalSubtaskForm = ({
           <div className="space-y-1.5 bg-gray-50 p-3 rounded-md border border-gray-200">
             {approverOrder.map((approver, index) => (
               <div
-                key={approver.value}
+                key={approver.value || index}
                 className="flex items-center justify-between bg-white px-2 py-1.5 rounded-md border border-gray-200 shadow-sm"
               >
                 <div className="flex items-center gap-2">
                   <span className="bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-semibold">
                     {index + 1}
                   </span>
-                  <span className="text-sm font-medium text-gray-800 truncate">
+                  <span className="text-xs font-medium text-gray-800 truncate">
                     {approver.label}
                   </span>
                 </div>
@@ -594,8 +481,7 @@ const ApprovalSubtaskForm = ({
                     type="button"
                     onClick={() => moveApproverUp(index)}
                     disabled={index === 0}
-                    className="p-1 text-gray-400 hover:text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm"
-                    title="Move Up"
+                    className="p-1 text-gray-400 hover:text-blue-600 disabled:opacity-40 text-xs"
                   >
                     ↑
                   </button>
@@ -603,8 +489,7 @@ const ApprovalSubtaskForm = ({
                     type="button"
                     onClick={() => moveApproverDown(index)}
                     disabled={index === approverOrder.length - 1}
-                    className="p-1 text-gray-400 hover:text-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm"
-                    title="Move Down"
+                    className="p-1 text-gray-400 hover:text-blue-600 disabled:opacity-40 text-xs"
                   >
                     ↓
                   </button>
@@ -612,39 +497,34 @@ const ApprovalSubtaskForm = ({
               </div>
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-1">
-            Approvers will review in this order. Use arrows to reorder.
-          </p>
         </div>
       )}
 
-      {/* Due Date & Assignee Grid */}
+      {/* Due Days Offset & Assignee Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Due Date */}
+        {/* DUE DAYS OFFSET */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
-            <Clock className="w-4 h-4 text-gray-500" />
-            Approval Deadline <span className="text-red-500">*</span>
+          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5 text-indigo-600" />
+            DUE DAYS OFFSET <span className="text-red-500">*</span>
           </label>
           <input
-            type="datetime-local"
-            {...register("dueDate", {
-              required: "Approval deadline is required",
+            type="number"
+            min={0}
+            {...register("dueDays", {
+              required: "Due days offset is required",
             })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-2 focus:border-blue-500 text-sm"
+            className="w-full h-8 px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:border-2 focus:border-blue-500 text-xs"
           />
-          {errors.dueDate && (
-            <p className="text-red-500 text-xs mt-1 flex items-center">
-              <AlertCircle className="w-3 h-3 mr-1" />
-              {errors.dueDate.message}
-            </p>
-          )}
+          <p className="text-[11px] text-gray-400 mt-1">
+            Days offset when process launched.
+          </p>
         </div>
 
         {/* Assignee */}
         <div>
           <label className="block text-sm font-medium text-gray-900 mb-1">
-            Assigned To <span className="text-red-500">*</span>
+            Assigned To<span className="text-red-500">*</span>
           </label>
           <Controller
             name="assignedTo"
@@ -656,11 +536,9 @@ const ApprovalSubtaskForm = ({
               <AssigneeSearchSelect
                 value={field.value}
                 onChange={field.onChange}
-                isOrgUser={isOrgUser}
-                currentUser={user}
-                collaboratorOptions={approverSourceOptions}
-                isLoadingCollaborators={isLoadingCollaborators || localIsLoadingApprovers}
-                placeholder="Search and select assignee..."
+                isOrgUser={true}
+                options={orgUsers}
+                placeholder="Search and select lead approver..."
               />
             )}
           />
@@ -688,7 +566,7 @@ const ApprovalSubtaskForm = ({
                 {...field}
                 options={priorityOptions}
                 menuPlacement="auto"
-                className="react-select-container h-8-select-dynamic"
+                className="react-select-container text-xs"
                 classNamePrefix="react-select"
                 styles={selectStyles}
                 placeholder="Select priority..."
@@ -711,22 +589,11 @@ const ApprovalSubtaskForm = ({
                 {...field}
                 isMulti
                 menuPlacement="auto"
-                options={approverSourceOptions.filter(
-                  (opt) =>
-                    opt.value !== "self" &&
-                    !watchedApprovers?.some(
-                      (approver) => approver.value === opt.value,
-                    ),
-                )}
-                isLoading={isLoadingCollaborators || localIsLoadingApprovers}
-                className="react-select-container h-8-select-dynamic"
+                options={approverSourceOptions}
+                className="react-select-container text-xs"
                 classNamePrefix="react-select"
                 styles={selectStyles}
-                placeholder={
-                  isLoadingCollaborators || localIsLoadingApprovers
-                    ? "Loading collaborators..."
-                    : "Select collaborators for notifications..."
-                }
+                placeholder="Select collaborators for notifications..."
               />
             )}
           />
@@ -760,15 +627,14 @@ const ApprovalSubtaskForm = ({
         </div>
       </div>
 
-      {/* Attachments */}
+      {/* Attachments Section */}
       <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1">
-          Attachments{" "}
-          <span className="text-xs text-gray-500 ml-1">(Max 5MB total)</span>
+        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+          Attachments <span className="text-xs text-gray-400 font-normal ml-1">(Max 5MB total)</span>
         </label>
         <div
-          className={`w-full border-2 border-dashed p-4 text-center cursor-pointer rounded-md transition-colors ${
-            isDragActive ? "border-blue-500 bg-blue-50" : "border-blue-300 bg-white"
+          className={`w-full border-2 border-dashed p-3 text-center cursor-pointer rounded-md transition-colors ${
+            isDragActive ? "border-indigo-500 bg-indigo-50" : "border-gray-300 bg-gray-50/60"
           }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -776,18 +642,9 @@ const ApprovalSubtaskForm = ({
           onClick={() => attachmentsInputRef.current?.click()}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              attachmentsInputRef.current?.click();
-            }
-          }}
         >
-          <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center bg-blue-100 text-blue-600 rounded">
-            +
-          </div>
-          <p className="text-sm font-semibold text-blue-600">Drag &amp; Drop files</p>
-          <p className="text-xs text-gray-500">PDF, DOC, images supported</p>
+          <p className="text-xs font-semibold text-indigo-600">Drag &amp; Drop files or click to browse</p>
+          <p className="text-[11px] text-gray-400">PDF, DOC, images supported</p>
         </div>
         <input
           ref={attachmentsInputRef}
@@ -799,40 +656,34 @@ const ApprovalSubtaskForm = ({
         />
 
         {uploadedFiles.length > 0 && (
-          <div className="mt-3 space-y-1">
+          <div className="mt-2 space-y-1">
             {uploadedFiles.map((file) => (
               <div
                 key={file.id}
-                className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded"
+                className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded text-xs"
               >
                 <div className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span className="text-sm text-gray-700">{file.name}</span>
-                  <span className="text-xs text-gray-500">({formatFileSize(file.size)})</span>
+                  <Paperclip className="w-3.5 h-3.5 text-gray-500" />
+                  <span className="text-gray-700 font-medium">{file.name}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => removeFile(file.id)}
-                  className="text-red-500 hover:text-red-700 text-sm"
+                  className="text-gray-400 hover:text-red-500 text-xs"
                 >
-                  ✕
+                  <X className="w-3.5 h-3.5" />
                 </button>
               </div>
             ))}
-            <div className="text-xs text-gray-500">
-              Total size: {formatFileSize(attachmentSize)} / 5MB
-            </div>
           </div>
         )}
       </div>
 
-      {/* Context Task Dependency & Auto Initiate */}
+      {/* Linked Task Selector */}
       <LinkedTaskSelector
         parentTaskId={parentTask?._id || parentTask?.id}
-        sequence={(parentTask?.subtaskCount || 0) + 1}
-        excludeTaskId={editData?._id}
+        sequence={1}
+        excludeTaskId={stepToEdit?.id}
         linkedTaskId={linkedTaskId}
         onLinkedTaskChange={(selectedId) => {
           setLinkedTaskId(selectedId);
@@ -840,40 +691,34 @@ const ApprovalSubtaskForm = ({
         }}
         autoInitiate={autoInitiate}
         onAutoInitiateChange={setAutoInitiate}
-        disabled={isSubmitting}
+        disabled={false}
         label="Context Task (Prerequisite Dependency)"
         isRequired={true}
         error={contextTaskError}
+        previousSteps={previousSteps}
       />
 
-      {/* Submit Controls */}
+
+
+      {/* Actions */}
       <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
         <Button
           type="button"
           variant="outline"
-          onClick={onCancel}
+          onClick={onClose}
           disabled={isSubmitting}
-          className="border-gray-300 text-gray-600 hover:bg-gray-50"
+          className="border-gray-300 text-gray-600 hover:bg-gray-50 h-9 text-xs"
         >
           Cancel
         </Button>
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="bg-blue-600 hover:bg-blue-700 text-white min-w-[190px]"
+          className="bg-indigo-600 hover:bg-indigo-700 text-white min-w-[140px] h-9 text-xs font-semibold"
         >
-          {isSubmitting ? (
-            <span className="flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Saving...
-            </span>
-          ) : (
-            "Create Approval Subtask"
-          )}
+          {stepToEdit ? "Save Step" : "Add Step"}
         </Button>
       </div>
     </form>
   );
-};
-
-export default ApprovalSubtaskForm;
+}

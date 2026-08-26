@@ -972,52 +972,6 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
                           className="flex items-center gap-2"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {/* Delete Subtask */}
-                          {(() => {
-                            const isApprovedOrRejected =
-                              normApprovalStatus === "approved" ||
-                              normApprovalStatus === "rejected" ||
-                              normStatus === "done" ||
-                              normStatus === "completed" ||
-                              normStatus === "cancelled" ||
-                              normStatus === "canceled" ||
-                              normStatus === "rejected" ||
-                              normStatus === "approved";
-
-                            if (isApprovedOrRejected) return null;
-
-                            const canDeleteByPermission =
-                              canDeleteSubtask(subtask);
-                            const DELETABLE_STATUSES = [
-                              "open",
-                              "onhold",
-                              "pending",
-                              "to-do",
-                            ];
-                            const canDeleteByStatus =
-                              DELETABLE_STATUSES.includes(normStatus);
-                            const canDelete =
-                              canDeleteByPermission && canDeleteByStatus;
-
-                            return (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={!canDelete}
-                                className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1 font-medium"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteSubtask(
-                                    subtask.id || subtask._id,
-                                    subtask.title,
-                                  );
-                                }}
-                              >
-                                <Trash2 className="w-3.5 h-3.5 text-red-500" />{" "}
-                                Delete
-                              </Button>
-                            );
-                          })()}
                         </div>
                       </div>
                     </div>
@@ -1026,7 +980,7 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
                     {isExpanded && (
                       <div className="border-t border-gray-100 bg-gray-50/50 p-4 space-y-4 rounded-b-xl text-xs">
                         {/* Description Block */}
-                        <div>
+                        {/* <div>
                           <h5 className="font-semibold text-gray-700 uppercase tracking-wider text-[11px] mb-1">
                             Full Description
                           </h5>
@@ -1042,7 +996,7 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
                               No description specified.
                             </p>
                           )}
-                        </div>
+                        </div> */}
 
                         {/* Metadata Grid */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 rounded-lg border border-gray-200 shadow-xs">

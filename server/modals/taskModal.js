@@ -9,13 +9,13 @@ const TaskSchema = mongoose.Schema(
     },
     taskType: {
       type: String,
-      enum: ["regular", "recurring", "milestone", "approval"],
+      enum: ["regular", "recurring", "milestone", "approval", "email"],
       default: "regular",
       required: true,
     },
     mainTaskType: {
       type: String,
-      enum: ["regular", "recurring", "milestone", "approval"],
+      enum: ["regular", "recurring", "milestone", "approval", "email"],
       default: "regular",
     },
     createdByRole: {
@@ -561,10 +561,10 @@ const TaskSchema = mongoose.Schema(
       description: "User who submitted the form"
     },
 
-    // Email to Task Fields
+    // Email to Task & Process Builder Fields
     source: {
       type: String,
-      enum: ["manual", "email", "api", "quick-task", "form"],
+      enum: ["manual", "email", "api", "quick-task", "form", "process-builder"],
       default: "manual",
       description: "Source of task creation"
     },
@@ -577,6 +577,44 @@ const TaskSchema = mongoose.Schema(
       type: String,
       default: null,
       description: "Original email subject (if source is email)"
+    },
+
+    // Process Builder Tracking Fields
+    isSubtask: {
+      type: Boolean,
+      default: false,
+      index: true,
+      description: "Flag indicating whether task is a subtask"
+    },
+    parentTaskId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Task",
+      default: null,
+      index: true,
+      description: "Reference to parent task _id"
+    },
+    parentTask: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Task",
+      default: null,
+      description: "Alias reference to parent task _id"
+    },
+    isProcessBuilderTask: {
+      type: Boolean,
+      default: false,
+      index: true,
+      description: "Flag indicating task or subtask was created by Process Builder"
+    },
+    processTemplateId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ProcessTemplate",
+      default: null,
+      description: "Reference to original ProcessTemplate"
+    },
+    processStepId: {
+      type: String,
+      default: null,
+      description: "Reference step identifier if task is a step subtask"
     },
   },
   { timestamps: true }

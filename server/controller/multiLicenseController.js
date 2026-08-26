@@ -1372,8 +1372,9 @@ export const assignLicenseToUser = async (req, res) => {
     // 🆕 NEW: Atomically assign instance to user
     await availableInstance.assignToUser(user._id);
 
-    // Update user with license_instance_id
+    // Update user with license_instance_id and license_code
     user.license_instance_id = availableInstance._id;
+    user.license_code = license_code;
     await user.save({ validateBeforeSave: false });
 
     // Audit log for license assignment

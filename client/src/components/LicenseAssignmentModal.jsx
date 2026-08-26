@@ -112,6 +112,7 @@ export function LicenseAssignmentModal({
   // Current user's license
   const currentLicense =
     (user?.license_code && user?.license_code !== "No license" ? user?.license_code : null) ||
+    (user?.license_instance_id?.license_code && user?.license_instance_id?.license_code !== "No license" ? user?.license_instance_id?.license_code : null) ||
     (typeof user?.assigned_license === "string" && user?.assigned_license !== "No license"
       ? user?.assigned_license
       : user?.assigned_license?.license_code && user?.assigned_license?.license_code !== "No license"

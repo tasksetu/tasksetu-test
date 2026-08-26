@@ -32,52 +32,90 @@ export default function LinkedTaskSelector({
   onAutoInitiateChange,
   disabled = false,
   label = "Linked Task (Prerequisite Dependency)",
+  isRequired = false,
+  error = null,
+  previousSteps = [],
 }) {
   const [eligibleTasks, setEligibleTasks] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const prevStepsKey = JSON.stringify(previousSteps || []);
+
   useEffect(() => {
-    if (parentTaskId) {
-      fetchEligibleLinkedTasks();
+    let isCancelled = false;
+
+    if (previousSteps && previousSteps.length > 0) {
+      const formatted = previousSteps.map((st, idx) => ({
+        _id: st.id || `step_${idx}`,
+        title: st.name || st.title || `Step ${idx + 1}`,
+        sequence: idx + 1,
+        taskType: (st.taskType || "regular").toLowerCase(),
+      }));
+      setEligibleTasks(formatted);
+      setLoading(false);
+    } else if (parentTaskId) {
+      setLoading(true);
+      apiClient
+        .get(`/api/workflow/tasks/${parentTaskId}/eligible-linked-tasks`, {
+          params: { sequence, excludeId: excludeTaskId },
+        })
+        .then((res) => {
+          if (!isCancelled && res.data?.success) {
+            setEligibleTasks(res.data.data || []);
+          }
+        })
+        .catch((err) => {
+          if (!isCancelled) {
+            console.error("Failed to fetch eligible linked tasks", err);
+          }
+        })
+        .finally(() => {
+          if (!isCancelled) {
+            setLoading(false);
+          }
+        });
     } else {
       setEligibleTasks([]);
-    }
-  }, [parentTaskId, sequence, excludeTaskId]);
-
-  const fetchEligibleLinkedTasks = async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get(
-        `/api/workflow/tasks/${parentTaskId}/eligible-linked-tasks`,
-        {
-          params: { sequence, excludeId: excludeTaskId },
-        },
-      );
-      if (res.data?.success) {
-        setEligibleTasks(res.data.data || []);
-      }
-    } catch (err) {
-      console.error("Failed to fetch eligible linked tasks", err);
-    } finally {
       setLoading(false);
     }
-  };
 
-  // If no existing subtasks are available to link to, show first task notice
+    return () => {
+      isCancelled = true;
+    };
+  }, [parentTaskId, sequence, excludeTaskId, prevStepsKey]);
+
+  // If no existing subtasks are available to link to, show notice
   if (!loading && eligibleTasks.length === 0) {
     return (
-      <div className="mb-4 text-xs text-gray-500 italic bg-gray-50 p-2.5 rounded-md border border-gray-200 flex items-center gap-1.5">
-        <Link2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-        <span>First task in sequence (no previous subtasks available to link).</span>
+      <div className="mb-4 space-y-1">
+        <label className="block text-xs font-semibold text-gray-700 uppercase mb-1 flex items-center gap-1.5">
+          <Link2 className="w-4 h-4 text-blue-600" /> {label}
+          {isRequired && <span className="text-red-500">*</span>}
+        </label>
+        <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-md border border-amber-200 flex items-center gap-1.5 font-medium">
+          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>
+            {isRequired
+              ? "An Approval Subtask requires a previous subtask as a prerequisite context task, but no previous subtasks exist under this parent task."
+              : "First task in sequence (no previous subtasks available to link)."}
+          </span>
+        </div>
+        {error && (
+          <p className="text-red-500 text-xs mt-1 flex items-center gap-1 font-medium">
+            <AlertCircle className="w-3.5 h-3.5" />
+            {error}
+          </p>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="mb-4 space-y-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+    <div className={`mb-4 space-y-3 p-3 bg-gray-50 border rounded-lg ${error ? "border-red-400 bg-red-50/20" : "border-gray-200"}`}>
       <div>
         <label className="block text-xs font-semibold text-gray-700 uppercase mb-1 flex items-center gap-1.5">
           <Link2 className="w-4 h-4 text-blue-600" /> {label}
+          {isRequired && <span className="text-red-500">*</span>}
         </label>
         <select
           value={linkedTaskId || ""}
@@ -89,15 +127,25 @@ export default function LinkedTaskSelector({
             }
           }}
           disabled={disabled || loading}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:border-blue-500 focus:border-2 bg-white"
+          className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:border-2 bg-white ${
+            error ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"
+          }`}
         >
-          <option value="">— No dependency (Can start anytime) —</option>
+          <option value="">
+            {isRequired ? "— Select a prerequisite context task (Required) —" : "— No dependency (Can start anytime) —"}
+          </option>
           {eligibleTasks.map((t, idx) => (
             <option key={t._id} value={t._id}>
               Subtask {t.sequence || idx + 1}: {t.title} ({t.taskType || "regular"})
             </option>
           ))}
         </select>
+        {error && (
+          <p className="text-red-500 text-xs mt-1 flex items-center gap-1 font-medium">
+            <AlertCircle className="w-3.5 h-3.5" />
+            {error}
+          </p>
+        )}
         <p className="text-xs text-gray-500 mt-1">
           This task will depend on the selected subtask being completed.
         </p>

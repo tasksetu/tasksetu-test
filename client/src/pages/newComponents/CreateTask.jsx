@@ -33,6 +33,7 @@ import { useTaskPriorities } from "@/hooks/useTaskPriorities";
 import {
   canCreateTaskType,
   canAssignToOthers as canAssignToOthersUtil,
+  isOrgUserRole,
   getAssignmentScope,
   getAllowedTaskTypes,
   getRestrictionMessage,
@@ -465,12 +466,13 @@ export default function CreateTask({
 
   const taskTypes = getAvailableTaskTypes();
 
-  // Determine if user can assign to others based on new permission system
   const currentRole = activeRole || role;
+  const isOrgUser = isOrgUserRole(currentRole);
   const canUserAssignToOthers = canAssignToOthersUtil(currentRole);
   const assignmentScope = getAssignmentScope(currentRole);
 
   console.log("🔐 ASSIGNMENT PERMISSIONS DEBUG - Current role:", currentRole);
+  console.log("🔐 ASSIGNMENT PERMISSIONS DEBUG - Is Org User:", isOrgUser);
   console.log(
     "🔐 ASSIGNMENT PERMISSIONS DEBUG - Can assign to others:",
     canUserAssignToOthers,
@@ -482,7 +484,7 @@ export default function CreateTask({
 
   const commonFormProps = {
     onCancel: onClose,
-    isOrgUser: canUserAssignToOthers, // Updated: Use new permission system
+    isOrgUser: isOrgUser, // Updated: Check if user belongs to an organization
     assignmentOptions,
     collaboratorOptions: collaboratorsList,
     isLoadingCollaborators,
@@ -1184,7 +1186,7 @@ export default function CreateTask({
             {...commonFormProps}
             onSubmit={handleTaskSubmit}
             onCancel={onClose}
-            isOrgUser={canAssignToOthers}
+            isOrgUser={isOrgUser}
             assignmentOptions={assignmentOptions}
             userRole={role}
             canAssignToOthers={canAssignToOthers}
@@ -1198,7 +1200,7 @@ export default function CreateTask({
           <RecurringTaskForm
             onSubmit={handleTaskSubmit}
             onCancel={onClose}
-            isOrgUser={canAssignToOthers}
+            isOrgUser={isOrgUser}
             assignmentOptions={assignmentOptions}
             userRole={role}
             canAssignToOthers={canAssignToOthers}
@@ -1213,7 +1215,7 @@ export default function CreateTask({
           <MilestoneTaskForm
             onSubmit={handleTaskSubmit}
             onCancel={onClose}
-            isOrgUser={canAssignToOthers}
+            isOrgUser={isOrgUser}
             assignmentOptions={assignmentOptions}
             userRole={role}
             canAssignToOthers={canAssignToOthers}
@@ -1231,7 +1233,7 @@ export default function CreateTask({
           <ApprovalTaskForm
             onSubmit={handleTaskSubmit}
             onCancel={onClose}
-            isOrgUser={canAssignToOthers}
+            isOrgUser={isOrgUser}
             assignmentOptions={assignmentOptions}
             userRole={role}
             canAssignToOthers={canAssignToOthers}
@@ -1828,7 +1830,7 @@ function LegacyCreateTask({
               onSubmit(formData);
             }}
             onClose={onClose}
-            isOrgUser={canAssignToOthers}
+            isOrgUser={isOrgUser}
             assignmentOptions={assignmentOptions}
             userRole={role}
             canAssignToOthers={canAssignToOthers}

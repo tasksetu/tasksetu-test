@@ -25,6 +25,7 @@ import superAdminDashboardRoutes from "./routes/superAdminDashboardRoutes.js";
 import superAdminRoutes from "./routes/superAdminRoutes.js";
 import cronDebugRoutes from "./routes/cronDebugRoutes.js"; // ✅ NEW: Cron debug & test routes
 import workflowRoutes from "./routes/workflowRoutes.js"; // ✅ Workflow Engine routes
+import processBuilderRoutes from "./process-builder/processBuilderRoutes.js"; // ✅ Process Builder routes
 // Import from centralized models.js to avoid duplicate model compilation
 import { FormCategory, FormTag } from "./models.js";
 import { FormVersion } from "./modals/formVersionModal.js";
@@ -326,6 +327,10 @@ const connectToMongoDB = async () => {
       // ✅ Workflow Engine routes (Phases 3-13)
       app.use("/api/workflow", workflowRoutes);
       console.log("✅ Workflow Engine routes registered at /api/workflow");
+
+      // ✅ Process Builder routes
+      app.use("/api/process-builder", processBuilderRoutes);
+      console.log("✅ Process Builder routes registered at /api/process-builder");
     } catch (routeError) {
       console.error("Error registering routes:", routeError);
       throw routeError;

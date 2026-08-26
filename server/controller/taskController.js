@@ -12169,19 +12169,10 @@ export const unlinkTaskFromMilestone = async (req, res) => {
  */
 export const getMilestoneLinkedTasks = async (req, res) => {
   try {
-
     const milestoneId = req.params.id;
 
-    // Fetch milestone
-    const milestone = await Task.findById(milestoneId).populate({
-      path: "linkedTasks",
-      select:
-        "title description status priority dueDate assignedTo createdBy completedDate",
-      populate: [
-        { path: "assignedTo", select: "firstName lastName email" },
-        { path: "createdBy", select: "firstName lastName email" },
-      ],
-    });
+    // Fetch milestone task
+    const milestone = await Task.findById(milestoneId).lean();
 
     if (!milestone) {
       return res.status(404).json({
@@ -12190,12 +12181,35 @@ export const getMilestoneLinkedTasks = async (req, res) => {
       });
     }
 
-    const linkedTasks = milestone.linkedTasks || [];
+    // Collect all task IDs linked to this milestone
+    const linkedIdsFromMilestone = Array.isArray(milestone.linkedTasks)
+      ? milestone.linkedTasks
+      : [];
+    const linkedIdsFromData = Array.isArray(milestone.milestoneData?.linkedTaskIds)
+      ? milestone.milestoneData.linkedTaskIds
+      : [];
 
+    const allLinkedObjectIds = [
+      ...linkedIdsFromMilestone,
+      ...linkedIdsFromData,
+    ].filter((id) => id && mongoose.Types.ObjectId.isValid(id));
+
+    // Fetch tasks pointing back via linkedToMilestone OR referenced in milestone linkedTasks
+    const directTasks = await Task.find({
+      $or: [
+        { linkedToMilestone: milestoneId },
+        { _id: { $in: allLinkedObjectIds } },
+      ],
+      is_deleted: { $ne: true },
+    })
+      .select("title description status priority dueDate assignedTo createdBy completedDate")
+      .populate("assignedTo", "firstName lastName email")
+      .populate("createdBy", "firstName lastName email")
+      .lean();
 
     res.status(200).json({
       success: true,
-      message: `Found ${linkedTasks.length} linked tasks`,
+      message: `Found ${directTasks.length} linked tasks`,
       data: {
         milestone: {
           _id: milestone._id,
@@ -12203,7 +12217,7 @@ export const getMilestoneLinkedTasks = async (req, res) => {
           progress: milestone.progress,
           status: milestone.status,
         },
-        linkedTasks: linkedTasks.map((task) => ({
+        linkedTasks: directTasks.map((task) => ({
           _id: task._id,
           title: task.title,
           description: task.description,
@@ -12214,19 +12228,19 @@ export const getMilestoneLinkedTasks = async (req, res) => {
           assignedTo: task.assignedTo
             ? {
                 _id: task.assignedTo._id,
-                name: `${task.assignedTo.firstName} ${task.assignedTo.lastName}`.trim(),
+                name: `${task.assignedTo.firstName || ""} ${task.assignedTo.lastName || ""}`.trim() || task.assignedTo.email,
                 email: task.assignedTo.email,
               }
             : null,
           createdBy: task.createdBy
             ? {
                 _id: task.createdBy._id,
-                name: `${task.createdBy.firstName} ${task.createdBy.lastName}`.trim(),
+                name: `${task.createdBy.firstName || ""} ${task.createdBy.lastName || ""}`.trim() || task.createdBy.email,
               }
             : null,
         })),
-        totalCount: linkedTasks.length,
-        completedCount: linkedTasks.filter((t) => t.status === "DONE").length,
+        totalCount: directTasks.length,
+        completedCount: directTasks.filter((t) => t.status === "DONE").length,
       },
     });
   } catch (error) {

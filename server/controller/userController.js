@@ -290,11 +290,12 @@ export const getUsersByOrg = async (req, res) => {
     // Count total users for pagination
     const total = await User.countDocuments(searchQuery);
 
-    // Fetch paginated users - include license fields
+    // Fetch paginated users - include license fields (including new atomic model license_instance_id)
     const users = await User.find(searchQuery)
       .select(
-        "firstName lastName role department designation location assignedTasks completedTasks status lastLoginAt isPrimaryAdmin email createdAt license_code assigned_license",
+        "firstName lastName role department designation location assignedTasks completedTasks status lastLoginAt isPrimaryAdmin email createdAt license_code assigned_license license_instance_id",
       )
+      .populate("license_instance_id")
       .skip(skip)
       .limit(limit)
       .lean();
@@ -337,21 +338,29 @@ export const getUsersByOrg = async (req, res) => {
       return acc;
     }, {});
 
-    const formattedUsers = users.map((u) => ({
-      ...u,
-      firstName: u.firstName || "",
-      lastName: u.lastName || "",
-      lastLoginAt: u.lastLoginAt || null,
-      // Fix: Get license from assigned_license or license_code field
-      license_code: u.assigned_license?.license_code || u.license_code || null,
-      licenseId:
-        u.assigned_license?.license_code || u.license_code || "No license",
-      // override with live counts computed from tasks
-      assignedTasks: countsMap[u._id.toString()]?.assignedTasks ?? 0,
-      completedTasks: countsMap[u._id.toString()]?.completedTasks ?? 0,
-      formsCreated: countsMap[u._id.toString()]?.formsCreated ?? 0,
-      activeProcesses: countsMap[u._id.toString()]?.activeProcesses ?? 0,
-    }));
+    const formattedUsers = users.map((u) => {
+      const resolvedLicense =
+        u.license_instance_id?.license_code ||
+        u.assigned_license?.license_code ||
+        u.license_code ||
+        "EXPLORE";
+
+      return {
+        ...u,
+        firstName: u.firstName || "",
+        lastName: u.lastName || "",
+        lastLoginAt: u.lastLoginAt || null,
+        // Fix: Resolve license from license_instance_id, assigned_license, or license_code field
+        license_code: resolvedLicense,
+        licenseId: resolvedLicense,
+        assigned_license: u.assigned_license || { license_code: resolvedLicense },
+        // override with live counts computed from tasks
+        assignedTasks: countsMap[u._id.toString()]?.assignedTasks ?? 0,
+        completedTasks: countsMap[u._id.toString()]?.completedTasks ?? 0,
+        formsCreated: countsMap[u._id.toString()]?.formsCreated ?? 0,
+        activeProcesses: countsMap[u._id.toString()]?.activeProcesses ?? 0,
+      };
+    });
 
     res.json({
       users: formattedUsers,

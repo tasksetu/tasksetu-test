@@ -49,7 +49,7 @@ export default function FormSubmissionRecipientModal({
         setSelectedFormId(firstId);
       }
     }
-  }, [forms]);
+  }, [forms, selectedFormId]);
 
   // Fetch recipients when selectedFormId changes
   useEffect(() => {

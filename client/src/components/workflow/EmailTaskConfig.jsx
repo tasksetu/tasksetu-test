@@ -12,8 +12,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import ReactQuill from "react-quill";
-import "react-quill/dist/quill.snow.css";
+import CustomEditor from "../common/CustomEditor";
 import { Plus, Trash2, Mail, RefreshCw, Paperclip, Send, CheckCircle, Clock, AlertCircle, Users, Download, Table, Columns, Info, Loader2 } from "lucide-react";
 import { apiClient } from "../../utils/apiClient";
 import FormSubmissionRecipientModal from "./FormSubmissionRecipientModal";
@@ -293,20 +292,12 @@ export default function EmailTaskConfig({
         <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
           Email Body / Message <span className="text-red-500">*</span>
         </label>
-        <ReactQuill
-          theme="snow"
+        <CustomEditor
           value={config.body || ""}
           onChange={(content) => updateConfig({ ...config, body: content })}
           readOnly={disabled}
-          placeholder="Dear {VendorName},&#10;&#10;Please review the attached details and complete the form below."
-          modules={{
-            toolbar: [
-              ["bold", "italic", "underline"],
-              ["link"],
-              [{ list: "ordered" }, { list: "bullet" }],
-              ["clean"],
-            ],
-          }}
+          placeholder="Dear {VendorName}, Please review the attached details..."
+          height="140px"
           className={`bg-white rounded-md ${
             errors?.body ? "border border-red-500 rounded-sm" : ""
           }`}
@@ -522,100 +513,6 @@ export default function EmailTaskConfig({
           </div>
         )}
       </div>
-
-      {/* If Task ID exists: Re-Send button & Recipient Status Table */}
-      {taskId && (
-        <div className="mt-6 border-t border-blue-200 pt-4">
-          <div className="flex items-center justify-between mb-3">
-            <h5 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-              <Send className="w-4 h-4 text-blue-600" /> Recipient Tracking & Re-Send
-            </h5>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => handleResend("pending")}
-                disabled={resending}
-                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium flex items-center gap-1"
-              >
-                {resending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                Re-Send Pending
-              </button>
-              <button
-                type="button"
-                onClick={() => handleResend("all")}
-                disabled={resending}
-                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded text-xs font-medium flex items-center gap-1"
-              >
-                Re-Send All
-              </button>
-            </div>
-          </div>
-
-          {resendMessage && (
-            <p className="text-xs font-medium text-blue-600 bg-blue-50 p-2 rounded mb-2">
-              {resendMessage}
-            </p>
-          )}
-
-          {/* Status Table */}
-          <div className="bg-white border border-gray-200 rounded-md overflow-hidden text-xs">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase">
-                  <th className="p-2 font-semibold">Recipient</th>
-                  <th className="p-2 font-semibold">Status</th>
-                  <th className="p-2 font-semibold">Sent At</th>
-                  <th className="p-2 font-semibold">Submitted At</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {(recipientStatus || []).length > 0 ? (
-                  (recipientStatus || []).map((row, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="p-2">
-                        <div className="font-medium text-gray-900">{row.name || "—"}</div>
-                        <div className="text-gray-400 text-[11px]">{row.email}</div>
-                      </td>
-                      <td className="p-2">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold uppercase ${
-                            row.status === "submitted"
-                              ? "bg-green-100 text-green-700"
-                              : row.status === "sent" || row.status === "opened"
-                              ? "bg-blue-100 text-blue-700"
-                              : row.status === "failed"
-                              ? "bg-red-100 text-red-700"
-                              : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {row.status === "submitted" && <CheckCircle className="w-3 h-3" />}
-                          {row.status === "failed" && <AlertCircle className="w-3 h-3" />}
-                          {(row.status === "sent" || row.status === "pending") && (
-                            <Clock className="w-3 h-3" />
-                          )}
-                          {row.status}
-                        </span>
-                      </td>
-                      <td className="p-2 text-gray-500">
-                        {row.sentAt ? new Date(row.sentAt).toLocaleString() : "—"}
-                      </td>
-                      <td className="p-2 text-gray-500">
-                        {row.submittedAt ? new Date(row.submittedAt).toLocaleString() : "—"}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} className="p-3 text-center text-gray-400 italic">
-                      {loadingStatus ? "Loading recipient tracking..." : "No email delivery history yet."}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {/* Bulk Recipient Import Modal from Form Responses */}
       <FormSubmissionRecipientModal

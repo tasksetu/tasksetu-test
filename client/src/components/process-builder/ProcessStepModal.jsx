@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useOrgUsers, useOrgForms } from "@/hooks/useProcessBuilder";
+import { useAuth } from "@/features/shared/hooks/useAuth";
 import {
   Clock,
   FileText,
@@ -27,7 +29,15 @@ import {
   Flag,
   ShieldCheck,
   ListTodo,
+  Mail,
+  Target,
+  X,
 } from "lucide-react";
+
+import ProcessStandardStepForm from "./forms/ProcessStandardStepForm";
+import ProcessEmailStepForm from "./forms/ProcessEmailStepForm";
+import ProcessMilestoneStepForm from "./forms/ProcessMilestoneStepForm";
+import ProcessApprovalStepForm from "./forms/ProcessApprovalStepForm";
 
 export function ProcessStepModal({
   isOpen,
@@ -35,50 +45,104 @@ export function ProcessStepModal({
   onSave,
   stepToEdit = null,
   stepIndex = 0,
+  existingSteps = [],
 }) {
+  const { user: currentUser } = useAuth();
   const { data: orgUsers = [] } = useOrgUsers();
   const { data: orgForms = [] } = useOrgForms();
 
-  const [taskType, setTaskType] = useState("Regular");
+  const previousSteps = useMemo(() => {
+    if (!Array.isArray(existingSteps) || existingSteps.length === 0) return [];
+    return existingSteps
+      .slice(0, stepIndex)
+      .filter((st) => st && (st.id || st._id) !== (stepToEdit?.id || stepToEdit?._id));
+  }, [existingSteps, stepIndex, stepToEdit]);
+
+  const detectTaskType = (step) => {
+    if (!step) return "regular";
+    let typeLower = (step.subtaskType || step.taskType || "regular").toLowerCase();
+    if (step.isApprovalTask || step.approvalRequired || typeLower === "approval") return "approval";
+    if (step.isMilestone || typeLower === "milestone") return "milestone";
+    if (step.emailConfig || step.emailSubject || typeLower === "email") return "email";
+    return typeLower;
+  };
+
+  const [taskType, setTaskType] = useState(() => detectTaskType(stepToEdit));
   const [stepName, setStepName] = useState("");
   const [assignedUserId, setAssignedUserId] = useState("");
   const [dueDays, setDueDays] = useState(3);
+  const [priority, setPriority] = useState("Medium");
+  const [status, setStatus] = useState("Open");
+  const [visibility, setVisibility] = useState("Private");
+  const [description, setDescription] = useState("");
+  const [tags, setTags] = useState([]);
+  const [tagInput, setTagInput] = useState("");
+
   const [approvalRequired, setApprovalRequired] = useState(false);
   const [formId, setFormId] = useState("none");
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
+    if (!isOpen) return;
+
+    const initialType = detectTaskType(stepToEdit);
+    setTaskType(initialType);
+
     if (stepToEdit) {
-      setTaskType(stepToEdit.taskType || "Regular");
-      setStepName(stepToEdit.name || "");
+      setStepName(stepToEdit.name || stepToEdit.title || "");
       setAssignedUserId(
         stepToEdit.assignedUserId ? String(stepToEdit.assignedUserId) : ""
       );
       setDueDays(stepToEdit.dueDays ?? 3);
+      setPriority(stepToEdit.priority || "Medium");
+      setStatus(stepToEdit.status || "Open");
+      setVisibility(stepToEdit.visibility || "Private");
+      setDescription(stepToEdit.description || "");
+      setTags(Array.isArray(stepToEdit.tags) ? stepToEdit.tags : []);
       setApprovalRequired(!!stepToEdit.approvalRequired);
       setFormId(stepToEdit.formId || "none");
     } else {
-      setTaskType("Regular");
       setStepName("");
       setAssignedUserId(orgUsers[0] ? String(orgUsers[0].id) : "");
       setDueDays(3);
+      setPriority("Medium");
+      setStatus("Open");
+      setVisibility("Private");
+      setDescription("");
+      setTags([]);
       setApprovalRequired(false);
       setFormId("none");
     }
+    setTagInput("");
     setErrors({});
-  }, [stepToEdit, isOpen, orgUsers]);
+  }, [stepToEdit, isOpen]);
 
-  const handleSubmit = (e) => {
+  const handleAddTag = (e) => {
+    if ((e.key === "Enter" || e.key === ",") && tagInput.trim()) {
+      e.preventDefault();
+      const newTag = tagInput.trim().replace(/^#/, "");
+      if (newTag && !tags.includes(newTag)) {
+        setTags([...tags, newTag]);
+      }
+      setTagInput("");
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove) => {
+    setTags(tags.filter((t) => t !== tagToRemove));
+  };
+
+  const handleStandardSubmit = (e) => {
     e.preventDefault();
     const newErrors = {};
     if (!stepName.trim()) {
-      newErrors.stepName = "Name of step is required";
+      newErrors.stepName = "Sub-task title is required";
     }
     if (!assignedUserId) {
-      newErrors.assignedUserId = "Please select an assigned user";
+      newErrors.assignedUserId = "Please select an assignee";
     }
     if (dueDays < 0 || dueDays === "" || isNaN(dueDays)) {
-      newErrors.dueDays = "Please enter a valid number of due days";
+      newErrors.dueDays = "Please enter valid due days";
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -88,10 +152,15 @@ export function ProcessStepModal({
 
     const stepData = {
       id: stepToEdit?.id || `step_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      taskType,
+      taskType: "Regular",
       name: stepName.trim(),
-      assignedUserId: Number(assignedUserId),
+      assignedUserId: Number(assignedUserId) || assignedUserId,
       dueDays: Number(dueDays),
+      priority,
+      status,
+      visibility,
+      description: description.trim(),
+      tags,
       approvalRequired: Boolean(approvalRequired),
       formId: formId === "none" ? null : formId,
     };
@@ -100,230 +169,174 @@ export function ProcessStepModal({
     onClose();
   };
 
+  const handleSpecialSubtaskSubmit = (type, data) => {
+    const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
+    const stepTitle = data.title || data.name || stepName || "Untitled Subtask Step";
+    const assigneeVal = data.assignedTo || data.assignee || assignedUserId || (orgUsers[0] ? orgUsers[0].id : "");
+
+    const stepData = {
+      id: stepToEdit?.id || `step_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      taskType: capitalizedType,
+      name: String(stepTitle).trim(),
+      assignedUserId: typeof assigneeVal === "object" ? assigneeVal.value || assigneeVal.id : assigneeVal,
+      dueDays: Number(dueDays || 3),
+      priority: data.priority || priority || "Medium",
+      status: data.status || status || "Open",
+      visibility: data.visibility || visibility || "Private",
+      description: data.description || description || "",
+      tags: data.tags || tags || [],
+      approvalRequired: type === "approval" || Boolean(data.approvalRequired),
+      formId: data.attachedFormId || data.formId || (formId === "none" ? null : formId),
+      emailConfig: data.emailConfig || null,
+      emailSubject: data.emailConfig?.subject || data.emailSubject || "",
+      emailBody: data.emailConfig?.body || data.emailBody || "",
+      emailAutoComplete: Boolean(data.emailConfig?.autoComplete || data.emailAutoComplete),
+      approvalInstructions: data.approvalContext || data.context || data.approvalInstructions || "",
+      milestoneNotes: data.milestoneType || data.milestoneNotes || "",
+    };
+
+    onSave(stepData);
+    onClose();
+  };
+
+  const parentTaskMock = useMemo(() => {
+    return {
+      _id: `parent_${stepIndex + 1}`,
+      id: `parent_${stepIndex + 1}`,
+      title: `Process Step #${stepIndex + 1}`,
+    };
+  }, [stepIndex]);
+
+  const formattedEditData = useMemo(() => {
+    if (!stepToEdit) return null;
+    return {
+      ...stepToEdit,
+      _id: stepToEdit.id,
+      title: stepToEdit.name || stepToEdit.title || "",
+      assignedTo: stepToEdit.assignedUserId || "",
+      dueDate: stepToEdit.dueDays ? new Date(Date.now() + stepToEdit.dueDays * 86400000).toISOString() : "",
+      priority: stepToEdit.priority || "medium",
+      description: stepToEdit.description || "",
+      approvalContext: stepToEdit.approvalInstructions || "",
+      milestoneType: stepToEdit.milestoneNotes || "",
+    };
+  }, [stepToEdit]);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[560px] bg-white text-gray-900 border-gray-200 shadow-xl p-0 overflow-hidden rounded-md">
-        <DialogHeader className="px-6 pt-5 pb-4 border-b border-gray-200 bg-gray-50/80">
-          <DialogTitle className="text-xl font-normal text-gray-800 flex items-center gap-2" style={{ color: "#676a6c" }}>
-            {stepToEdit ? (
-              <>
-                <ListTodo className="w-5 h-5 text-indigo-600" /> Edit Step #{stepIndex + 1}
-              </>
-            ) : (
-              <>
-                <Zap className="w-5 h-5 text-indigo-600" /> Add Step #{stepIndex + 1} to Process
-              </>
-            )}
-          </DialogTitle>
-          <p className="text-xs text-blue-600 mt-0.5">
-            Configure step details, assign users, set due days offset, and attach forms.
+      <DialogContent className="sm:max-w-[650px] max-h-[92vh] flex flex-col bg-white text-gray-900 border-gray-200 shadow-2xl p-0 overflow-hidden rounded-lg">
+        {/* Header matching TaskSetu Subtask Drawer */}
+        <DialogHeader className="px-6 pt-5 pb-3 border-b border-gray-200 bg-gray-50/90">
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <ListTodo className="w-5 h-5 text-indigo-600" />
+              {stepToEdit ? `Edit Step #${stepIndex + 1}` : "Add Step"}
+            </DialogTitle>
+          </div>
+          <p className="text-xs text-blue-600 font-medium mt-0.5">
+            + Process Step :- Step #{stepIndex + 1}
           </p>
-        </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
-          {/* Task Type */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wider flex items-center justify-between">
-              <span>Task Type</span>
-              <span className="text-[11px] text-gray-400 font-normal lowercase">
-                (regular, milestone, approval)
-              </span>
-            </Label>
-            <div className="grid grid-cols-3 gap-2.5">
+          {/* Subtask Type Selector Tabs - Only show when creating a NEW step */}
+          {!stepToEdit ? (
+            <div className="flex items-center gap-1 mt-3 p-1 bg-gray-200/70 rounded-lg border border-gray-200">
               {[
-                {
-                  id: "Regular",
-                  label: "Regular",
-                  icon: ListTodo,
-                  desc: "Standard action",
-                  color: "border-blue-200 bg-blue-50/70 text-blue-700",
-                },
-                {
-                  id: "Milestone",
-                  label: "Milestone",
-                  icon: Flag,
-                  desc: "Key checkpoint",
-                  color: "border-amber-200 bg-amber-50/70 text-amber-700",
-                },
-                {
-                  id: "Approval",
-                  label: "Approval",
-                  icon: ShieldCheck,
-                  desc: "Requires sign-off",
-                  color: "border-emerald-200 bg-emerald-50/70 text-emerald-700",
-                },
-              ].map((item) => {
-                const Icon = item.icon;
-                const isSelected = taskType === item.id;
+                { id: "regular", label: "Regular task", icon: ListTodo },
+                { id: "email", label: "Email task", icon: Mail },
+                { id: "milestone", label: "Milestone task", icon: Target },
+                { id: "approval", label: "Approval task", icon: ShieldCheck },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isSelected = taskType === tab.id;
                 return (
                   <button
-                    key={item.id}
+                    key={tab.id}
                     type="button"
-                    onClick={() => {
-                      setTaskType(item.id);
-                      if (item.id === "Approval") {
-                        setApprovalRequired(true);
-                      }
-                    }}
-                    className={`flex flex-col items-center justify-center p-2.5 rounded border text-left transition-all ${
+                    onClick={() => setTaskType(tab.id)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-semibold rounded-md transition-all ${
                       isSelected
-                        ? `${item.color} ring-2 ring-indigo-500 font-semibold shadow-2xs`
-                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                        ? "bg-white text-indigo-700 shadow-xs border border-gray-200"
+                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                     }`}
                   >
-                    <Icon className="w-4 h-4 mb-1" />
-                    <span className="text-xs">{item.label}</span>
-                    <span className="text-[10px] text-gray-500">{item.desc}</span>
+                    <Icon className={`w-3.5 h-3.5 ${isSelected ? "text-indigo-600" : "text-gray-500"}`} />
+                    <span className="truncate">{tab.label}</span>
                   </button>
                 );
               })}
             </div>
-          </div>
-
-          {/* Name of Step */}
-          <div className="space-y-1.5">
-            <Label htmlFor="stepName" className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
-              Name of Step <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="stepName"
-              placeholder="e.g. Document Verification, Manager Review"
-              value={stepName}
-              onChange={(e) => setStepName(e.target.value)}
-              className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500 text-sm"
-            />
-            {errors.stepName && (
-              <p className="text-xs text-red-500 mt-1">{errors.stepName}</p>
-            )}
-          </div>
-
-          {/* Assigned User */}
-          <div className="space-y-1.5">
-            <Label htmlFor="assignedUser" className="text-xs font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-              <UserCheck className="w-3.5 h-3.5 text-indigo-600" /> Assigned User (Section){" "}
-              <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={assignedUserId}
-              onValueChange={(val) => setAssignedUserId(val)}
-            >
-              <SelectTrigger className="bg-white border-gray-300 text-gray-900 focus:ring-blue-500 text-xs">
-                <SelectValue placeholder="Select user from organization" />
-              </SelectTrigger>
-              <SelectContent className="bg-white border-gray-200 text-gray-900">
-                {orgUsers.map((user) => (
-                  <SelectItem key={user.id} value={String(user.id)} className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900">{user.name}</span>
-                      <span className="text-gray-500">({user.role})</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.assignedUserId && (
-              <p className="text-xs text-red-500 mt-1">{errors.assignedUserId}</p>
-            )}
-            <p className="text-[11px] text-gray-500">
-              List of existing users in your organization.
-            </p>
-          </div>
-
-          {/* Due Days & Approval Switch */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            {/* Due Days */}
-            <div className="space-y-1.5">
-              <Label htmlFor="dueDays" className="text-xs font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-indigo-600" /> Due Days <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="dueDays"
-                type="number"
-                min="0"
-                max="365"
-                value={dueDays}
-                onChange={(e) => setDueDays(e.target.value)}
-                className="bg-white border-gray-300 text-gray-900 focus:ring-blue-500 text-xs"
-              />
-              {errors.dueDays && (
-                <p className="text-xs text-red-500 mt-1">{errors.dueDays}</p>
-              )}
-              <p className="text-[11px] text-gray-500">
-                Days offset when process launched from that date.
-              </p>
-            </div>
-
-            {/* Approval Required */}
-            <div className="space-y-1 flex flex-col justify-between p-2.5 rounded border border-gray-200 bg-gray-50/60">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="approvalRequired" className="text-xs font-semibold text-gray-700 cursor-pointer">
-                  Approval Required
-                </Label>
-                <Switch
-                  id="approvalRequired"
-                  checked={approvalRequired}
-                  onCheckedChange={setApprovalRequired}
-                  className="data-[state=checked]:bg-indigo-600"
-                />
-              </div>
-              <p className="text-[11px] text-gray-500">
-                Requires formal sign-off (true or false).
-              </p>
-            </div>
-          </div>
-
-          {/* Form (Pre-existing Form) */}
-          <div className="space-y-1.5 pt-1">
-            <Label htmlFor="formId" className="text-xs font-semibold text-gray-700 uppercase tracking-wider flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-indigo-600" /> Form (Pre-existing Form)
-              </span>
-              <Badge variant="outline" className="text-[10px] border-gray-200 text-gray-500 bg-white">
-                Optional
+          ) : (
+            <div className="mt-2 flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className={`text-xs px-2.5 py-0.5 font-semibold ${
+                  taskType === "approval"
+                    ? "border-emerald-300 text-emerald-800 bg-emerald-50"
+                    : taskType === "milestone"
+                    ? "border-amber-300 text-amber-800 bg-amber-50"
+                    : taskType === "email"
+                    ? "border-purple-300 text-purple-800 bg-purple-50"
+                    : "border-blue-300 text-blue-800 bg-blue-50"
+                }`}
+              >
+                {taskType === "approval"
+                  ? "Approval Task Edit"
+                  : taskType === "milestone"
+                  ? "Milestone Task Edit"
+                  : taskType === "email"
+                  ? "Email Task Edit"
+                  : "Regular Task Edit"}
               </Badge>
-            </Label>
-            <Select value={formId} onValueChange={(val) => setFormId(val)}>
-              <SelectTrigger className="bg-white border-gray-300 text-gray-900 focus:ring-blue-500 text-xs">
-                <SelectValue placeholder="Select pre-existing form (optional)" />
-              </SelectTrigger>
-              <SelectContent className="bg-white border-gray-200 text-gray-900">
-                <SelectItem value="none" className="text-xs text-gray-400">
-                  -- None (No Form Attached) --
-                </SelectItem>
-                {orgForms.map((form) => (
-                  <SelectItem key={form.id} value={form.id} className="text-xs">
-                    <div className="flex items-center justify-between w-full gap-3">
-                      <span>{form.title}</span>
-                      <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                        {form.category}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[11px] text-gray-500">
-              List of existing forms of that organization (optional).
-            </p>
-          </div>
+            </div>
+          )}
+        </DialogHeader>
 
-          <DialogFooter className="border-t border-gray-200 pt-4 px-0 flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="border-gray-300 text-gray-700 hover:bg-gray-50 h-8 text-xs"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium h-8 px-4 text-xs shadow-xs"
-            >
-              Save Step
-            </Button>
-          </DialogFooter>
-        </form>
+        {/* Tab content rendering */}
+        {taskType === "email" ? (
+          <ProcessEmailStepForm
+            key={stepToEdit?.id || `step_${stepIndex}_email`}
+            stepToEdit={stepToEdit}
+            onClose={onClose}
+            previousSteps={previousSteps}
+            onSubmit={(data) => {
+              onSave(data);
+              onClose();
+            }}
+          />
+        ) : taskType === "milestone" ? (
+          <ProcessMilestoneStepForm
+            key={stepToEdit?.id || `step_${stepIndex}_milestone`}
+            stepToEdit={stepToEdit}
+            onClose={onClose}
+            previousSteps={previousSteps}
+            onSubmit={(data) => {
+              onSave(data);
+              onClose();
+            }}
+          />
+        ) : taskType === "approval" ? (
+          <ProcessApprovalStepForm
+            key={stepToEdit?.id || `step_${stepIndex}_approval`}
+            stepToEdit={stepToEdit}
+            onClose={onClose}
+            previousSteps={previousSteps}
+            onSubmit={(data) => {
+              onSave(data);
+              onClose();
+            }}
+          />
+        ) : (
+          <ProcessStandardStepForm
+            key={stepToEdit?.id || `step_${stepIndex}_regular`}
+            stepToEdit={stepToEdit}
+            onClose={onClose}
+            previousSteps={previousSteps}
+            onSubmit={(data) => {
+              onSave(data);
+              onClose();
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

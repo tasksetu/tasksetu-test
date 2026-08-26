@@ -27,6 +27,7 @@ import {
   ListTodo,
   Flag,
   Sparkles,
+  Mail,
 } from "lucide-react";
 
 export function ProcessBuilderForm({
@@ -130,9 +131,41 @@ export function ProcessBuilderForm({
     onSubmit(payload);
   };
 
-  const getUserName = (userId) => {
-    const user = orgUsers.find((u) => Number(u.id) === Number(userId));
-    return user ? `${user.name} (${user.role})` : `User #${userId}`;
+  const getUserName = (assignedUser) => {
+    if (!assignedUser) return "Unassigned";
+
+    const userIdStr = String(
+      typeof assignedUser === "object"
+        ? assignedUser?.value || assignedUser?.id || assignedUser?._id || ""
+        : assignedUser
+    ).trim();
+
+    if (userIdStr) {
+      const user = orgUsers.find((u) => {
+        if (!u) return false;
+        const uId = String(u.id || u._id || u.value || "").trim();
+        return uId === userIdStr;
+      });
+
+      if (user) {
+        const roleStr = Array.isArray(user.role) ? user.role.join(", ") : user.role || "";
+        return `${user.name || user.label || "User"}${roleStr ? ` (${roleStr})` : ""}`;
+      }
+    }
+
+    if (typeof assignedUser === "object" && assignedUser !== null) {
+      if (assignedUser.name) {
+        const role = Array.isArray(assignedUser.role)
+          ? assignedUser.role.join(", ")
+          : assignedUser.role || "";
+        return `${assignedUser.name}${role ? ` (${role})` : ""}`;
+      }
+      if (assignedUser.label && assignedUser.label !== "Self") {
+        return assignedUser.label;
+      }
+    }
+
+    return userIdStr ? `User #${userIdStr}` : "Self";
   };
 
   const getFormTitle = (formId) => {
@@ -141,7 +174,8 @@ export function ProcessBuilderForm({
     return form ? form.title : `Form (${formId})`;
   };
 
-  const getTaskTypeBadge = (type) => {
+  const getTaskTypeBadge = (step) => {
+    const type = typeof step === "string" ? step : step?.taskType;
     switch (type) {
       case "Approval":
         return (
@@ -149,10 +183,20 @@ export function ProcessBuilderForm({
             <ShieldCheck className="w-3 h-3" /> Approval
           </Badge>
         );
-      case "Milestone":
+      case "Milestone": {
+        const isLinked =
+          step?.milestoneType === "linked" ||
+          (Array.isArray(step?.linkedTasks) && step.linkedTasks.length > 0);
         return (
           <Badge className="bg-amber-50 text-amber-700 border border-amber-200 gap-1">
-            <Flag className="w-3 h-3" /> Milestone
+            <Flag className="w-3 h-3" /> {isLinked ? "Linked Milestone" : "Standalone Milestone"}
+          </Badge>
+        );
+      }
+      case "Email":
+        return (
+          <Badge className="bg-purple-50 text-purple-700 border border-purple-200 gap-1">
+            <Mail className="w-3 h-3" /> Email
           </Badge>
         );
       default:
@@ -293,7 +337,7 @@ export function ProcessBuilderForm({
                             <span className="font-semibold text-gray-900 text-sm">
                               {step.name}
                             </span>
-                            {getTaskTypeBadge(step.taskType)}
+                            {getTaskTypeBadge(step)}
                             {step.approvalRequired && (
                               <Badge
                                 variant="outline"
@@ -399,6 +443,7 @@ export function ProcessBuilderForm({
         onClose={() => setIsStepModalOpen(false)}
         onSave={handleSaveStep}
         stepToEdit={stepToEdit}
+        existingSteps={steps}
         stepIndex={
           editingStepIndex !== null ? editingStepIndex : steps.length
         }
