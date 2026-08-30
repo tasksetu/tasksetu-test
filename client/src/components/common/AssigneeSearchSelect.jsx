@@ -125,21 +125,48 @@ const AssigneeSearchSelect = ({
       padding: '0 8px',
       display: 'flex',
       alignItems: 'center',
+      position: 'relative',
+    }),
+    placeholder: (provided) => ({
+      ...provided,
+      position: 'absolute',
+      top: '50%',
+      transform: 'translateY(-50%)',
+      margin: 0,
+      color: '#9CA3AF',
+      fontSize: '0.75rem',
+      lineHeight: '1',
+      pointerEvents: 'none',
+    }),
+    singleValue: (provided) => ({
+      ...provided,
+      position: 'absolute',
+      top: '50%',
+      transform: 'translateY(-50%)',
+      margin: 0,
+      color: '#111827',
+      fontSize: '0.75rem',
+      lineHeight: '1',
     }),
     input: (provided) => ({
       ...provided,
       margin: '0px',
       padding: '0px',
+      fontSize: '0.75rem',
     }),
     indicatorsContainer: (provided) => ({
       ...provided,
       height: '32px',
       minHeight: '32px',
       maxHeight: '32px',
+      display: 'flex',
+      alignItems: 'center',
     }),
     dropdownIndicator: (provided) => ({
       ...provided,
-      padding: '2px 6px',
+      padding: '0 6px',
+      display: 'flex',
+      alignItems: 'center',
     }),
     menu: (provided) => ({
       ...provided,
@@ -154,6 +181,7 @@ const AssigneeSearchSelect = ({
           : 'white',
       color: state.isSelected ? 'white' : '#111827',
       cursor: 'pointer',
+      fontSize: '0.75rem',
       '&:active': {
         backgroundColor: '#3B82F6'
       }
@@ -182,7 +210,7 @@ const AssigneeSearchSelect = ({
       isClearable={!required}
       components={{
         DropdownIndicator: (props) => (
-          <div {...props.innerProps} style={{ padding: '8px' }}>
+          <div {...props.innerProps} className="flex items-center justify-center px-1.5 h-full cursor-pointer">
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
             ) : (

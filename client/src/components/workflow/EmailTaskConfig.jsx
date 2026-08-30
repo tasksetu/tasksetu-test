@@ -292,16 +292,18 @@ export default function EmailTaskConfig({
         <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
           Email Body / Message <span className="text-red-500">*</span>
         </label>
-        <CustomEditor
-          value={config.body || ""}
-          onChange={(content) => updateConfig({ ...config, body: content })}
-          readOnly={disabled}
-          placeholder="Dear {VendorName}, Please review the attached details..."
-          height="140px"
-          className={`bg-white rounded-md ${
-            errors?.body ? "border border-red-500 rounded-sm" : ""
-          }`}
-        />
+        <div className={`border rounded-md overflow-hidden bg-white ${
+          errors?.body ? "border-red-500" : "border-gray-300 focus-within:border-indigo-500"
+        }`}>
+          <CustomEditor
+            value={config.body || ""}
+            onChange={(content) => updateConfig({ ...config, body: content })}
+            readOnly={disabled}
+            placeholder="Dear {Name}, Please review the attached details..."
+            height="140px"
+            className="w-full bg-white"
+          />
+        </div>
         {errors?.body && (
           <p className="text-red-500 text-xs mt-1 flex items-center gap-1 font-medium">
             <AlertCircle className="w-3.5 h-3.5" />

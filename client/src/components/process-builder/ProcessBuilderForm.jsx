@@ -277,7 +277,7 @@ export function ProcessBuilderForm({
                     <Sparkles className="w-4 h-4 text-indigo-600" /> Steps of Process
                   </h3>
                   <p className="text-xs text-gray-500">
-                    Add and order the steps executed when this process is started.
+                    Add and sequentially order the steps to be executed for process initiation.
                   </p>
                 </div>
                 {/* add (button) */}

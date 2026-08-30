@@ -560,18 +560,21 @@ export const startProcessInstance = async (req, res) => {
       if (stepTaskType === "email" || step.emailSubject || step.emailBody || step.emailConfig) {
         subtaskData.taskType = "email";
         subtaskData.subtaskType = "email";
-        subtaskData.emailConfig = step.emailConfig || {
-          recipients: [],
-          subject: step.emailSubject || "",
-          body: step.emailBody || "",
-          variables: [],
-          attachedFormId: step.formId || null,
-          formLinkEnabled: true,
-          autoComplete: Boolean(step.emailAutoComplete),
-          autoCompleteAfterDays: 1,
+        const eCfg = step.emailConfig || {};
+        subtaskData.emailConfig = {
+          recipients: eCfg.recipients || step.recipients || step.emailRecipients || [],
+          subject: eCfg.subject || step.emailSubject || step.subject || "",
+          body: eCfg.body || step.emailBody || step.body || "",
+          variables: eCfg.variables || step.variables || [],
+          attachedFormId: eCfg.attachedFormId || step.formId || null,
+          formLinkEnabled: eCfg.formLinkEnabled !== false,
+          autoComplete: Boolean(eCfg.autoComplete || step.emailAutoComplete),
+          autoCompleteAfterDays: eCfg.autoCompleteAfterDays || 1,
           sendCount: 0,
           lastSentAt: null,
         };
+        subtaskData.emailSubject = subtaskData.emailConfig.subject;
+        subtaskData.emailBody = subtaskData.emailConfig.body;
       }
       if (stepTaskType === "approval" || step.approvalRequired || step.isApprovalTask) {
         subtaskData.taskType = "approval";
@@ -684,30 +687,8 @@ export const startProcessInstance = async (req, res) => {
         await Task.findByIdAndUpdate(subtask._id, { $set: updateFields });
       }
 
-      // 📧 Trigger email send if this is an Email Subtask with recipients
-      if (subtask.taskType === "email" && subtask.emailConfig?.recipients?.length > 0) {
-        try {
-          const { EmailTaskService } = await import("../workflow/EmailTaskService.js");
-          EmailTaskService.sendEmailTask(subtask).catch((err) =>
-            console.error("❌ [startProcessInstance] Email subtask send failed:", err)
-          );
-        } catch (emailErr) {
-          console.error("❌ [startProcessInstance] Failed to load EmailTaskService:", emailErr);
-        }
-      }
-
-      // 🔔 Trigger notifications for Approval Subtasks & Assignees
-      try {
-        const EnhancedNotificationHelper = (await import("../services/enhancedNotificationHelper.js")).default;
-        await EnhancedNotificationHelper.notifyTaskCreation(subtask, {
-          taskType: subtask.taskType,
-          createdBy: userId,
-          collaborators: subtask.collaborators || [],
-          approvers: subtask.approvers || [],
-        });
-      } catch (notifErr) {
-        console.error("❌ [startProcessInstance] Failed to send task notification:", notifErr);
-      }
+      // 📌 Note: Subtasks are created in OPEN status. Email dispatch and Approval notifications 
+      // are suppressed at launch and will trigger when task status transitions from OPEN to IN_PROGRESS.
     }
 
     // Response structure matching frontend expectations

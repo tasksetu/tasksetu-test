@@ -367,7 +367,8 @@ async function ensureDefaultTaskPriorityConfigs(organizationId, userId = null) {
 async function recalcUserTaskCounters(userId) {
   try {
     if (!userId) return;
-    const uid = userId.toString ? userId.toString() : userId;
+    const uid = typeof userId === "object" ? (userId._id?.toString() || userId.id?.toString()) : String(userId);
+    if (!uid || !mongoose.Types.ObjectId.isValid(uid)) return;
     const assignedCount = await Task.countDocuments({
       assignedTo: uid,
       isDeleted: { $ne: true },
@@ -3269,6 +3270,33 @@ export const updateSubtask = async (req, res) => {
       await LinkedTaskService.onTaskCompleted(subtaskId).catch((err) =>
         console.error("❌ Auto-initiate failed in updateSubtask:", err.message)
       );
+    }
+
+    // 📧 🔔 Trigger Email & Approval notifications when subtask status moves to IN_PROGRESS
+    const normSubStatus = String(updatedSubtask?.status || "").toUpperCase();
+    if (["IN_PROGRESS", "INPROGRESS"].includes(normSubStatus)) {
+      try {
+        const fullSubtask = await storage.getTaskById(subtaskId);
+        if (fullSubtask && (fullSubtask.taskType === "email" || fullSubtask.subtaskType === "email")) {
+          const { EmailTaskService } = await import("../workflow/EmailTaskService.js");
+          EmailTaskService.sendEmailTask(fullSubtask).catch((err) =>
+            console.error("❌ Email subtask send failed in updateSubtask:", err)
+          );
+        }
+        if (fullSubtask && (fullSubtask.taskType === "approval" || fullSubtask.subtaskType === "approval")) {
+          const EnhancedNotificationHelper = (await import("../services/enhancedNotificationHelper.js")).default;
+          EnhancedNotificationHelper.notifyTaskCreation(fullSubtask, {
+            taskType: "approval",
+            createdBy: fullSubtask.createdBy,
+            collaborators: fullSubtask.collaborators || [],
+            approvers: fullSubtask.approvers || [],
+          }).catch((aErr) =>
+            console.error("❌ Approval subtask notify failed in updateSubtask:", aErr)
+          );
+        }
+      } catch (subNotifErr) {
+        console.error("❌ Failed to trigger subtask notifications in updateSubtask:", subNotifErr);
+      }
     }
 
     // Recalculate counters for affected users (old and new assignee if changed)
@@ -6591,6 +6619,25 @@ export const updateTask = async (req, res) => {
       });
     }
 
+    // 🔒 PROCESS BUILDER / STEP TASK LOCK: Prevent editing task details if task status is NOT "OPEN"
+    const isProcessOrStepTask =
+      task.isSubtask ||
+      task.isProcessBuilderTask ||
+      ["email", "approval", "milestone"].includes(
+        String(task.taskType || "").toLowerCase()
+      );
+    const currentTaskStatus = String(task.status || "").toUpperCase();
+    if (
+      isProcessOrStepTask &&
+      !["OPEN", "PENDING"].includes(currentTaskStatus)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Process step tasks cannot be edited once they are in progress or completed. Editing is only permitted when the task status is OPEN.",
+      });
+    }
+
     // 🔐 ROLE-BASED PERMISSION VALIDATION FOR TASK UPDATES
 
     const userRole = getHighestPriorityRole(user.role);
@@ -7119,6 +7166,33 @@ export const updateTask = async (req, res) => {
     }
 
     const updatedTask = await storage.updateTask(id, updateData, user.id);
+
+    // 📧 🔔 Trigger Email & Approval notifications when task status moves to IN_PROGRESS
+    const normTaskStatus = String(updatedTask?.status || "").toUpperCase();
+    if (["IN_PROGRESS", "INPROGRESS"].includes(normTaskStatus)) {
+      try {
+        const fullTask = await storage.getTaskById(id);
+        if (fullTask && (fullTask.taskType === "email" || fullTask.subtaskType === "email")) {
+          const { EmailTaskService } = await import("../workflow/EmailTaskService.js");
+          EmailTaskService.sendEmailTask(fullTask).catch((err) =>
+            console.error("❌ Email task send failed in updateTask:", err)
+          );
+        }
+        if (fullTask && (fullTask.taskType === "approval" || fullTask.subtaskType === "approval")) {
+          const EnhancedNotificationHelper = (await import("../services/enhancedNotificationHelper.js")).default;
+          EnhancedNotificationHelper.notifyTaskCreation(fullTask, {
+            taskType: "approval",
+            createdBy: fullTask.createdBy,
+            collaborators: fullTask.collaborators || [],
+            approvers: fullTask.approvers || [],
+          }).catch((aErr) =>
+            console.error("❌ Approval task notify failed in updateTask:", aErr)
+          );
+        }
+      } catch (taskNotifErr) {
+        console.error("❌ Failed to trigger task notifications in updateTask:", taskNotifErr);
+      }
+    }
 
     // 🔄 If this task is a subtask, recalculate parent task's status and progress
     if (updatedTask?.isSubtask && updatedTask?.parentTaskId) {
@@ -7724,6 +7798,32 @@ export const updateTaskStatus = async (req, res) => {
         );
       }
 
+      // 📧 🔔 Trigger Email & Approval notifications when subtask status moves to IN_PROGRESS
+      if (["IN_PROGRESS", "INPROGRESS"].includes(normalizedStatus)) {
+        try {
+          const fullSubtask = await Task.findById(id);
+          if (fullSubtask && (fullSubtask.taskType === "email" || fullSubtask.subtaskType === "email")) {
+            const { EmailTaskService } = await import("../workflow/EmailTaskService.js");
+            EmailTaskService.sendEmailTask(fullSubtask).catch((err) =>
+              console.error("❌ Email subtask send failed in updateTaskStatus:", err)
+            );
+          }
+          if (fullSubtask && (fullSubtask.taskType === "approval" || fullSubtask.subtaskType === "approval")) {
+            const EnhancedNotificationHelper = (await import("../services/enhancedNotificationHelper.js")).default;
+            EnhancedNotificationHelper.notifyTaskCreation(fullSubtask, {
+              taskType: "approval",
+              createdBy: fullSubtask.createdBy,
+              collaborators: fullSubtask.collaborators || [],
+              approvers: fullSubtask.approvers || [],
+            }).catch((aErr) =>
+              console.error("❌ Approval subtask notify failed in updateTaskStatus:", aErr)
+            );
+          }
+        } catch (subNotifErr) {
+          console.error("❌ Failed to trigger subtask notifications in updateTaskStatus:", subNotifErr);
+        }
+      }
+
       // After subtask update, fetch all siblings and auto-update parent
       const parentTask = await getParentTaskIfSubtask(task);
       if (parentTask) {
@@ -8017,6 +8117,32 @@ export const updateTaskStatus = async (req, res) => {
       await LinkedTaskService.onTaskCompleted(id).catch((err) =>
         console.error("❌ Auto-initiate failed in updateTaskStatus (task):", err.message)
       );
+    }
+
+    // 📧 🔔 Trigger Email & Approval notifications when task status moves to IN_PROGRESS
+    if (["IN_PROGRESS", "INPROGRESS"].includes(normalizedStatus)) {
+      try {
+        const fullTask = await storage.getTaskById(id);
+        if (fullTask && (fullTask.taskType === "email" || fullTask.subtaskType === "email")) {
+          const { EmailTaskService } = await import("../workflow/EmailTaskService.js");
+          EmailTaskService.sendEmailTask(fullTask).catch((err) =>
+            console.error("❌ Email task send failed in updateTaskStatus:", err)
+          );
+        }
+        if (fullTask && (fullTask.taskType === "approval" || fullTask.subtaskType === "approval")) {
+          const EnhancedNotificationHelper = (await import("../services/enhancedNotificationHelper.js")).default;
+          EnhancedNotificationHelper.notifyTaskCreation(fullTask, {
+            taskType: "approval",
+            createdBy: fullTask.createdBy,
+            collaborators: fullTask.collaborators || [],
+            approvers: fullTask.approvers || [],
+          }).catch((aErr) =>
+            console.error("❌ Approval task notify failed in updateTaskStatus:", aErr)
+          );
+        }
+      } catch (taskNotifErr) {
+        console.error("❌ Failed to trigger task notifications in updateTaskStatus:", taskNotifErr);
+      }
     }
 
     // 🔄 If this task is a subtask, recalculate parent task's status and progress

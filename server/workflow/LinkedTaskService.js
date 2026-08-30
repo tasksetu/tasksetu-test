@@ -122,6 +122,35 @@ class LinkedTaskServiceClass {
           `[LinkedTaskService] Auto-initiated task ${waitingTask._id} (${waitingTask.title})`,
         );
 
+        // 📧 Trigger email send for auto-initiated Email Task
+        if (waitingTask.taskType === "email" || waitingTask.subtaskType === "email") {
+          try {
+            const { EmailTaskService } = await import("./EmailTaskService.js");
+            EmailTaskService.sendEmailTask(waitingTask).catch((err) =>
+              console.error("[LinkedTaskService] Auto-initiated email send failed:", err)
+            );
+          } catch (eErr) {
+            console.error("[LinkedTaskService] Failed to load EmailTaskService:", eErr);
+          }
+        }
+
+        // 🔔 Trigger approval notifications for auto-initiated Approval Task
+        if (waitingTask.taskType === "approval" || waitingTask.subtaskType === "approval") {
+          try {
+            const EnhancedNotificationHelper = (await import("../services/enhancedNotificationHelper.js")).default;
+            EnhancedNotificationHelper.notifyTaskCreation(waitingTask, {
+              taskType: "approval",
+              createdBy: waitingTask.createdBy,
+              collaborators: waitingTask.collaborators || [],
+              approvers: waitingTask.approvers || [],
+            }).catch((aErr) =>
+              console.error("[LinkedTaskService] Auto-initiated approval notification failed:", aErr)
+            );
+          } catch (aErr) {
+            console.error("[LinkedTaskService] Failed to load EnhancedNotificationHelper:", aErr);
+          }
+        }
+
         // 🔄 Auto-update parent task status & progress if waitingTask is a subtask
         const parentId = waitingTask.parentTask || waitingTask.parentTaskId;
         if (parentId) {

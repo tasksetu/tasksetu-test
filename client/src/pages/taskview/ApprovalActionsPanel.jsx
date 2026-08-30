@@ -87,8 +87,16 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
     (decision) => getApproverId(decision.approverId) === currentUserId,
   );
 
+  // Task must be in IN_PROGRESS status to be active for approval
+  const isTaskActiveForApproval = ["IN_PROGRESS", "INPROGRESS"].includes(
+    String(task?.status || "").toUpperCase()
+  );
+
   const canApprove =
-    isApprover && !userDecision && task.approvalStatus === "pending";
+    isTaskActiveForApproval &&
+    isApprover &&
+    !userDecision &&
+    task?.approvalStatus === "pending";
 
   console.log("🎯 Final decision:", {
     canApprove,
@@ -363,18 +371,37 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
             </label>
             <p className="mt-1">
               <span
-                className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(isCancelled ? "cancelled" : task.approvalStatus)}`}
+                className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  isCancelled
+                    ? "bg-red-100 text-red-800"
+                    : String(task.status).toUpperCase() === "OPEN"
+                    ? "bg-blue-100 text-blue-800"
+                    : getStatusBadgeColor(task.approvalStatus)
+                }`}
               >
                 {isCancelled
                   ? "Cancelled"
+                  : String(task.status).toUpperCase() === "OPEN"
+                  ? "Open (Draft)"
                   : task.approvalStatus
-                    ? task.approvalStatus.charAt(0).toUpperCase() +
-                      task.approvalStatus.slice(1)
-                    : "Pending"}
+                  ? task.approvalStatus.charAt(0).toUpperCase() +
+                    task.approvalStatus.slice(1)
+                  : "Pending"}
               </span>
             </p>
           </div>
         </div>
+
+        {/* OPEN Status Notice */}
+        {String(task.status).toUpperCase() === "OPEN" && (
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-sm">
+              <p className="text-xs text-blue-800 font-semibold flex items-center gap-1.5">
+                <span>ℹ️</span> Task Status is <strong>OPEN</strong>. Approval actions will become active for approvers when this task transitions to <strong>IN_PROGRESS</strong>.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Auto-approval info */}
         {task.autoApproveEnabled && task.autoApproveAfter && (

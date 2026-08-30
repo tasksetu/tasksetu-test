@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useSubtask } from "../../contexts/SubtaskContext";
 import { useRoute, useLocation } from "wouter";
 import { useActiveRole } from "../../components/RoleSwitcher";
@@ -8,6 +8,7 @@ import { getPriorityOptions } from "@/utils/priorityUtils";
 import { format } from "date-fns";
 import axios from "axios";
 import { canAssignToOthers, isOrgUserRole } from "../../utils/taskPermissions";
+import EmailTaskConfig from "../../components/workflow/EmailTaskConfig";
 import {
   ClipboardList,
   CheckSquare,
@@ -38,6 +39,8 @@ import {
   Filter,
   CheckCircle2,
   Edit,
+  Lock,
+  Mail,
   UserPlus,
   Zap,
   Bell,
@@ -144,6 +147,10 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
   // Progress State
   const [isEditingProgress, setIsEditingProgress] = useState(false);
   const [progressInput, setProgressInput] = useState("");
+
+  // Email Task Config Edit State
+  const [isEditingEmailConfig, setIsEditingEmailConfig] = useState(false);
+  const [emailConfigInput, setEmailConfigInput] = useState(null);
 
   // Form submission modal state
   const [showFormSubmissionsModal, setShowFormSubmissionsModal] =
@@ -371,6 +378,16 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
           category: taskData.category || "",
           taskTypeAdvanced: taskData.taskTypeAdvanced || "simple",
           mainTaskType: taskData.mainTaskType || "regular",
+          emailConfig: taskData.emailConfig || (taskData.emailSubject || taskData.emailBody || taskData.emailRecipients?.length > 0 ? {
+            subject: taskData.emailSubject || "",
+            body: taskData.emailBody || "",
+            recipients: taskData.emailRecipients || taskData.emailConfig?.recipients || [],
+            variables: taskData.emailVariables || taskData.emailConfig?.variables || [],
+            attachedFormId: taskData.attachedFormId || taskData.emailConfig?.attachedFormId || null,
+            autoComplete: taskData.emailAutoComplete || taskData.emailConfig?.autoComplete || false,
+          } : null),
+          emailSubject: taskData.emailSubject || taskData.emailConfig?.subject || "",
+          emailBody: taskData.emailBody || taskData.emailConfig?.body || "",
           isSubtask: taskData.isSubtask || false,
           isRecurring:
             taskData.isRecurring || taskData.mainTaskType === "recurring",
@@ -1888,6 +1905,11 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
   const permissions = {
     canView: commentPermissions.canView || true,
     canEdit: commentPermissions.canEdit || false,
+    canAddComment: commentPermissions.canAdd || false,
+    canEditComment: commentPermissions.canEdit || false,
+    canDeleteComment: commentPermissions.canDelete || false,
+    canModerateComments: commentPermissions.canModerate || false,
+    canAttachFiles: commentPermissions.canAttachFiles || false,
     canReassign:
       currentUser &&
       task &&
@@ -1927,6 +1949,58 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
   };
 
   console.log("DEBUG - Final Permissions Object:", permissions);
+
+  const isProcessStepTask = useMemo(() => {
+    if (!task) return false;
+    return Boolean(
+      task.isSubtask ||
+        task.isProcessBuilderTask ||
+        task.parentTask ||
+        ["email", "approval", "milestone"].includes(
+          String(task.taskType || task.classification || "").toLowerCase()
+        )
+    );
+  }, [task]);
+
+  const isUserAuthorizedToEdit = useMemo(() => {
+    if (!task || !currentUser) return false;
+
+    const currentUserId = String(currentUser.id || currentUser._id || "");
+    if (!currentUserId) return false;
+
+    // Task Owner (Creator)
+    const isOwner =
+      currentUserId === String(task.creatorId || task.createdBy?._id || task.createdBy || "");
+
+    // Assignee
+    const isAssignee =
+      currentUserId === String(task.assigneeId || task.assignedTo?._id || task.assignedTo || "");
+
+    // Collaborator
+    const isCollaborator =
+      Array.isArray(task.collaborators) &&
+      task.collaborators.some((collab) => {
+        const collabId =
+          typeof collab === "object" ? collab._id || collab.id || collab.value : collab;
+        return String(collabId) === currentUserId;
+      });
+
+    // Strict check: Only Task Owner (Creator), Assignee, or Collaborator (or Super Admin) can edit
+    const isSuperAdmin = currentUser.role === "org_admin" || currentUser.role === "tasksetu-admin";
+
+    return isOwner || isAssignee || isCollaborator || isSuperAdmin;
+  }, [task, currentUser]);
+
+  const isTaskEditable = useMemo(() => {
+    if (!task) return false;
+    if (!isUserAuthorizedToEdit) return false;
+
+    const currentStatus = String(task.status || "").toUpperCase();
+    if (isProcessStepTask) {
+      return ["OPEN", "PENDING"].includes(currentStatus);
+    }
+    return !["DONE", "COMPLETED", "CANCELLED"].includes(currentStatus);
+  }, [task, isProcessStepTask, isUserAuthorizedToEdit]);
 
   // Loading state
   if (loading) {
@@ -2089,9 +2163,13 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
   };
 
   const handlePriorityChange = async (newPriority) => {
-    // ❌ Block priority change for completed tasks
-    if (task?.status === "DONE") {
-      showErrorToast("Task is already completed. Priority cannot be changed.");
+    // ❌ Block priority change for non-editable tasks
+    if (!isTaskEditable) {
+      showErrorToast(
+        isProcessStepTask
+          ? `Task priority cannot be changed while status is ${task?.status}. Editing is only allowed when status is OPEN.`
+          : `Task is already ${task?.status}. Priority cannot be changed.`
+      );
       return;
     }
 
@@ -2621,9 +2699,12 @@ ${task.collaborators?.join(", ") || "No collaborators"}
   };
 
   const handleDescriptionUpdate = async () => {
-    if (task?.status === "DONE" || task?.status === "CANCELLED") {
-      const msg = task?.status === "DONE" ? "completed" : "cancelled";
-      showErrorToast(`Task is already ${msg}. Description cannot be changed.`);
+    if (!isTaskEditable) {
+      showErrorToast(
+        isProcessStepTask
+          ? `Task details cannot be changed while status is ${task?.status}. Editing is only allowed when status is OPEN.`
+          : `Task is already ${task?.status}. Description cannot be changed.`
+      );
       setIsEditingDescription(false);
       return;
     }
@@ -2649,14 +2730,17 @@ ${task.collaborators?.join(", ") || "No collaborators"}
       await fetchActivities();
     } catch (error) {
       console.error("Error updating description:", error);
-      showErrorToast("Failed to update description");
+      showErrorToast(error?.response?.data?.message || "Failed to update description");
     }
   };
 
   const handleTagsUpdate = async () => {
-    if (task?.status === "DONE" || task?.status === "CANCELLED") {
-      const msg = task?.status === "DONE" ? "completed" : "cancelled";
-      showErrorToast(`Task is already ${msg}. Tags cannot be changed.`);
+    if (!isTaskEditable) {
+      showErrorToast(
+        isProcessStepTask
+          ? `Task details cannot be changed while status is ${task?.status}. Editing is only allowed when status is OPEN.`
+          : `Task is already ${task?.status}. Tags cannot be changed.`
+      );
       setIsEditingTags(false);
       return;
     }
@@ -2687,14 +2771,17 @@ ${task.collaborators?.join(", ") || "No collaborators"}
       await fetchActivities();
     } catch (error) {
       console.error("Error updating tags:", error);
-      showErrorToast("Failed to update tags");
+      showErrorToast(error?.response?.data?.message || "Failed to update tags");
     }
   };
 
   const handleDueDateUpdate = async () => {
-    if (task?.status === "DONE" || task?.status === "CANCELLED") {
-      const msg = task?.status === "DONE" ? "completed" : "cancelled";
-      showErrorToast(`Task is already ${msg}. Due date cannot be changed.`);
+    if (!isTaskEditable) {
+      showErrorToast(
+        isProcessStepTask
+          ? `Task details cannot be changed while status is ${task?.status}. Editing is only allowed when status is OPEN.`
+          : `Task is already ${task?.status}. Due date cannot be changed.`
+      );
       setIsEditingDueDate(false);
       return;
     }
@@ -2734,6 +2821,48 @@ ${task.collaborators?.join(", ") || "No collaborators"}
     } catch (error) {
       console.error("Error updating due date:", error);
       showErrorToast("Failed to update due date");
+    }
+  };
+
+  const handleEmailConfigUpdate = async (updatedConfig) => {
+    if (!isTaskEditable) {
+      showErrorToast(`Email configuration is locked in ${task?.status} status.`);
+      setIsEditingEmailConfig(false);
+      return;
+    }
+
+    const configToSave = updatedConfig || emailConfigInput;
+    if (!configToSave) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const taskIdToUpdate = task?._id || task?.id;
+
+      const payload = {
+        emailConfig: configToSave,
+        emailSubject: configToSave.subject,
+        emailBody: configToSave.body,
+      };
+
+      await axios.put(`/api/tasks/${taskIdToUpdate}`, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      setTask((prev) => ({
+        ...prev,
+        emailConfig: configToSave,
+      }));
+      setIsEditingEmailConfig(false);
+      showSuccessToast("Email configuration updated successfully");
+      await fetchActivities();
+    } catch (error) {
+      console.error("Error updating email configuration:", error);
+      showErrorToast(
+        error?.response?.data?.message || "Failed to update email configuration"
+      );
     }
   };
   return (
@@ -3238,6 +3367,36 @@ ${task.collaborators?.join(", ") || "No collaborators"}
         <div className="task-content w-full max-w-[100vw] px-2 sm:px-4 lg:px-6 py-2 sm:py-3">
           {activeTab === "core-info" && (
             <div className="core-info-view space-y-2 sm:space-y-3">
+              {/* Process Step Task Edit Status Banner */}
+              {isProcessStepTask && (
+                <div
+                  className={`px-4 py-2.5 rounded-none flex items-center justify-between gap-2 text-xs font-semibold border ${
+                    isTaskEditable
+                      ? "bg-blue-50 border-blue-200 text-blue-800"
+                      : "bg-amber-50 border-amber-200 text-amber-800"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {isTaskEditable ? (
+                      <Pen size={14} className="text-blue-600 shrink-0" />
+                    ) : (
+                      <Lock size={14} className="text-amber-600 shrink-0" />
+                    )}
+                    <span>
+                      {isTaskEditable ? (
+                        <>
+                          <strong>Task Editable:</strong> Assignees can edit task details (recipients, email body, approvers, description, etc.) while status is <strong>OPEN</strong> without changing status.
+                        </>
+                      ) : (
+                        <>
+                          <strong>Task Configuration Locked:</strong> This task is currently <strong>{task?.status}</strong> and its configuration cannot be edited. Task editing is locked once a task moves out of OPEN status.
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 gap-2 sm:gap-3">
                 {/* Task Description Card - Full Width */}
                 <div className="bg-white rounded-none border border-gray-200 overflow-hidden transition-all">
@@ -3251,6 +3410,7 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                       </h3>
                     </div>
                     {!isEditingDescription &&
+                      isTaskEditable &&
                       task.status !== "DONE" &&
                       task.status !== "CANCELLED" &&
                       task.approvalStatus !== "approved" &&
@@ -3317,6 +3477,146 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                     )}
                   </div>
                 </div>
+
+                {/* Email Task Configuration Card */}
+                {(String(task.taskType || "").toLowerCase() === "email" ||
+                  String(task.subtaskType || "").toLowerCase() === "email" ||
+                  task.classification === "EMAIL") && (
+                  <div className="bg-white rounded-none border border-gray-200 overflow-hidden transition-all">
+                    <div className="bg-purple-50/50 px-4 sm:px-6 py-2.5 border-b border-purple-100 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 bg-purple-100 rounded-none text-purple-600 shrink-0">
+                          <Mail size={14} />
+                        </div>
+                        <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider">
+                          Email Task Configuration
+                        </h3>
+                      </div>
+                      {isTaskEditable && (
+                        <button
+                          onClick={() => {
+                            if (isEditingEmailConfig) {
+                              handleEmailConfigUpdate(emailConfigInput);
+                            } else {
+                              setEmailConfigInput(
+                                task.emailConfig || {
+                                  subject: task.title || "",
+                                  body: task.description || "",
+                                  recipients: [{ name: "", email: "", source: "manual" }],
+                                  variables: [],
+                                  attachedFormId: "",
+                                  autoComplete: false,
+                                }
+                              );
+                              setIsEditingEmailConfig(true);
+                            }
+                          }}
+                          className="flex items-center gap-1 px-3 py-1 text-[11px] font-bold text-purple-700 hover:text-purple-900 bg-purple-100 hover:bg-purple-200 border border-purple-300 rounded-none transition-colors"
+                        >
+                          {isEditingEmailConfig ? (
+                            <>Save Configuration</>
+                          ) : (
+                            <>
+                              <Edit size={12} /> Edit Configuration
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="p-4 sm:p-6">
+                      {isEditingEmailConfig ? (
+                        <div className="space-y-4">
+                          <EmailTaskConfig
+                            value={emailConfigInput || task.emailConfig || {}}
+                            onChange={(newCfg) => setEmailConfigInput(newCfg)}
+                            disabled={!isTaskEditable}
+                            taskId={task._id || task.id}
+                          />
+                          <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+                            <button
+                              onClick={() => handleEmailConfigUpdate(emailConfigInput)}
+                              className="px-4 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 border border-purple-600 rounded-none transition-colors"
+                            >
+                              Save Configuration
+                            </button>
+                            <button
+                              onClick={() => setIsEditingEmailConfig(false)}
+                              className="px-4 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 border border-slate-300 rounded-none transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (() => {
+                        const currentRecipients = task.emailConfig?.recipients?.length > 0
+                          ? task.emailConfig.recipients
+                          : (task.recipients || task.emailRecipients || []);
+                        const currentBody = task.emailConfig?.body || task.emailBody || (task.description && task.description !== task.title && task.description !== "No description provided" ? task.description : "");
+                        const currentSubject = task.emailConfig?.subject || task.emailSubject || "";
+
+                        const getRecText = (rec) => {
+                          if (!rec) return "Recipient";
+                          if (typeof rec === "string") return rec;
+                          const email = rec.email || rec.recipientEmail || rec.value || rec.address || "";
+                          const name = rec.name || rec.recipientName || rec.label || "";
+                          if (name && email) return `${name} (${email})`;
+                          return name || email || "Recipient";
+                        };
+
+                        return (
+                          <div className="space-y-4">
+                            {/* Subject */}
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">
+                                Email Subject
+                              </p>
+                              <p className="text-sm font-semibold text-gray-800 bg-slate-50 px-3 py-2 border border-slate-200 rounded-none">
+                                {currentSubject || task.title || "No subject set"}
+                              </p>
+                            </div>
+
+                            {/* Recipients */}
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">
+                                Recipients ({currentRecipients.length})
+                              </p>
+                              {currentRecipients.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {currentRecipients.map((rec, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="bg-purple-50 text-purple-800 px-3 py-1 text-xs font-semibold border border-purple-200 rounded-none flex items-center gap-1.5"
+                                    >
+                                      <Mail size={12} className="text-purple-600" />
+                                      {getRecText(rec)}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic">No recipients configured</p>
+                              )}
+                            </div>
+
+                            {/* Message Body */}
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">
+                                Email Body / Message
+                              </p>
+                              <div className="bg-slate-50 p-3.5 border border-slate-200 rounded-none text-xs text-slate-700 max-h-[200px] overflow-y-auto">
+                                {currentBody ? (
+                                  <SafeHtml html={currentBody} />
+                                ) : (
+                                  <p className="italic text-gray-400">No message body configured</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
 
                 {task.subtasks && task.subtasks.length > 0 && (
                   <div className="bg-white rounded-none border border-gray-200 overflow-hidden transition-all">
@@ -3445,6 +3745,7 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                               Tags
                             </p>
                             {!isEditingTags &&
+                              isTaskEditable &&
                               task.status !== "DONE" &&
                               task.status !== "CANCELLED" &&
                               task.approvalStatus !== "approved" &&
@@ -3560,9 +3861,10 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                               </div>
                             ) : (
                               <div
-                                className={`flex items-center gap-1.5 px-1 -ml-1 rounded-none transition-colors ${task.status === "DONE" || task.status === "CANCELLED" || task.isRecurring ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                                className={`flex items-center gap-1.5 px-1 -ml-1 rounded-none transition-colors ${!isTaskEditable || task.status === "DONE" || task.status === "CANCELLED" || task.isRecurring ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                                 onClick={() => {
                                   if (
+                                    !isTaskEditable ||
                                     task.status === "DONE" ||
                                     task.status === "CANCELLED" ||
                                     task.approvalStatus === "approved" ||
@@ -3578,17 +3880,19 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                                   setIsEditingDueDate(true);
                                 }}
                                 title={
-                                  task.status === "DONE"
-                                    ? "Cannot edit completed task"
-                                    : task.status === "CANCELLED"
-                                      ? "Cannot edit cancelled task"
-                                      : task.approvalStatus === "approved"
-                                        ? "Cannot edit approved task"
-                                        : task.approvalStatus === "rejected"
-                                          ? "Cannot edit rejected task"
-                                          : task.isRecurring
-                                            ? "Cannot edit due date of recurring tasks"
-                                            : "Click to edit due date"
+                                  !isTaskEditable
+                                    ? "Task editing is locked"
+                                    : task.status === "DONE"
+                                      ? "Cannot edit completed task"
+                                      : task.status === "CANCELLED"
+                                        ? "Cannot edit cancelled task"
+                                        : task.approvalStatus === "approved"
+                                          ? "Cannot edit approved task"
+                                          : task.approvalStatus === "rejected"
+                                            ? "Cannot edit rejected task"
+                                            : task.isRecurring
+                                              ? "Cannot edit due date of recurring tasks"
+                                              : "Click to edit due date"
                                 }
                               >
                                 <span className="text-sm font-bold text-slate-900 leading-tight border-b border-dashed border-slate-300">
@@ -3609,7 +3913,7 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                                       })()
                                     : "No due date"}
                                 </span>
-                                {!task.isRecurring && (
+                                {!task.isRecurring && isTaskEditable && (
                                   <Pen
                                     size={10}
                                     className="text-slate-400 opacity-90 transition-opacity"
@@ -3686,14 +3990,9 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                               onChange={(e) =>
                                 handlePriorityChange(e.target.value)
                               }
-                              disabled={
-                                task.status === "DONE" ||
-                                task.status === "CANCELLED" ||
-                                task.approvalStatus === "approved" ||
-                                task.approvalStatus === "REJECTED"
-                              }
+                              disabled={!isTaskEditable || task.status === "DONE" || task.status === "CANCELLED" || task.approvalStatus === "approved" || task.approvalStatus === "REJECTED"}
                               className={`h-[24px] min-h-[24px] max-h-[24px] box-border px-2 pr-6 py-0 rounded-none text-[10px] leading-none font-bold border transition-all mt-[-2px]
-                                ${task.status === "DONE" || task.status === "CANCELLED" || task.approvalStatus === "approved" || task.approvalStatus === "REJECTED" ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}
+                                ${!isTaskEditable || task.status === "DONE" || task.status === "CANCELLED" || task.approvalStatus === "approved" || task.approvalStatus === "REJECTED" ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}
                                 ${
                                   task.priority?.toLowerCase() === "low"
                                     ? "bg-green-50 border-green-200 text-green-700"
@@ -3859,9 +4158,10 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                                 </div>
                               ) : (
                                 <div
-                                  className={`flex items-center gap-1 px-1 -ml-1 rounded-none transition-colors group ${task.status === "DONE" || task.status === "CANCELLED" ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-slate-100"}`}
+                                  className={`flex items-center gap-1 px-1 -ml-1 rounded-none transition-colors group ${!isTaskEditable || task.status === "DONE" || task.status === "CANCELLED" ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-slate-100"}`}
                                   onClick={() => {
                                     if (
+                                      !isTaskEditable ||
                                       task.status === "DONE" ||
                                       task.status === "CANCELLED"
                                     )
@@ -3872,11 +4172,13 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                                     setIsEditingTimeEstimate(true);
                                   }}
                                   title={
-                                    task.status === "DONE"
-                                      ? "Cannot edit completed task"
-                                      : task.status === "CANCELLED"
-                                        ? "Cannot edit cancelled task"
-                                        : "Click to edit estimate"
+                                    !isTaskEditable
+                                      ? "Task editing is locked"
+                                      : task.status === "DONE"
+                                        ? "Cannot edit completed task"
+                                        : task.status === "CANCELLED"
+                                          ? "Cannot edit cancelled task"
+                                          : "Click to edit estimate"
                                   }
                                 >
                                   <span className="text-[10px] font-medium text-slate-700 border-b border-dashed border-slate-300">
@@ -3887,10 +4189,12 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                                       : 0}{" "}
                                     hrs
                                   </span>
-                                  <Pen
-                                    size={10}
-                                    className="text-slate-400 opacity-90 transition-opacity"
-                                  />
+                                  {isTaskEditable && (
+                                    <Pen
+                                      size={10}
+                                      className="text-slate-400 opacity-90 transition-opacity"
+                                    />
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -4031,18 +4335,20 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                                   </div>
                                 ) : (
                                   <div
-                                    className={`flex items-center gap-1 cursor-pointer group hover:bg-slate-100 px-1 -ml-1 rounded-none transition-colors ${task.status === "CANCELLED" ? "opacity-60 cursor-not-allowed" : ""}`}
+                                    className={`flex items-center gap-1 px-1 -ml-1 rounded-none transition-colors ${!isTaskEditable || task.status === "CANCELLED" ? "opacity-60 cursor-not-allowed" : "cursor-pointer group hover:bg-slate-100"}`}
                                     onClick={() => {
-                                      if (task.status === "CANCELLED") return;
+                                      if (!isTaskEditable || task.status === "CANCELLED") return;
                                       setProgressInput(
                                         task.progress?.toString() || "0",
                                       );
                                       setIsEditingProgress(true);
                                     }}
                                     title={
-                                      task.status === "CANCELLED"
-                                        ? "Cannot edit cancelled task"
-                                        : "Click to edit progress"
+                                      !isTaskEditable
+                                        ? "Task editing is locked"
+                                        : task.status === "CANCELLED"
+                                          ? "Cannot edit cancelled task"
+                                          : "Click to edit progress"
                                     }
                                   >
                                     <span className="text-[10px] font-medium text-slate-700 border-b border-dashed border-slate-300">
@@ -4051,10 +4357,12 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                                     <span className="text-[10px] text-slate-500">
                                       %
                                     </span>
-                                    <Pen
-                                      size={10}
-                                      className="text-slate-400 opacity-90 transition-opacity"
-                                    />
+                                    {isTaskEditable && (
+                                      <Pen
+                                        size={10}
+                                        className="text-slate-400 opacity-90 transition-opacity"
+                                      />
+                                    )}
                                   </div>
                                 )}
                               </div>

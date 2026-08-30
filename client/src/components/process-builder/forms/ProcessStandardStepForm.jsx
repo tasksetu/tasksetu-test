@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import Select from "react-select";
 import {
   Tag,
   User,
+  Users,
   AlertCircle,
   Calendar,
   Clock,
@@ -11,6 +13,7 @@ import {
   Trash2,
   FileText,
   X,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,13 +47,61 @@ export default function ProcessStandardStepForm({
     formId: "none",
   });
 
-  const [tagInput, setTagInput] = useState("");
-  const [linkedTaskId, setLinkedTaskId] = useState(stepToEdit?.linkedTaskId || null);
-  const [autoInitiate, setAutoInitiate] = useState(
-    stepToEdit?.configuration?.autoInitiate || stepToEdit?.autoInitiate || false
+  const [collaborators, setCollaborators] = useState(
+    stepToEdit?.collaborators || [],
   );
 
-  const [uploadedFiles, setUploadedFiles] = useState(stepToEdit?.attachments || []);
+  const currentAssigneeId = useMemo(() => {
+    if (!formData.assignee) return null;
+    return typeof formData.assignee === "object"
+      ? String(
+          formData.assignee.value ||
+            formData.assignee.id ||
+            formData.assignee._id,
+        )
+      : String(formData.assignee);
+  }, [formData.assignee]);
+
+  const collaboratorOptions = useMemo(() => {
+    return (orgUsers || [])
+      .filter((u) => String(u.id || u._id) !== currentAssigneeId)
+      .map((u) => {
+        const name =
+          u.name ||
+          `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
+          u.email;
+        const role = u.role?.name || u.role || "User";
+        return {
+          value: u.id || u._id,
+          label: `${name} (${u.email}) - ${role}`,
+        };
+      });
+  }, [orgUsers, currentAssigneeId]);
+
+  useEffect(() => {
+    if (currentAssigneeId) {
+      setCollaborators((prev) =>
+        prev.filter((c) => {
+          const val = typeof c === "object" ? c.value || c.id || c._id : c;
+          return String(val) !== currentAssigneeId;
+        }),
+      );
+    }
+  }, [currentAssigneeId]);
+
+  const [tagInput, setTagInput] = useState("");
+  const [linkedTaskId, setLinkedTaskId] = useState(
+    stepToEdit?.linkedTaskId || null,
+  );
+  const [autoInitiate, setAutoInitiate] = useState(
+    stepToEdit?.configuration?.autoInitiate ||
+      stepToEdit?.autoInitiate ||
+      false,
+  );
+
+  const [uploadedFiles, setUploadedFiles] = useState(
+    stepToEdit?.attachments || [],
+  );
   const [attachmentSize, setAttachmentSize] = useState(0);
   const [isDragActive, setIsDragActive] = useState(false);
   const attachmentsInputRef = useRef(null);
@@ -62,8 +113,6 @@ export default function ProcessStandardStepForm({
         title: stepToEdit.name || stepToEdit.title || stepToEdit.taskName || "",
         assignee: stepToEdit.assignedUserId
           ? String(stepToEdit.assignedUserId)
-          : orgUsers[0]
-          ? String(orgUsers[0].id)
           : "",
         dueDays: stepToEdit.dueDays ?? 3,
         priority: stepToEdit.priority || "Medium",
@@ -75,12 +124,14 @@ export default function ProcessStandardStepForm({
       });
       setLinkedTaskId(stepToEdit.linkedTaskId || null);
       setAutoInitiate(
-        stepToEdit.configuration?.autoInitiate || stepToEdit.autoInitiate || false
+        stepToEdit.configuration?.autoInitiate ||
+          stepToEdit.autoInitiate ||
+          false,
       );
     } else {
       setFormData({
         title: "",
-        assignee: orgUsers[0] ? String(orgUsers[0].id) : "",
+        assignee: "",
         dueDays: 3,
         priority: "Medium",
         status: "OPEN",
@@ -129,8 +180,14 @@ export default function ProcessStandardStepForm({
     const incomingFiles = Array.from(files || []);
     if (incomingFiles.length === 0) return;
 
-    const currentSize = uploadedFiles.reduce((sum, f) => sum + (f.size || 0), 0);
-    const incomingSize = incomingFiles.reduce((sum, file) => sum + file.size, 0);
+    const currentSize = uploadedFiles.reduce(
+      (sum, f) => sum + (f.size || 0),
+      0,
+    );
+    const incomingSize = incomingFiles.reduce(
+      (sum, file) => sum + file.size,
+      0,
+    );
 
     if (currentSize + incomingSize > 5 * 1024 * 1024) {
       setErrors((prev) => ({
@@ -187,7 +244,11 @@ export default function ProcessStandardStepForm({
     if (!formData.assignee) {
       newErrors.assignee = "Assignee is required";
     }
-    if (formData.dueDays < 0 || formData.dueDays === "" || isNaN(formData.dueDays)) {
+    if (
+      formData.dueDays < 0 ||
+      formData.dueDays === "" ||
+      isNaN(formData.dueDays)
+    ) {
       newErrors.dueDays = "Please enter a valid due days offset";
     }
 
@@ -202,7 +263,9 @@ export default function ProcessStandardStepForm({
         : formData.assignee;
 
     onSubmit({
-      id: stepToEdit?.id || `step_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      id:
+        stepToEdit?.id ||
+        `step_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       taskType: "Regular",
       subtaskType: "regular",
       mainTaskType: "regular",
@@ -213,7 +276,8 @@ export default function ProcessStandardStepForm({
       dueDays: Number(formData.dueDays),
       priority: formData.priority,
       status: formData.status,
-      visibility: formData.visibility,
+      visibility: "Private",
+      collaborators: collaborators,
       description: formData.description.trim(),
       tags: formData.tags,
       approvalRequired: false,
@@ -231,12 +295,18 @@ export default function ProcessStandardStepForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-left">
+    <form
+      onSubmit={handleSubmit}
+      className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-left"
+    >
       {/* TASK TITLE */}
       <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <Label htmlFor="subtaskTitle" className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
-            Task Title <span className="text-red-500">*</span>
+          <Label
+            htmlFor="subtaskTitle"
+            className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
+          >
+            Regular Task Name <span className="text-red-500">*</span>
           </Label>
           <span className="text-xs text-gray-400 font-normal">
             {formData.title.length}/60
@@ -247,7 +317,7 @@ export default function ProcessStandardStepForm({
           type="text"
           value={formData.title}
           onChange={(e) => handleChange("title", e.target.value)}
-          placeholder="Sub-task title"
+          placeholder="Add task title"
           className={`bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500 text-xs !h-8 ${
             errors.title ? "border-red-500 focus:border-red-500" : ""
           }`}
@@ -258,14 +328,27 @@ export default function ProcessStandardStepForm({
           <p className="text-xs text-red-500 mt-1">{errors.title}</p>
         )}
       </div>
-
+      {/* Description */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+          Regular Task Description
+        </Label>
+        <div className="border border-gray-300 rounded-md overflow-hidden bg-white focus-within:border-blue-500">
+          <CustomEditor
+            value={formData.description}
+            onChange={(content) => handleChange("description", content)}
+            placeholder="Add task description..."
+            className="w-full"
+          />
+        </div>
+      </div>
       {/* Row 1: Assignee & Priority */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
         {/* Assignee */}
         <div className="flex flex-col">
-          <div className="h-5 flex items-center mb-1.5">
+          <div className="h-5 flex items-center justify-between mb-1.5">
             <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
-              Assignee <span className="text-red-500">*</span>
+              Assigned To <span className="text-red-500">*</span>
             </Label>
           </div>
           <AssigneeSearchSelect
@@ -303,12 +386,38 @@ export default function ProcessStandardStepForm({
         </div>
       </div>
 
+      {/* Collaborators Row */}
+      <div className="flex flex-col">
+        <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+          <Users className="w-3.5 h-3.5 text-indigo-600" />
+          Collaborators
+        </Label>
+        <Select
+          isMulti
+          menuPlacement="auto"
+          options={collaboratorOptions}
+          value={collaborators}
+          onChange={(val) => setCollaborators(val || [])}
+          className="react-select-container text-xs"
+          classNamePrefix="react-select"
+          placeholder="Select collaborators..."
+        />
+        <p className="text-[11px] text-gray-500 mt-1 flex items-center gap-1">
+          <Info className="w-3 h-3 text-indigo-500 shrink-0" />
+          Note: The task owner (assignee) is automatically excluded from the
+          collaborators list.
+        </p>
+      </div>
+
       {/* Row 2: Due Days Offset & Labels/Tags */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
         {/* Due Days Offset */}
         <div className="flex flex-col">
           <div className="h-5 flex items-center mb-1.5">
-            <Label htmlFor="dueDays" className="text-xs font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-1">
+            <Label
+              htmlFor="dueDays"
+              className="text-xs font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-1"
+            >
               <Clock className="w-3.5 h-3.5 text-indigo-600" />
               DUE DAYS OFFSET <span className="text-red-500">*</span>
             </Label>
@@ -335,7 +444,10 @@ export default function ProcessStandardStepForm({
         {/* Labels / Tags */}
         <div className="flex flex-col">
           <div className="h-5 flex items-center gap-1.5 mb-1.5">
-            <Label htmlFor="tagsInput" className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+            <Label
+              htmlFor="tagsInput"
+              className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
+            >
               Labels / Tags
             </Label>
           </div>
@@ -387,21 +499,6 @@ export default function ProcessStandardStepForm({
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Description */}
-      <div className="space-y-1.5">
-        <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
-          Description
-        </Label>
-        <div className="border border-gray-300 rounded-md overflow-hidden bg-white focus-within:border-blue-500">
-          <CustomEditor
-            value={formData.description}
-            onChange={(content) => handleChange("description", content)}
-            placeholder="Add notes or description... (supports rich text)"
-            className="w-full"
-          />
         </div>
       </div>
 
@@ -457,7 +554,9 @@ export default function ProcessStandardStepForm({
           <p className="text-xs font-semibold text-indigo-700">
             Drag &amp; Drop files or click to browse
           </p>
-          <p className="text-[11px] text-gray-500">PDF, DOC, images supported</p>
+          <p className="text-[11px] text-gray-500">
+            PDF, DOC, images supported
+          </p>
         </div>
         <input
           ref={attachmentsInputRef}
@@ -480,7 +579,9 @@ export default function ProcessStandardStepForm({
               >
                 <div className="flex items-center space-x-2 flex-1 min-w-0">
                   <Paperclip className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-                  <span className="text-gray-800 font-medium truncate">{file.name}</span>
+                  <span className="text-gray-800 font-medium truncate">
+                    {file.name}
+                  </span>
                   {file.size > 0 && (
                     <span className="text-[11px] text-gray-500 ml-1">
                       ({(file.size / 1024).toFixed(2)} KB)
@@ -510,7 +611,7 @@ export default function ProcessStandardStepForm({
       <LinkedTaskSelector
         parentTaskId={stepToEdit?.parentTaskId}
         sequence={1}
-        excludeTaskId={stepToEdit?.id} 
+        excludeTaskId={stepToEdit?.id}
         linkedTaskId={linkedTaskId}
         onLinkedTaskChange={setLinkedTaskId}
         autoInitiate={autoInitiate}

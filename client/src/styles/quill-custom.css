@@ -31,8 +31,8 @@
   border-radius: 6px;
   border-color: #d1d5db;
   min-height: 32px !important;
-  height: 32px !important;
-  max-height: 32px !important;
+  height: auto !important;
+  max-height: none !important;
   box-shadow: none;
   transition: all 0.2s ease;
 }
@@ -41,10 +41,9 @@
   border-radius: 6px;
   border-color: #d1d5db;
   min-height: 38px !important;
-  height: 38px !important;
-  max-height: 38px !important;
+  height: auto !important;
+  max-height: none !important;
   box-shadow: none;
-  overflow: hidden !important;
   transition: all 0.2s ease;
 }
 
@@ -64,10 +63,20 @@
 .react-select-container .react-select__placeholder {
   color: #9ca3af;
   white-space: nowrap !important;
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  margin: 0 !important;
+  line-height: 1 !important;
 }
 
 .react-select-container .react-select__single-value {
   color: #374151;
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  margin: 0 !important;
+  line-height: 1 !important;
 }
 
 .react-select-container .react-select__menu {

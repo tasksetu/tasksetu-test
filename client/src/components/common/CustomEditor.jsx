@@ -53,6 +53,30 @@ const CustomEditor = ({
     'link',
   ];
 
+  // Suppress findDOMNode console warning emitted by react-quill library in React 18
+  React.useEffect(() => {
+    const originalError = console.error;
+    const originalWarn = console.warn;
+
+    const shouldSuppress = (args) =>
+      typeof args[0] === "string" && args[0].includes("findDOMNode");
+
+    console.error = (...args) => {
+      if (shouldSuppress(args)) return;
+      originalError.apply(console, args);
+    };
+
+    console.warn = (...args) => {
+      if (shouldSuppress(args)) return;
+      originalWarn.apply(console, args);
+    };
+
+    return () => {
+      console.error = originalError;
+      console.warn = originalWarn;
+    };
+  }, []);
+
   const handleChange = (content) => {
     if (onChange) {
       onChange(ensureLinkProtocol(content));

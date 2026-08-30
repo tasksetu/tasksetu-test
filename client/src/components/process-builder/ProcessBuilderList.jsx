@@ -333,9 +333,9 @@ export function ProcessBuilderList() {
               <TabsTrigger value="active" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-xs h-7">
                 Active ({processes.filter((p) => p.status === "Active").length})
               </TabsTrigger>
-              <TabsTrigger value="draft" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-xs h-7">
+              {/* <TabsTrigger value="draft" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-xs h-7">
                 Draft ({processes.filter((p) => p.status === "Draft").length})
-              </TabsTrigger>
+              </TabsTrigger> */}
             </TabsList>
           </Tabs>
 
@@ -378,26 +378,43 @@ export function ProcessBuilderList() {
           <div className="space-y-3">
             {filteredProcesses.map((proc) => {
               const stepCount = proc.steps?.length || 0;
+              const uniqueAssignees = new Set();
+              (proc.steps || []).forEach((step) => {
+                if (step.assignedUserId) {
+                  const val = typeof step.assignedUserId === "object"
+                    ? step.assignedUserId.value || step.assignedUserId.id || step.assignedUserId._id
+                    : step.assignedUserId;
+                  if (val) uniqueAssignees.add(String(val));
+                }
+                if (Array.isArray(step.approvers)) {
+                  step.approvers.forEach((app) => {
+                    const val = typeof app === "object" ? app.value || app.id || app._id : app;
+                    if (val && val !== "self") uniqueAssignees.add(String(val));
+                  });
+                }
+              });
+              const uniqueUserCount = uniqueAssignees.size;
+
               return (
                 <Card
-                  key={proc.id}
-                  className="bg-white border-gray-200 shadow-sm rounded-sm hover:border-gray-300 transition-all"
+                  key={proc.id || proc._id}
+                  className="border-gray-200 shadow-2xs hover:shadow-xs transition-shadow bg-white text-gray-900 overflow-hidden"
                 >
-                  <CardHeader className="p-4 pb-3">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-1">
+                  <CardHeader className="px-4 py-3.5 pb-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1 min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <CardTitle className="text-base font-semibold text-gray-900 hover:text-blue-600 transition-colors">
+                          <CardTitle className="text-base font-bold text-gray-900 truncate">
                             {proc.name}
                           </CardTitle>
                           <Badge
-                            className={
-                              proc.status === "Active"
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : "bg-amber-50 text-amber-700 border-amber-200"
-                            }
+                            className={`text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full border-0 ${
+                              (proc.status || "").toLowerCase() === "active"
+                                ? "bg-emerald-600 text-white shadow-2xs"
+                                : "bg-gray-200 text-gray-700"
+                            }`}
                           >
-                            {proc.status}
+                            {proc.status || "Active"}
                           </Badge>
                         </div>
                         <CardDescription className="text-xs text-gray-600 line-clamp-2">
@@ -501,7 +518,7 @@ export function ProcessBuilderList() {
                     <div className="flex items-center gap-4 flex-wrap">
                       <span className="flex items-center gap-1.5">
                         <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
-                        Assigned: {proc.steps?.length ? `${proc.steps.length} Users` : "None"}
+                        Assigned: {uniqueUserCount > 0 ? `${uniqueUserCount} ${uniqueUserCount === 1 ? "User" : "Users"}` : "None"}
                       </span>
                       <span className="flex items-center gap-1.5">
                         <FileText className="w-3.5 h-3.5 text-blue-600" />

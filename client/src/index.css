@@ -153,7 +153,7 @@ input[type="week"]::-webkit-calendar-picker-indicator {
 
 .react-select__control {
   min-height: 32px !important;
-  height: 32px !important;
+  height: auto !important;
   border-color: #d1d5db !important;
   box-shadow: none !important;
 }
@@ -172,9 +172,12 @@ input[type="week"]::-webkit-calendar-picker-indicator {
 }
 
 .react-select__value-container {
-  padding: 0 8px !important;
+  padding: 2px 8px !important;
   min-height: 30px !important;
-  height: 30px !important;
+  height: auto !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
 }
 
 .react-select__input-container {
@@ -183,13 +186,23 @@ input[type="week"]::-webkit-calendar-picker-indicator {
 }
 
 .react-select__single-value {
-  font-size: 0.875rem !important;
+  font-size: 0.75rem !important;
   color: #374151 !important;
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  margin: 0 !important;
+  line-height: 1 !important;
 }
 
 .react-select__placeholder {
-  font-size: 0.875rem !important;
+  font-size: 0.75rem !important;
   color: #9ca3af !important;
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  margin: 0 !important;
+  line-height: 1 !important;
 }
 
 .react-select__indicators {

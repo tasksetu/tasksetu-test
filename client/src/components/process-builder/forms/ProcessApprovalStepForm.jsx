@@ -36,19 +36,30 @@ export default function ProcessApprovalStepForm({
   const [localApproverOptions, setLocalApproverOptions] = useState([]);
   const [localIsLoadingApprovers, setLocalIsLoadingApprovers] = useState(false);
   const [taskNameLength, setTaskNameLength] = useState(0);
-  const [approverOrder, setApproverOrder] = useState(stepToEdit?.approverOrder || []);
+  const [approverOrder, setApproverOrder] = useState(
+    stepToEdit?.approverOrder || [],
+  );
 
-  const [linkedTaskId, setLinkedTaskId] = useState(stepToEdit?.linkedTaskId || null);
+  const [linkedTaskId, setLinkedTaskId] = useState(
+    stepToEdit?.linkedTaskId || null,
+  );
   const [contextTaskError, setContextTaskError] = useState("");
   const [autoInitiate, setAutoInitiate] = useState(
-    stepToEdit?.configuration?.autoInitiate || stepToEdit?.autoInitiate || false
+    stepToEdit?.configuration?.autoInitiate ||
+      stepToEdit?.autoInitiate ||
+      false,
   );
 
   const [approvalContext, setApprovalContext] = useState(
-    stepToEdit?.approvalContext || stepToEdit?.context || stepToEdit?.approvalInstructions || ""
+    stepToEdit?.approvalContext ||
+      stepToEdit?.context ||
+      stepToEdit?.approvalInstructions ||
+      "",
   );
 
-  const [uploadedFiles, setUploadedFiles] = useState(stepToEdit?.attachments || []);
+  const [uploadedFiles, setUploadedFiles] = useState(
+    stepToEdit?.attachments || [],
+  );
   const [attachmentSize, setAttachmentSize] = useState(0);
   const [isDragActive, setIsDragActive] = useState(false);
   const attachmentsInputRef = useRef(null);
@@ -59,7 +70,8 @@ export default function ProcessApprovalStepForm({
   const hasFetchedApproversRef = useRef(false);
 
   const fetchApprovers = async () => {
-    if (collaboratorOptions.length > 0 || hasFetchedApproversRef.current) return;
+    if (collaboratorOptions.length > 0 || hasFetchedApproversRef.current)
+      return;
     hasFetchedApproversRef.current = true;
 
     try {
@@ -84,7 +96,10 @@ export default function ProcessApprovalStepForm({
         setLocalApproverOptions(formattedApprovers);
       }
     } catch (error) {
-      console.error("Error fetching approvers in ProcessApprovalStepForm:", error);
+      console.error(
+        "Error fetching approvers in ProcessApprovalStepForm:",
+        error,
+      );
       setLocalApproverOptions([]);
     } finally {
       setLocalIsLoadingApprovers(false);
@@ -98,15 +113,47 @@ export default function ProcessApprovalStepForm({
   }, [collaboratorOptions.length]);
 
   const approverSourceOptions = useMemo(() => {
-    if (collaboratorOptions.length > 0) return collaboratorOptions;
-    if (localApproverOptions.length > 0) return localApproverOptions;
-    return orgUsers.map((u) => ({
-      value: u.id,
-      label: `${u.name} (${u.role || "User"})`,
-      name: u.name,
-      email: u.email,
-    }));
-  }, [collaboratorOptions, localApproverOptions, orgUsers]);
+    return (orgUsers || []).map((u) => {
+      const name =
+        u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email;
+      const role =
+        u.role?.name ||
+        (Array.isArray(u.role) ? u.role.join(", ") : u.role) ||
+        "User";
+      return {
+        value: String(u.id || u._id),
+        label: `${name} (${u.email || ""}) - ${role}`,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+      };
+    });
+  }, [orgUsers]);
+
+  const initialCollaborators = useMemo(() => {
+    if (!stepToEdit?.collaborators || !Array.isArray(stepToEdit.collaborators))
+      return [];
+    return stepToEdit.collaborators.map((c) => {
+      if (typeof c === "object" && c.value && c.label) return c;
+      const val = typeof c === "object" ? c.value || c.id || c._id : c;
+      const found = orgUsers.find((u) => String(u.id || u._id) === String(val));
+      if (found) {
+        const name =
+          found.name ||
+          `${found.firstName || ""} ${found.lastName || ""}`.trim() ||
+          found.email;
+        const role =
+          found.role?.name ||
+          (Array.isArray(found.role) ? found.role.join(", ") : found.role) ||
+          "User";
+        return {
+          value: String(found.id || found._id),
+          label: `${name} (${found.email || ""}) - ${role}`,
+        };
+      }
+      return { value: String(val), label: `User #${val}` };
+    });
+  }, [stepToEdit, orgUsers]);
 
   const priorityOptions = useMemo(() => {
     const dynamic = (Array.isArray(taskPriorities) ? taskPriorities : [])
@@ -139,22 +186,31 @@ export default function ProcessApprovalStepForm({
     formState: { errors },
   } = useForm({
     defaultValues: {
-      taskName: stepToEdit?.name || stepToEdit?.title || stepToEdit?.taskName || "",
+      taskName:
+        stepToEdit?.name || stepToEdit?.title || stepToEdit?.taskName || "",
       description: stepToEdit?.description || "",
       dueDays: stepToEdit?.dueDays ?? 3,
       priority: stepToEdit?.priority
         ? {
-            value: typeof stepToEdit.priority === "object" ? stepToEdit.priority.value : String(stepToEdit.priority).toLowerCase(),
-            label: typeof stepToEdit.priority === "object" ? stepToEdit.priority.label : String(stepToEdit.priority).toUpperCase(),
+            value:
+              typeof stepToEdit.priority === "object"
+                ? stepToEdit.priority.value
+                : String(stepToEdit.priority).toLowerCase(),
+            label:
+              typeof stepToEdit.priority === "object"
+                ? stepToEdit.priority.label
+                : String(stepToEdit.priority).toUpperCase(),
           }
         : { value: "medium", label: "Medium" },
-      assignedTo: stepToEdit?.assignedUserId ? String(stepToEdit.assignedUserId) : (orgUsers[0] ? String(orgUsers[0].id) : null),
+      assignedTo: stepToEdit?.assignedUserId
+        ? String(stepToEdit.assignedUserId)
+        : "",
       approvers: stepToEdit?.approvers || [],
       approvalMode: stepToEdit?.approvalMode || "any",
       autoApproval: stepToEdit?.autoApproval || false,
       autoApproveAfter: stepToEdit?.autoApproveAfter || null,
-      visibility: stepToEdit?.visibility || "private",
-      collaborators: stepToEdit?.collaborators || [],
+      visibility: "private",
+      collaborators: initialCollaborators,
       status: stepToEdit?.status || "OPEN",
     },
   });
@@ -163,6 +219,40 @@ export default function ProcessApprovalStepForm({
   const watchedApprovers = watch("approvers");
   const watchedApprovalMode = watch("approvalMode");
   const watchedAutoApproval = watch("autoApproval");
+  const watchedAssignedTo = watch("assignedTo");
+
+  const currentAssigneeId = useMemo(() => {
+    if (!watchedAssignedTo) return null;
+    return typeof watchedAssignedTo === "object"
+      ? String(
+          watchedAssignedTo.value ||
+            watchedAssignedTo.id ||
+            watchedAssignedTo._id,
+        )
+      : String(watchedAssignedTo);
+  }, [watchedAssignedTo]);
+
+  const filteredCollaboratorsList = useMemo(() => {
+    if (!currentAssigneeId) return approverSourceOptions;
+    return approverSourceOptions.filter(
+      (c) => String(c.value || c.id || c._id) !== currentAssigneeId,
+    );
+  }, [approverSourceOptions, currentAssigneeId]);
+
+  useEffect(() => {
+    if (currentAssigneeId) {
+      const currentCollabs = watch("collaborators");
+      if (Array.isArray(currentCollabs) && currentCollabs.length > 0) {
+        const filtered = currentCollabs.filter((c) => {
+          const val = typeof c === "object" ? c.value || c.id || c._id : c;
+          return String(val) !== currentAssigneeId;
+        });
+        if (filtered.length !== currentCollabs.length) {
+          setValue("collaborators", filtered);
+        }
+      }
+    }
+  }, [currentAssigneeId, setValue, watch]);
 
   useEffect(() => {
     setTaskNameLength(watchedTaskName?.length || 0);
@@ -174,7 +264,7 @@ export default function ProcessApprovalStepForm({
         watchedApprovers.map((approver, index) => ({
           ...approver,
           order: index + 1,
-        }))
+        })),
       );
     } else {
       setApproverOrder([]);
@@ -184,7 +274,10 @@ export default function ProcessApprovalStepForm({
   const moveApproverUp = (index) => {
     if (index > 0) {
       const newOrder = [...approverOrder];
-      [newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]];
+      [newOrder[index], newOrder[index - 1]] = [
+        newOrder[index - 1],
+        newOrder[index],
+      ];
       setApproverOrder(newOrder);
       setValue("approvers", newOrder);
     }
@@ -193,7 +286,10 @@ export default function ProcessApprovalStepForm({
   const moveApproverDown = (index) => {
     if (index < approverOrder.length - 1) {
       const newOrder = [...approverOrder];
-      [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+      [newOrder[index], newOrder[index + 1]] = [
+        newOrder[index + 1],
+        newOrder[index],
+      ];
       setApproverOrder(newOrder);
       setValue("approvers", newOrder);
     }
@@ -202,7 +298,10 @@ export default function ProcessApprovalStepForm({
   const processFiles = (files) => {
     if (!files || files.length === 0) return;
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-    const currentSize = uploadedFiles.reduce((sum, f) => sum + (f.size || f.file?.size || 0), 0);
+    const currentSize = uploadedFiles.reduce(
+      (sum, f) => sum + (f.size || f.file?.size || 0),
+      0,
+    );
     if (currentSize + totalSize > 5 * 1024 * 1024) {
       alert("Total file size cannot exceed 5MB");
       return;
@@ -222,8 +321,14 @@ export default function ProcessApprovalStepForm({
     e.target.value = "";
   };
 
-  const handleDragOver = (e) => { e.preventDefault(); setIsDragActive(true); };
-  const handleDragLeave = (e) => { e.preventDefault(); setIsDragActive(false); };
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragActive(true);
+  };
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragActive(false);
+  };
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragActive(false);
@@ -233,7 +338,9 @@ export default function ProcessApprovalStepForm({
   const removeFile = (fileId) => {
     setUploadedFiles((prev) => {
       const updated = prev.filter((f) => f.id !== fileId);
-      setAttachmentSize(updated.reduce((sum, f) => sum + (f.size || f.file?.size || 0), 0));
+      setAttachmentSize(
+        updated.reduce((sum, f) => sum + (f.size || f.file?.size || 0), 0),
+      );
       return updated;
     });
   };
@@ -250,13 +357,17 @@ export default function ProcessApprovalStepForm({
 
   const onFormSubmit = (data) => {
     if (!linkedTaskId) {
-      setContextTaskError("Prerequisite context task is required for approval tasks.");
+      setContextTaskError(
+        "Prerequisite context task is required for approval tasks.",
+      );
       return;
     }
     setContextTaskError("");
 
     const formattedData = {
-      id: stepToEdit?.id || `step_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      id:
+        stepToEdit?.id ||
+        `step_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       title: data.taskName,
       name: data.taskName,
       taskName: data.taskName,
@@ -266,7 +377,8 @@ export default function ProcessApprovalStepForm({
       mainTaskType: "regular",
       isApprovalTask: true,
       dueDays: Number(data.dueDays) || 3,
-      priority: typeof data.priority === "object" ? data.priority.value : data.priority,
+      priority:
+        typeof data.priority === "object" ? data.priority.value : data.priority,
       status: data.status || "OPEN",
       visibility: data.visibility || "Private",
       assignee: data.assignedTo?.value || data.assignedTo || "",
@@ -277,7 +389,10 @@ export default function ProcessApprovalStepForm({
       approvalMode: data.approvalMode || "any",
       approvalStatus: "pending",
       autoApproveEnabled: data.autoApproval || false,
-      autoApproveAfter: data.autoApproval && data.autoApproveAfter ? data.autoApproveAfter : null,
+      autoApproveAfter:
+        data.autoApproval && data.autoApproveAfter
+          ? data.autoApproveAfter
+          : null,
       approverOrder: data.approvalMode === "sequential" ? approverOrder : null,
       collaborators: data.collaborators?.map((c) => c.value || c) || [],
       attachments: uploadedFiles,
@@ -298,15 +413,63 @@ export default function ProcessApprovalStepForm({
     onSubmit(formattedData);
   };
 
+  const singleSelectStyles = {
+    control: (base, s) => ({
+      ...base,
+      minHeight: "32px",
+      height: "32px",
+      maxHeight: "32px",
+      fontSize: "0.75rem",
+      borderColor: s?.isFocused ? "#3b82f6" : "#d1d5db",
+      borderWidth: s?.isFocused ? "2px" : "1px",
+      boxShadow: "none",
+      "&:hover": { borderColor: s?.isFocused ? "#3b82f6" : "#d1d5db" },
+    }),
+    valueContainer: (base) => ({
+      ...base,
+      height: "32px",
+      minHeight: "32px",
+      maxHeight: "32px",
+      padding: "0 8px",
+      display: "flex",
+      alignItems: "center",
+    }),
+    indicatorsContainer: (base) => ({
+      ...base,
+      height: "32px",
+      minHeight: "32px",
+      maxHeight: "32px",
+    }),
+    dropdownIndicator: (base) => ({
+      ...base,
+      padding: "2px 6px",
+    }),
+    singleValue: (base) => ({
+      ...base,
+      fontSize: "0.75rem",
+      color: "#111827",
+    }),
+    placeholder: (base) => ({
+      ...base,
+      fontSize: "0.75rem",
+      color: "#9ca3af",
+    }),
+  };
+
   return (
-    <form onSubmit={handleSubmit(onFormSubmit)} className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-left">
+    <form
+      onSubmit={handleSubmit(onFormSubmit)}
+      className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-left"
+    >
       {/* Task Name */}
       <div>
         <div className="flex justify-between items-center mb-1">
-          <label className="block text-sm font-medium text-gray-900">
+          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
             Approval Task Name <span className="text-red-500">*</span>
           </label>
-          <span className="text-xs text-gray-400 font-medium">{taskNameLength}/100</span>
+          <span className="text-xs text-gray-400 font-medium">
+            {taskNameLength}/100
+          </span>
         </div>
         <input
           type="text"
@@ -319,7 +482,7 @@ export default function ProcessApprovalStepForm({
             },
           })}
           placeholder="Enter approval task name..."
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-2 focus:border-blue-500 text-xs placeholder-gray-400"
+          className="w-full !h-8 px-3 border border-gray-300 rounded-md focus:outline-none focus:border-2 focus:border-blue-500 text-xs placeholder-gray-400"
         />
         {errors.taskName && (
           <p className="text-red-500 text-xs mt-1 flex items-center">
@@ -331,8 +494,8 @@ export default function ProcessApprovalStepForm({
 
       {/* Description */}
       <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1">
-         Approval Task Description
+        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+          Approval Task Description
         </label>
         <Controller
           name="description"
@@ -350,8 +513,8 @@ export default function ProcessApprovalStepForm({
 
       {/* Approvers Selection */}
       <div className="bg-blue-50/50 p-3.5 rounded-md border border-blue-100">
-        <label className="block text-sm font-semibold text-blue-900 mb-2 flex items-center gap-1.5">
-          <UserCheck className="w-4 h-4 text-blue-600" />
+        <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+          <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
           Approvers <span className="text-red-500">*</span>
         </label>
         <Controller
@@ -389,22 +552,31 @@ export default function ProcessApprovalStepForm({
 
       {/* Approval Mode */}
       <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
+        <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1">
           Approval Mode <span className="text-red-500">*</span>
           <div className="relative group ml-1">
             <Info className="w-3.5 h-3.5 text-gray-400 cursor-help" />
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none w-64 z-10">
               <div className="space-y-1">
-                <div><strong>Any One:</strong> First approver's decision is final</div>
-                <div><strong>All Must Approve:</strong> Every approver must approve</div>
-                <div><strong>Sequential:</strong> Approvers review in order</div>
+                <div>
+                  <strong>Any One:</strong> First approver's decision is final
+                </div>
+                <div>
+                  <strong>All Must Approve:</strong> Every approver must approve
+                </div>
+                <div>
+                  <strong>Sequential:</strong> Approvers review in order
+                </div>
               </div>
             </div>
           </div>
         </label>
         <div className="flex items-center gap-6">
           {approvalModeOptions.map((option) => (
-            <label key={option.value} className="flex items-center gap-2 cursor-pointer">
+            <label
+              key={option.value}
+              className="flex items-center gap-2 cursor-pointer"
+            >
               <input
                 {...register("approvalMode")}
                 type="radio"
@@ -444,7 +616,7 @@ export default function ProcessApprovalStepForm({
             min={0}
             disabled={!watchedAutoApproval}
             placeholder="Days after due date (e.g. 2)"
-            className={`w-full h-8 px-3 py-1 border rounded-md text-xs focus:outline-none focus:border-2 focus:border-blue-500 ${
+            className={`w-full !h-8 px-3 py-1 border rounded-md text-xs focus:outline-none focus:border-2 focus:border-blue-500 ${
               watchedAutoApproval
                 ? "border-gray-300 bg-white"
                 : "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
@@ -514,7 +686,7 @@ export default function ProcessApprovalStepForm({
             {...register("dueDays", {
               required: "Due days offset is required",
             })}
-            className="w-full h-8 px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:border-2 focus:border-blue-500 text-xs"
+            className="w-full !h-8 px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:border-2 focus:border-blue-500 text-xs"
           />
           <p className="text-[11px] text-gray-400 mt-1">
             Days offset when process launched.
@@ -523,7 +695,7 @@ export default function ProcessApprovalStepForm({
 
         {/* Assignee */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-1">
+          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
             Assigned To<span className="text-red-500">*</span>
           </label>
           <Controller
@@ -555,7 +727,7 @@ export default function ProcessApprovalStepForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Priority */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-1">
+          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
             Priority
           </label>
           <Controller
@@ -568,7 +740,7 @@ export default function ProcessApprovalStepForm({
                 menuPlacement="auto"
                 className="react-select-container text-xs"
                 classNamePrefix="react-select"
-                styles={selectStyles}
+                styles={singleSelectStyles}
                 placeholder="Select priority..."
               />
             )}
@@ -577,8 +749,8 @@ export default function ProcessApprovalStepForm({
 
         {/* Collaborators */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
-            <Users className="w-4 h-4 text-gray-500" />
+          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+            <Users className="w-3.5 h-3.5 text-indigo-600" />
             Collaborators
           </label>
           <Controller
@@ -589,7 +761,7 @@ export default function ProcessApprovalStepForm({
                 {...field}
                 isMulti
                 menuPlacement="auto"
-                options={approverSourceOptions}
+                options={filteredCollaboratorsList}
                 className="react-select-container text-xs"
                 classNamePrefix="react-select"
                 styles={selectStyles}
@@ -597,44 +769,27 @@ export default function ProcessApprovalStepForm({
               />
             )}
           />
-        </div>
-      </div>
-
-      {/* Visibility */}
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1">
-          Visibility <span className="text-red-500">*</span>
-        </label>
-        <div className="flex items-center gap-6 mt-1">
-          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-            <input
-              type="radio"
-              value="private"
-              {...register("visibility")}
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-            />
-            Private
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-            <input
-              type="radio"
-              value="team"
-              {...register("visibility")}
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-            />
-            Team
-          </label>
+          <p className="text-[11px] text-gray-500 mt-1 flex items-center gap-1">
+            <Info className="w-3 h-3 text-indigo-500 shrink-0" />
+            Note: The task owner (assignee) is automatically excluded from the
+            collaborators list.
+          </p>
         </div>
       </div>
 
       {/* Attachments Section */}
-      <div>
+      <div className="space-y-1.5">
         <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-          Attachments <span className="text-xs text-gray-400 font-normal ml-1">(Max 5MB total)</span>
+          Attachments{" "}
+          <span className="text-xs text-gray-400 font-normal ml-1">
+            (Max 5MB total)
+          </span>
         </label>
         <div
           className={`w-full border-2 border-dashed p-3 text-center cursor-pointer rounded-md transition-colors ${
-            isDragActive ? "border-indigo-500 bg-indigo-50" : "border-gray-300 bg-gray-50/60"
+            isDragActive
+              ? "border-indigo-500 bg-indigo-50"
+              : "border-gray-300 bg-gray-50/60"
           }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -643,8 +798,15 @@ export default function ProcessApprovalStepForm({
           role="button"
           tabIndex={0}
         >
-          <p className="text-xs font-semibold text-indigo-600">Drag &amp; Drop files or click to browse</p>
-          <p className="text-[11px] text-gray-400">PDF, DOC, images supported</p>
+          <div className="mx-auto mb-1 flex h-8 w-8 items-center justify-center bg-indigo-100 text-indigo-600 rounded-full">
+            <Upload className="w-3.5 h-3.5" />
+          </div>
+          <p className="text-xs font-semibold text-indigo-600">
+            Drag &amp; Drop files or click to browse
+          </p>
+          <p className="text-[11px] text-gray-400">
+            PDF, DOC, images supported
+          </p>
         </div>
         <input
           ref={attachmentsInputRef}
@@ -697,8 +859,6 @@ export default function ProcessApprovalStepForm({
         error={contextTaskError}
         previousSteps={previousSteps}
       />
-
-
 
       {/* Actions */}
       <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">

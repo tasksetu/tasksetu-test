@@ -23,7 +23,8 @@ export default function ProcessMilestoneStepForm({
 }) {
   const [taskNameLength, setTaskNameLength] = useState(0);
   const [localCollaboratorsList, setLocalCollaboratorsList] = useState([]);
-  const [localIsLoadingCollaborators, setLocalIsLoadingCollaborators] = useState(false);
+  const [localIsLoadingCollaborators, setLocalIsLoadingCollaborators] =
+    useState(false);
 
   const localAvailableTasks = useMemo(() => {
     if (previousSteps && previousSteps.length > 0) {
@@ -43,7 +44,8 @@ export default function ProcessMilestoneStepForm({
   const { data: taskPriorities = [] } = useTaskPriorities();
 
   const fetchCollaborators = async () => {
-    if (collaboratorOptions.length > 0 || hasFetchedCollaboratorsRef.current) return;
+    if (collaboratorOptions.length > 0 || hasFetchedCollaboratorsRef.current)
+      return;
     hasFetchedCollaboratorsRef.current = true;
 
     try {
@@ -67,35 +69,58 @@ export default function ProcessMilestoneStepForm({
         setLocalCollaboratorsList(formatted);
       }
     } catch (error) {
-      console.error("Error fetching collaborators in ProcessMilestoneStepForm:", error);
+      console.error(
+        "Error fetching collaborators in ProcessMilestoneStepForm:",
+        error,
+      );
       setLocalCollaboratorsList([]);
     } finally {
       setLocalIsLoadingCollaborators(false);
     }
   };
 
-  useEffect(() => {
-    if (collaboratorOptions.length === 0 && !hasFetchedCollaboratorsRef.current) {
-      fetchCollaborators();
-    }
-  }, [collaboratorOptions.length]);
-
   const collaboratorsList = useMemo(() => {
-    if (collaboratorOptions.length > 0) return collaboratorOptions;
-    if (localCollaboratorsList.length > 0) return localCollaboratorsList;
-    return orgUsers.map((u) => {
-      const rolesStr = Array.isArray(u.role) ? u.role.join(", ") : u.role;
+    return (orgUsers || []).map((u) => {
+      const name =
+        u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email;
+      const role =
+        u.role?.name ||
+        (Array.isArray(u.role) ? u.role.join(", ") : u.role) ||
+        "User";
       return {
-        value: u.id,
-        label: `${u.name} (${u.email || ""}) ${rolesStr ? `- ${rolesStr}` : ""}`,
+        value: String(u.id || u._id),
+        label: `${name} (${u.email || ""}) - ${role}`,
         name: u.name,
         email: u.email,
+        role: u.role,
       };
     });
-  }, [collaboratorOptions, localCollaboratorsList, orgUsers]);
+  }, [orgUsers]);
 
-  const isCollaboratorsLoading =
-    collaboratorOptions.length > 0 ? isLoadingCollaborators : localIsLoadingCollaborators;
+  const initialCollaborators = useMemo(() => {
+    if (!stepToEdit?.collaborators || !Array.isArray(stepToEdit.collaborators))
+      return [];
+    return stepToEdit.collaborators.map((c) => {
+      if (typeof c === "object" && c.value && c.label) return c;
+      const val = typeof c === "object" ? c.value || c.id || c._id : c;
+      const found = orgUsers.find((u) => String(u.id || u._id) === String(val));
+      if (found) {
+        const name =
+          found.name ||
+          `${found.firstName || ""} ${found.lastName || ""}`.trim() ||
+          found.email;
+        const role =
+          found.role?.name ||
+          (Array.isArray(found.role) ? found.role.join(", ") : found.role) ||
+          "User";
+        return {
+          value: String(found.id || found._id),
+          label: `${name} (${found.email || ""}) - ${role}`,
+        };
+      }
+      return { value: String(val), label: `User #${val}` };
+    });
+  }, [stepToEdit, orgUsers]);
 
   const priorityOptions = useMemo(() => {
     const dynamic = (Array.isArray(taskPriorities) ? taskPriorities : [])
@@ -122,23 +147,66 @@ export default function ProcessMilestoneStepForm({
     formState: { errors },
   } = useForm({
     defaultValues: {
-      taskName: stepToEdit?.name || stepToEdit?.title || stepToEdit?.taskName || "",
+      taskName:
+        stepToEdit?.name || stepToEdit?.title || stepToEdit?.taskName || "",
       description: stepToEdit?.description || "",
       dueDays: stepToEdit?.dueDays ?? 3,
       milestoneType: stepToEdit?.milestoneType || "standalone",
       linkedTasks: stepToEdit?.linkedTasks || [],
       priority: stepToEdit?.priority
         ? {
-            value: typeof stepToEdit.priority === "object" ? stepToEdit.priority.value : String(stepToEdit.priority).toLowerCase(),
-            label: typeof stepToEdit.priority === "object" ? stepToEdit.priority.label : String(stepToEdit.priority).toUpperCase(),
+            value:
+              typeof stepToEdit.priority === "object"
+                ? stepToEdit.priority.value
+                : String(stepToEdit.priority).toLowerCase(),
+            label:
+              typeof stepToEdit.priority === "object"
+                ? stepToEdit.priority.label
+                : String(stepToEdit.priority).toUpperCase(),
           }
         : { value: "medium", label: "Medium" },
-      assignedTo: stepToEdit?.assignedUserId ? String(stepToEdit.assignedUserId) : (orgUsers[0] ? String(orgUsers[0].id) : null),
-      visibility: stepToEdit?.visibility || "private",
-      collaborators: stepToEdit?.collaborators || [],
+      assignedTo: stepToEdit?.assignedUserId
+        ? String(stepToEdit.assignedUserId)
+        : "",
+      visibility: "private",
+      collaborators: initialCollaborators,
       status: stepToEdit?.status || "OPEN",
     },
   });
+
+  const watchedAssignedTo = watch("assignedTo");
+  const currentAssigneeId = useMemo(() => {
+    if (!watchedAssignedTo) return null;
+    return typeof watchedAssignedTo === "object"
+      ? String(
+          watchedAssignedTo.value ||
+            watchedAssignedTo.id ||
+            watchedAssignedTo._id,
+        )
+      : String(watchedAssignedTo);
+  }, [watchedAssignedTo]);
+
+  const filteredCollaboratorsList = useMemo(() => {
+    if (!currentAssigneeId) return collaboratorsList;
+    return collaboratorsList.filter(
+      (c) => String(c.value || c.id || c._id) !== currentAssigneeId,
+    );
+  }, [collaboratorsList, currentAssigneeId]);
+
+  useEffect(() => {
+    if (currentAssigneeId) {
+      const currentCollabs = watch("collaborators");
+      if (Array.isArray(currentCollabs) && currentCollabs.length > 0) {
+        const filtered = currentCollabs.filter((c) => {
+          const val = typeof c === "object" ? c.value || c.id || c._id : c;
+          return String(val) !== currentAssigneeId;
+        });
+        if (filtered.length !== currentCollabs.length) {
+          setValue("collaborators", filtered);
+        }
+      }
+    }
+  }, [currentAssigneeId, setValue, watch]);
 
   const watchedTaskName = watch("taskName");
   const watchedMilestoneType = watch("milestoneType");
@@ -157,12 +225,60 @@ export default function ProcessMilestoneStepForm({
     }),
   };
 
+  const singleSelectStyles = {
+    control: (base, s) => ({
+      ...base,
+      minHeight: "32px",
+      height: "32px",
+      maxHeight: "32px",
+      fontSize: "0.75rem",
+      borderColor: s?.isFocused ? "#3b82f6" : "#d1d5db",
+      borderWidth: s?.isFocused ? "2px" : "1px",
+      boxShadow: "none",
+      "&:hover": { borderColor: s?.isFocused ? "#3b82f6" : "#d1d5db" },
+    }),
+    valueContainer: (base) => ({
+      ...base,
+      height: "32px",
+      minHeight: "32px",
+      maxHeight: "32px",
+      padding: "0 8px",
+      display: "flex",
+      alignItems: "center",
+    }),
+    indicatorsContainer: (base) => ({
+      ...base,
+      height: "32px",
+      minHeight: "32px",
+      maxHeight: "32px",
+    }),
+    dropdownIndicator: (base) => ({
+      ...base,
+      padding: "2px 6px",
+    }),
+    singleValue: (base) => ({
+      ...base,
+      fontSize: "0.75rem",
+      color: "#111827",
+    }),
+    placeholder: (base) => ({
+      ...base,
+      fontSize: "0.75rem",
+      color: "#9ca3af",
+    }),
+  };
+
   const onFormSubmit = (data) => {
     const mType = data.milestoneType || "standalone";
-    const linkedIds = mType === "linked" && Array.isArray(data.linkedTasks) ? data.linkedTasks : [];
+    const linkedIds =
+      mType === "linked" && Array.isArray(data.linkedTasks)
+        ? data.linkedTasks
+        : [];
 
     const payload = {
-      id: stepToEdit?.id || `step_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      id:
+        stepToEdit?.id ||
+        `step_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       name: data.taskName.trim(),
       title: data.taskName.trim(),
       taskName: data.taskName.trim(),
@@ -182,7 +298,8 @@ export default function ProcessMilestoneStepForm({
       linkedToMilestone: null,
       description: (data.description || "").trim(),
       dueDays: Number(data.dueDays) || 3,
-      priority: typeof data.priority === "object" ? data.priority.value : data.priority,
+      priority:
+        typeof data.priority === "object" ? data.priority.value : data.priority,
       assignedUserId: data.assignedTo?.value || data.assignedTo || "",
       assignedTo: data.assignedTo?.value || data.assignedTo || "",
       visibility: data.visibility || "Private",
@@ -200,7 +317,10 @@ export default function ProcessMilestoneStepForm({
   };
 
   return (
-    <form onSubmit={handleSubmit(onFormSubmit)} className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-left">
+    <form
+      onSubmit={handleSubmit(onFormSubmit)}
+      className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-left"
+    >
       {/* Milestone Type Selection */}
       <div className="bg-blue-50/50 p-3 rounded-md border border-blue-100">
         <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
@@ -237,10 +357,12 @@ export default function ProcessMilestoneStepForm({
       {/* Milestone Name */}
       <div>
         <div className="flex justify-between items-center mb-1">
-          <label className="block text-sm font-medium text-gray-900">
-            Milestone Name <span className="text-red-500">*</span>
+          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+            Milestone Task Name <span className="text-red-500">*</span>
           </label>
-          <span className="text-xs text-gray-400 font-medium">{taskNameLength}/100</span>
+          <span className="text-xs text-gray-400 font-medium">
+            {taskNameLength}/100
+          </span>
         </div>
         <input
           type="text"
@@ -253,7 +375,7 @@ export default function ProcessMilestoneStepForm({
             },
           })}
           placeholder="Enter milestone name..."
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs placeholder:text-gray-400 focus:outline-none focus:border-2 focus:border-blue-500"
+          className="w-full !h-8 px-3 border border-gray-300 rounded-md text-xs placeholder:text-gray-400 focus:outline-none focus:border-2 focus:border-blue-500"
         />
         {errors.taskName && (
           <p className="text-red-500 text-xs mt-1 flex items-center">
@@ -265,8 +387,8 @@ export default function ProcessMilestoneStepForm({
 
       {/* Description */}
       <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1">
-          Description
+        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+          Milestone Task Description
         </label>
         <Controller
           name="description"
@@ -285,7 +407,7 @@ export default function ProcessMilestoneStepForm({
       {/* Linked Tasks - Only show if milestone type is 'linked' */}
       {watchedMilestoneType === "linked" && (
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-1">
+           <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
             Link to Tasks/Sub-tasks <span className="text-red-500">*</span>
           </label>
           <Controller
@@ -309,7 +431,9 @@ export default function ProcessMilestoneStepForm({
                 closeMenuOnSelect={false}
                 options={localAvailableTasks}
                 value={localAvailableTasks.filter((opt) =>
-                  field.value?.some((v) => v.value === opt.value || v === opt.value)
+                  field.value?.some(
+                    (v) => v.value === opt.value || v === opt.value,
+                  ),
                 )}
                 menuPlacement="auto"
                 formatOptionLabel={(option) => (
@@ -330,8 +454,8 @@ export default function ProcessMilestoneStepForm({
             )}
           />
           <p className="text-xs text-gray-500 mt-1">
-            Select sub-tasks/steps to link to this milestone. Due date will default to
-            the latest linked step offset.
+            Select sub-tasks/steps to link to this milestone. Due date will
+            default to the latest linked step offset.
           </p>
           {errors.linkedTasks && (
             <p className="text-red-500 text-xs mt-1 flex items-center">
@@ -353,9 +477,12 @@ export default function ProcessMilestoneStepForm({
             min={0}
             disabled={watchedMilestoneType === "linked"}
             {...register("dueDays", {
-              required: watchedMilestoneType !== "linked" ? "Due days offset is required" : false,
+              required:
+                watchedMilestoneType !== "linked"
+                  ? "Due days offset is required"
+                  : false,
             })}
-            className={`w-full h-8 px-3 py-1 border rounded-md text-xs focus:outline-none focus:border-2 focus:border-blue-500 ${
+            className={`w-full !h-8 px-3 py-1 border rounded-md text-xs focus:outline-none focus:border-2 focus:border-blue-500 ${
               watchedMilestoneType === "linked"
                 ? "border-gray-300 bg-gray-100 text-gray-500 cursor-not-allowed"
                 : "border-gray-300"
@@ -380,7 +507,7 @@ export default function ProcessMilestoneStepForm({
 
         {/* Assignee */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-1">
+          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
             Assigned To <span className="text-red-500">*</span>
           </label>
           <Controller
@@ -412,7 +539,7 @@ export default function ProcessMilestoneStepForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Priority */}
         <div>
-          <label className="block text-sm font-medium text-gray-900 mb-1">
+          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
             Priority
           </label>
           <Controller
@@ -425,7 +552,7 @@ export default function ProcessMilestoneStepForm({
                 menuPlacement="auto"
                 className="react-select-container text-xs"
                 classNamePrefix="react-select"
-                styles={selectStyles}
+                styles={singleSelectStyles}
                 placeholder="Select priority..."
               />
             )}
@@ -433,9 +560,9 @@ export default function ProcessMilestoneStepForm({
         </div>
 
         {/* Collaborators */}
-        <div>
-          <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center gap-1">
-            <Users className="w-4 h-4 text-gray-500" />
+        <div className="flex flex-col">
+          <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+            <Users className="w-3.5 h-3.5 text-indigo-600" />
             Collaborators
           </label>
           <Controller
@@ -446,46 +573,19 @@ export default function ProcessMilestoneStepForm({
                 {...field}
                 isMulti
                 menuPlacement="auto"
-                options={collaboratorsList}
-                isLoading={isCollaboratorsLoading}
+                options={filteredCollaboratorsList}
                 className="react-select-container text-xs"
                 classNamePrefix="react-select"
                 styles={selectStyles}
-                placeholder={
-                  isCollaboratorsLoading
-                    ? "Loading collaborators..."
-                    : "Select collaborators..."
-                }
+                placeholder="Select collaborators..."
               />
             )}
           />
-        </div>
-      </div>
-
-      {/* Visibility */}
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1">
-          Visibility <span className="text-red-500">*</span>
-        </label>
-        <div className="flex items-center gap-6 mt-1">
-          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-            <input
-              type="radio"
-              value="private"
-              {...register("visibility")}
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-            />
-            Private
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-            <input
-              type="radio"
-              value="team"
-              {...register("visibility")}
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-            />
-            Team
-          </label>
+          <p className="text-[11px] text-gray-500 mt-1 flex items-center gap-1">
+            <Info className="w-3 h-3 text-indigo-500 shrink-0" />
+            Note: The task owner (assignee) is automatically excluded from the
+            collaborators list.
+          </p>
         </div>
       </div>
 
