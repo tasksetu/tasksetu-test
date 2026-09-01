@@ -365,7 +365,7 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
       if (successCount > 0 && errorCount === 0) {
         toast({
           title: "Invitations Sent Successfully!",
-          description: `${successCount} user${
+             description: `${successCount} user${
             successCount > 1 ? "s have" : " has"
           } been invited to your organization.`,
           variant: "default",
