@@ -90,7 +90,7 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
 
   // Count how many users in the current form are "free" (EXPLORE or no license)
   const freeUsersInBatch = users.filter(
-    (u) => !u.licenseId || u.licenseId === "EXPLORE"
+    (u) => !u.licenseId || u.licenseId === "EXPLORE",
   ).length;
 
   const freeQuotaExceeded =
@@ -219,7 +219,7 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
   const roleOptions = [
     { value: "employee", label: "Employee" },
     { value: "manager", label: "Manager" },
-    { value: "org_admin", label: "Company Admin" },
+    { value: "org_admin", label: "Org Admin" },
   ];
   // Reset form when modal opens
   useEffect(() => {
@@ -365,7 +365,7 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
       if (successCount > 0 && errorCount === 0) {
         toast({
           title: "Invitations Sent Successfully!",
-             description: `${successCount} user${
+          description: `${successCount} user${
             successCount > 1 ? "s have" : " has"
           } been invited to your organization.`,
           variant: "default",
@@ -534,7 +534,7 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
 
       // Client-side free quota guard (server also enforces this)
       const freeInBatch = inviteData.filter(
-        (inv) => !inv.licenseId || inv.licenseId === "EXPLORE"
+        (inv) => !inv.licenseId || inv.licenseId === "EXPLORE",
       ).length;
 
       if (
@@ -542,7 +542,10 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
         freeInBatch > 0 &&
         freeQuotaData.used + freeInBatch > freeQuotaData.entitled
       ) {
-        const remaining = Math.max(0, freeQuotaData.entitled - freeQuotaData.used);
+        const remaining = Math.max(
+          0,
+          freeQuotaData.entitled - freeQuotaData.used,
+        );
         toast({
           title: "Free User Limit Reached",
           description:
@@ -835,8 +838,8 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
               freeQuotaExceeded
                 ? "border-red-200 bg-red-50 text-red-800"
                 : freeUsersRemaining === 0
-                ? "border-amber-200 bg-amber-50 text-amber-800"
-                : "border-blue-100 bg-blue-50 text-blue-800"
+                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : "border-blue-100 bg-blue-50 text-blue-800"
             }`}
           >
             <div className="flex items-center gap-2">
@@ -846,8 +849,8 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
                 <ShieldCheck className="h-4 w-4 shrink-0 text-blue-500" />
               )}
               <span>
-                <strong>Free Users (Explore):</strong>{" "}
-                {freeQuotaData.used} used &nbsp;/&nbsp; {freeQuotaData.entitled} allowed
+                <strong>Free Users (Explore):</strong> {freeQuotaData.used} used
+                &nbsp;/&nbsp; {freeQuotaData.entitled} allowed
                 {/* {freeUsersInBatch > 0 && (
                   <span className="ml-2 font-medium">
                     ({freeUsersInBatch} in this batch)
@@ -857,7 +860,9 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
             </div>
             <div className="flex items-center gap-3 shrink-0">
               {freeQuotaExceeded ? (
-                <span className="font-semibold text-red-600">Limit exceeded</span>
+                <span className="font-semibold text-red-600">
+                  Limit exceeded
+                </span>
               ) : (
                 <span>
                   <strong>{freeUsersRemaining}</strong> remaining
@@ -871,15 +876,15 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
                       i < freeQuotaData.used
                         ? "bg-blue-500"
                         : i < freeQuotaData.used + freeUsersInBatch
-                        ? "bg-amber-400"
-                        : "bg-gray-200"
+                          ? "bg-amber-400"
+                          : "bg-gray-200"
                     }`}
                   />
                 ))}
               </div>
             </div>
           </div>
-        )} 
+        )}
 
         {/* Quota exceeded inline alert */}
         {freeQuotaExceeded && (
@@ -888,15 +893,16 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
             <div>
               <p className="font-semibold">Free user limit reached</p>
               <p className="mt-0.5">
-                Assign a paid license (PLAN / EXECUTE / OPTIMIZE) to
-                the extra users, or{" "}
+                Assign a paid license (PLAN / EXECUTE / OPTIMIZE) to the extra
+                users, or{" "}
                 <button
                   type="button"
                   className="font-semibold underline hover:no-underline"
                   onClick={onClose}
                 >
                   upgrade your plan
-                </button>.
+                </button>
+                .
               </p>
             </div>
           </div>

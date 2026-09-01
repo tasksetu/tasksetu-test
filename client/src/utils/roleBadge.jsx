@@ -1,7 +1,7 @@
 
 import { Badge } from "@/components/ui/badge";
 export const roleLabels = {
-  org_admin: "Organization Admin",
+  org_admin: "Org Admin",
   manager: "Manager",
   employee: "Employee",
 };

@@ -979,8 +979,8 @@ export default function EditProfile() {
 
   const getRoleDisplayName = (role) => {
     const names = {
-      org_admin: "Organization Admin",
-      admin: "Company Admin",
+      org_admin: "Org Admin",
+      admin: "Org Admin",
       manager: "Manager",
       employee: "Employee",
       individual: "Individual",

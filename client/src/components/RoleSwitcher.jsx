@@ -86,7 +86,7 @@ export const getRoleDisplayName = (role) => {
     case "org_admin":
     case "admin":
     case "company_admin":
-      return "Organization Admin";
+      return "Org Admin";
     case "manager":
       return "Manager";
     case "employee":

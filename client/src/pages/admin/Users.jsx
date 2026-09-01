@@ -451,7 +451,7 @@ export default function Users() {
   const safe = (val) =>
     val === null || val === undefined || val === "" ? "-" : val;
   const roleLabels = {
-    org_admin: "Organization Admin",
+    org_admin: "Org Admin",
     manager: "Manager",
     employee: "Employee",
   };
@@ -630,9 +630,13 @@ export default function Users() {
 
   const getRoleIcon = (role) => {
     switch (role) {
+      case "Org Admin":
+      case "Organization Admin":
       case "Company Admin":
+      case "org_admin":
         return <Crown className="h-4 w-4 text-purple-600" />;
       case "Manager":
+      case "manager":
         return <Shield className="h-4 w-4 text-blue-600" />;
       default:
         return <User className="h-4 w-4 text-gray-600" />;
@@ -672,12 +676,11 @@ export default function Users() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-        <h1 className="text-2xl font-normal m-0"
-                style={{ color: "#676a6c" }}>
+          <h1 className="text-2xl font-normal m-0" style={{ color: "#676a6c" }}>
             {/* <UsersIcon className="h-8 w-8 text-blue-600" /> */}
             User Management
           </h1>
-           <p className="mt-0 text-sm text-blue-600">
+          <p className="mt-0 text-sm text-blue-600">
             Manage all users within your organization&apos;s Tasksetu account
           </p>
         </div>
@@ -708,8 +711,8 @@ export default function Users() {
             freeQuotaData.used > freeQuotaData.entitled
               ? "border-red-200 bg-red-50 text-red-800"
               : freeQuotaData.remaining === 0
-              ? "border-amber-200 bg-amber-50 text-amber-800"
-              : "border-blue-100 bg-blue-50 text-blue-800"
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-blue-100 bg-blue-50 text-blue-800"
           }`}
         >
           <div className="flex items-center gap-2">
@@ -719,11 +722,13 @@ export default function Users() {
               <ShieldCheck className="h-4 w-4 shrink-0 text-blue-500" />
             )}
             <span>
-              <strong>Free Users (Explore):</strong>{" "}
-              {freeQuotaData.used} used &nbsp;/&nbsp; {freeQuotaData.entitled} allowed
+              <strong>Free Users (Explore):</strong> {freeQuotaData.used} used
+              &nbsp;/&nbsp; {freeQuotaData.entitled} allowed
               {freeQuotaData.used > freeQuotaData.entitled && (
                 <span className="ml-2 font-medium text-red-600">
-                  (Please deactivate {freeQuotaData.used - freeQuotaData.entitled} free user(s) below to restore access)
+                  (Please deactivate{" "}
+                  {freeQuotaData.used - freeQuotaData.entitled} free user(s)
+                  below to restore access)
                 </span>
               )}
             </span>
@@ -741,9 +746,7 @@ export default function Users() {
                 <div
                   key={i}
                   className={`h-2 w-2 rounded-full ${
-                    i < freeQuotaData.used
-                      ? "bg-blue-500"
-                      : "bg-gray-200"
+                    i < freeQuotaData.used ? "bg-blue-500" : "bg-gray-200"
                   }`}
                 />
               ))}
@@ -781,12 +784,12 @@ export default function Users() {
         </CardHeader>
         <CardContent>
           {loadingLicensePool ? (
-             <div className="flex items-center justify-center py-8">
-          <div className="flex flex-col items-center gap-3">
-            <Loader className="w-8 h-8 animate-spin text-blue-600" />
-            <p className="text-lg text-gray-600">Loading license pool...</p>
-          </div>
-        </div>
+            <div className="flex items-center justify-center py-8">
+              <div className="flex flex-col items-center gap-3">
+                <Loader className="w-8 h-8 animate-spin text-blue-600" />
+                <p className="text-lg text-gray-600">Loading license pool...</p>
+              </div>
+            </div>
           ) : licensePool.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Shield className="h-12 w-12 mx-auto mb-2 text-gray-300" />
@@ -850,14 +853,10 @@ export default function Users() {
 
                     {/* Expired Licenses Card */}
                     <div className="p-4 rounded-md border-2 transition-all bg-red-50 border-red-200 hover:shadow-sm">
-                      <div className="text-sm text-gray-600 mb-2">
-                        Expired
-                      </div>
+                      <div className="text-sm text-gray-600 mb-2">Expired</div>
                       <div
                         className={`font-bold text-3xl ${
-                          license.expired > 0
-                            ? "text-red-600"
-                            : "text-gray-400"
+                          license.expired > 0 ? "text-red-600" : "text-gray-400"
                         }`}
                       >
                         {license.expired || 0}
@@ -1039,9 +1038,17 @@ export default function Users() {
                     <TableCell>
                       {(() => {
                         const licenseCode =
-                          (user.license_code && user.license_code !== "No license" ? user.license_code : null) ||
-                          (user.license_instance_id?.license_code && user.license_instance_id.license_code !== "No license" ? user.license_instance_id.license_code : null) ||
-                          (user.licenseId && user.licenseId !== "No license" ? user.licenseId : null) ||
+                          (user.license_code &&
+                          user.license_code !== "No license"
+                            ? user.license_code
+                            : null) ||
+                          (user.license_instance_id?.license_code &&
+                          user.license_instance_id.license_code !== "No license"
+                            ? user.license_instance_id.license_code
+                            : null) ||
+                          (user.licenseId && user.licenseId !== "No license"
+                            ? user.licenseId
+                            : null) ||
                           "EXPLORE";
                         const licenseStyles = {
                           EXPLORE: "bg-gray-100 text-gray-700 border-gray-200",
@@ -1161,7 +1168,9 @@ export default function Users() {
                               currentUser?.role?.includes("org_admin");
 
                             // Primary Admin or Org Admin can manage licenses (including themselves)
-                            return isCurrentUserPrimaryAdmin || isCurrentUserOrgAdmin;
+                            return (
+                              isCurrentUserPrimaryAdmin || isCurrentUserOrgAdmin
+                            );
                           })() && (
                             <DropdownMenuItem
                               onClick={() => {
@@ -1180,7 +1189,6 @@ export default function Users() {
                           {/* Keep other actions hidden for primary admin */}
                           {!user.isPrimaryAdmin && (
                             <>
-
                               {/* Password Reset */}
                               <DropdownMenuItem
                                 onClick={() => {

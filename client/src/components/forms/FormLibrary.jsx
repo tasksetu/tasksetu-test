@@ -139,7 +139,7 @@ const FormLibrary = () => {
     OWNER: "Owner",
     EDITOR: "Editor",
     VIEWER: "Viewer",
-    ORG_ADMIN: "Company Admin",
+    ORG_ADMIN: "Org Admin",
     SUPER_ADMIN: "Platform Admin",
   };
 

@@ -28,7 +28,7 @@ export default function ProfileWidget({ variant = "card" }) {
   const getRoleDisplayName = (role) => {
     const roleMap = {
       'superadmin': 'Super Admin',
-      'org_admin': 'Organization Admin',
+      'org_admin': 'Org Admin',
       'admin': 'Admin',
       'employee': 'Employee',
       'member': 'Member',
