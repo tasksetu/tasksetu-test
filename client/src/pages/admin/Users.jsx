@@ -486,13 +486,6 @@ export default function Users() {
       fetchLicensePool();
       fetchFreeQuota();
       queryClient.invalidateQueries(["users"]);
-
-      toast({
-        title: "User Added Successfully!",
-        description: `New users have been invited to your organization. License pool updated.`,
-        variant: "default",
-        duration: 5000,
-      });
     } catch (error) {
       showErrorToast(error.message || "An unexpected error occurred");
     }

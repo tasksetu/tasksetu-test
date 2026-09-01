@@ -26,7 +26,6 @@ import {
   User,
   Building2,
   MapPin,
-  Phone,
   Briefcase,
   Plus,
   Trash2,
@@ -49,7 +48,6 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
       department: "",
       designation: "",
       location: "",
-      phone: "",
       sendInvitationEmail: true,
     },
   ]);
@@ -239,7 +237,6 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
           department: "",
           designation: "",
           location: "",
-          phone: "",
           sendInvitationEmail: true,
         },
       ]);
@@ -292,7 +289,6 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
         department: "",
         designation: "",
         location: "",
-        phone: "",
         sendInvitationEmail: true,
       },
     ]);
@@ -533,7 +529,6 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
         department: user.department?.trim() || null,
         designation: user.designation?.trim() || null,
         location: user.location?.trim() || null,
-        phone: user.phone?.trim() || null,
         sendEmail: user.sendInvitationEmail,
       }));
 
@@ -780,7 +775,7 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
         </div>
 
         {/* Location */}
-        <div>
+        <div className="md:col-span-2">
           <Label
             htmlFor={`location_${user.id}`}
             className="block text-sm font-medium text-gray-700 mb-1"
@@ -795,24 +790,6 @@ export function AddUserModal({ isOpen, onClose, onUserAdded }) {
             onChange={(e) =>
               handleUserChange(user.id, "location", e.target.value)
             }
-            className="h-9"
-          />
-        </div>
-
-        {/* Phone */}
-        <div>
-          <Label
-            htmlFor={`phone_${user.id}`}
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
-            Phone Number
-          </Label>
-          <Input
-            id={`phone_${user.id}`}
-            type="tel"
-            placeholder="Enter phone number"
-            value={user.phone}
-            onChange={(e) => handleUserChange(user.id, "phone", e.target.value)}
             className="h-9"
           />
         </div>
