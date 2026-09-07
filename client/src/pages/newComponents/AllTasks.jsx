@@ -22,6 +22,7 @@ import {
   canEditTaskStatus,
   canMarkAsCompleted,
   canDeleteTask,
+  canEditTaskTitle,
   applyFiltering,
 } from "../../utils/taskHelpers";
 import { Loader, ClipboardList, Plus } from "lucide-react";
@@ -697,7 +698,11 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
 
   // Inline title editing
   const handleTaskTitleClick = (task) => {
-    setEditingTaskId(task.id);
+    if (!canEditTaskTitle(task, currentUser)) {
+      handleNavigateToTask(task.id || task._id);
+      return;
+    }
+    setEditingTaskId(task.id || task._id);
     setEditingTitle(task.title);
   };
 
@@ -758,6 +763,10 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
 
   // Inline subtask title editing
   const handleSubtaskTitleClick = (subtask, parentTaskId) => {
+    if (!canEditTaskTitle(subtask, currentUser)) {
+      handleNavigateToTask(parentTaskId || subtask.parentTaskId || subtask._id || subtask.id);
+      return;
+    }
     setEditingSubtaskId(subtask._id || subtask.id);
     setEditingSubtaskTitle(subtask.title);
   };

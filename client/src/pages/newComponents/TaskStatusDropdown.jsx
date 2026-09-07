@@ -38,11 +38,18 @@ export default function TaskStatusDropdown({
     }
 
     // If a parent handler is provided, let it handle the API call and logic
-    // This prevents double API calls when used in AllTasks.jsx which has its own mutation
     if (onStatusChange) {
       console.log(`TaskStatusDropdown: Forwarding status change to parent handler for task ${taskId}`);
-      onStatusChange(newStatusCode);
-      return true;
+      setIsUpdating(true);
+      try {
+        await onStatusChange(newStatusCode);
+        return true;
+      } catch (err) {
+        console.error("TaskStatusDropdown parent status change error:", err);
+        return false;
+      } finally {
+        setIsUpdating(false);
+      }
     }
 
     setIsUpdating(true);
@@ -127,23 +134,53 @@ export default function TaskStatusDropdown({
   };
 
   // Enhanced status matching with fallbacks
+  const normStatus = (str) =>
+    String(str || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+
+  // Enhanced status matching with fallbacks
   let currentStatusObj = statuses.find(
-    (s) => s.code === currentStatus && s.active,
+    (s) => s.code === currentStatus && s.active !== false,
   );
 
-  // Fallback: try case-insensitive matching
+  // Fallback 1: Normalized code matching (handles IN_PROGRESS vs in_progress vs inprogress)
   if (!currentStatusObj && currentStatus) {
     currentStatusObj = statuses.find(
-      (s) => s.code.toLowerCase() === currentStatus.toLowerCase() && s.active,
+      (s) => normStatus(s.code) === normStatus(currentStatus) && s.active !== false,
     );
   }
 
-  // Fallback: try label matching
+  // Fallback 2: Normalized label matching (handles "In Progress" vs "IN_PROGRESS")
   if (!currentStatusObj && currentStatus) {
     currentStatusObj = statuses.find(
-      (s) => s.label.toLowerCase() === currentStatus.toLowerCase() && s.active,
+      (s) => normStatus(s.label) === normStatus(currentStatus) && s.active !== false,
     );
   }
+
+  const isNormInProgress = normStatus(currentStatus) === "inprogress";
+  const isNormDone = normStatus(currentStatus) === "done" || normStatus(currentStatus) === "completed";
+  const isNormOpen = normStatus(currentStatus) === "open";
+
+  const displayLabel = currentStatusObj?.label || (
+    isNormInProgress
+      ? "In Progress"
+      : isNormDone
+        ? "Completed"
+        : isNormOpen
+          ? "Open"
+          : currentStatus
+  );
+
+  const displayColor = currentStatusObj?.color || (
+    isNormInProgress
+      ? "#3b82f6"
+      : isNormDone
+        ? "#16a34a"
+        : isNormOpen
+          ? "#6c757d"
+          : "#6c757d"
+  );
 
   // Comprehensive debug logging
   useEffect(() => {
@@ -168,18 +205,14 @@ export default function TaskStatusDropdown({
     }
   }, [currentStatus, statuses, currentStatusObj, task?.title]);
 
-  const badgeStyle = currentStatusObj
-    ? {
-      backgroundColor: currentStatusObj.color,
-      color: "white",
-      border: `2px solid ${currentStatusObj.color}`,
-      boxShadow: `0 0 0 1px ${currentStatusObj.color}20`
-    }
-    : {
-      backgroundColor: "#6c757d", // Default gray color when status not found
-      color: "white",
-      border: "2px solid #6c757d"
-    };  // Calculate valid transitions when dropdown opens
+  const badgeStyle = {
+    backgroundColor: displayColor,
+    color: "white",
+    border: `2px solid ${displayColor}`,
+    boxShadow: `0 0 0 1px ${displayColor}20`
+  };
+
+  // Calculate valid transitions when dropdown opens
   useEffect(() => {
     if (isOpen && currentStatusObj) {
       // ✅ Fixed: Use allowedTransitions if it's an array (even if empty)
@@ -316,24 +349,53 @@ const baseWidth = 176;
   }
 
   return (
-    <div className="relative">
+    <div className="relative inline-flex items-center">
       <Button
         ref={buttonRef}
         variant="ghost"
-        className="inline-flex h-6 items-center px-2.5 py-0 text-xs font-medium hover:opacity-80 transition-opacity rounded-md"
+        disabled={isUpdating}
+        className="inline-flex h-6 items-center px-2.5 py-0 text-xs font-medium hover:opacity-80 transition-opacity rounded-md disabled:opacity-90 disabled:cursor-wait"
         style={badgeStyle}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => !isUpdating && setIsOpen(!isOpen)}
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
       >
-        {currentStatusObj?.label || currentStatus}
-        <svg className="ml-1 w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-          <path
-            fillRule="evenodd"
-            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-            clipRule="evenodd"
-          />
-        </svg>
+        {isUpdating ? (
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <svg
+              className="animate-spin h-3 w-3 text-white"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+            <span>Updating...</span>
+          </span>
+        ) : (
+          <>
+            {currentStatusObj?.label || currentStatus}
+            <svg className="ml-1 w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                fillRule="evenodd"
+                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </>
+        )}
       </Button>
 
       {/* Status tooltip */}

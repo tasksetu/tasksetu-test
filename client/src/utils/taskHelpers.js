@@ -90,6 +90,75 @@ export const canDeleteTask = (task, currentUser) => {
   );
 };
 
+export const canEditTaskTitle = (task, currentUser) => {
+  if (!task) return false;
+
+  // 1. Lock check: If status is CANCELLED, REJECTED, TERMINATED, DONE, or COMPLETED, NO ONE can edit title
+  const rawStatus = String(task.status || "").toUpperCase().replace(/[^A-Z]/g, "");
+  const rawAppStatus = String(task.approvalStatus || "").toUpperCase().replace(/[^A-Z]/g, "");
+
+  const lockedStatuses = [
+    "CANCELLED",
+    "CANCELED",
+    "REJECTED",
+    "TERMINATED",
+    "DONE",
+    "COMPLETED",
+  ];
+
+  if (lockedStatuses.includes(rawStatus) || lockedStatuses.includes(rawAppStatus)) {
+    return false;
+  }
+
+  let user = currentUser;
+  if (!user || (!user.id && !user._id && !user.email)) {
+    try {
+      user = JSON.parse(localStorage.getItem("user") || "{}");
+    } catch (e) {
+      user = null;
+    }
+  }
+
+  if (!user) return false;
+
+  // 2. Admin / Super Admin override (if not locked by status)
+  const userRoles = Array.isArray(user.role)
+    ? user.role
+    : Array.isArray(user.roles)
+    ? user.roles
+    : [user.role || user.roles || "employee"];
+
+  const isAdmin = userRoles.some((r) =>
+    ["super_admin", "super-admin", "org_admin", "admin", "company-admin", "tasksetu-admin"].includes(
+      String(r).toLowerCase()
+    )
+  );
+
+  if (isAdmin) return true;
+
+  // 3. Assignee Check: User must be the assignee of the task/subtask
+  const currentUserId = String(user.id || user._id || "");
+  const currentUserEmail = String(user.email || "").toLowerCase();
+  const currentUserName = `${user.firstName || ""} ${user.lastName || ""}`
+    .trim()
+    .toLowerCase() || String(user.name || "").toLowerCase();
+
+  const assignedToId = String(
+    task.assignedTo?._id || task.assignedTo?.id || task.assignedTo || task.assigneeId || ""
+  );
+  const assignedToEmail = String(task.assignedTo?.email || "").toLowerCase();
+  const assigneeName = (
+    typeof task.assignee === "string" ? task.assignee : task.assignee?.name || ""
+  ).toLowerCase();
+
+  const isAssignee =
+    (currentUserId && assignedToId && currentUserId === assignedToId) ||
+    (currentUserEmail && assignedToEmail && currentUserEmail === assignedToEmail) ||
+    (currentUserName && assigneeName && (assigneeName.includes(currentUserName) || currentUserName.includes(assigneeName)));
+
+  return Boolean(isAssignee);
+};
+
 export const applyFiltering = (tasks, filters) => {
   const {
     searchTerm,

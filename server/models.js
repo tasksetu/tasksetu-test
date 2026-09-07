@@ -491,6 +491,34 @@ const taskSchema = new mongoose.Schema(
     autoApproveEnabled: { type: Boolean, default: false },
     autoApproveAfter: { type: Date }, // Date when auto-approval should trigger
 
+    // Approval Cycles Audit Log (specifically for approval tasks & approval subtasks)
+    currentCycle: {
+      type: Number,
+      default: 1,
+    },
+    approvalCycles: [
+      {
+        cycleNumber: { type: Number, required: true },
+        status: { type: String, enum: ["approved", "rejected", "in_progress"], default: "in_progress" },
+        actionTaken: { type: String, enum: ["approved", "terminate_process", "reinitiate_context_step"] },
+        rejectionReason: { type: String, default: "" },
+        reinitiatedSubtaskId: { type: mongoose.Schema.Types.ObjectId, ref: "Task", default: null },
+        reinitiatedSubtaskTitle: { type: String, default: "" },
+        decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        decidedByName: { type: String, default: "" },
+        decidedAt: { type: Date, default: Date.now },
+        decisions: [
+          {
+            approverId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+            approverName: { type: String },
+            decision: { type: String, enum: ["approve", "reject"] },
+            comment: { type: String },
+            decidedAt: { type: Date, default: Date.now },
+          },
+        ],
+      },
+    ],
+
     // Snooze Task Fields
     isSnooze: { type: Boolean, default: false },
     snoozeUntil: { type: Date, default: null },

@@ -178,75 +178,89 @@ userFeatureUsageSchema.statics.consumeUsage = async function (
     const periodKey = this.getPeriodKey(limitType);
     const featureCodeUpper = featureCode.toUpperCase();
 
-
     const query = {
         user_id: userId,
         feature_code: featureCodeUpper,
         period_key: periodKey,
     };
 
-    // Check if there's an existing record with current period_key
-    const existingRecord = session
-        ? await this.findOne(query).session(session)
-        : await this.findOne(query);
+    let attempts = 0;
+    const maxAttempts = 5;
 
-    const currentPeriodUsage = existingRecord?.used_count || 0;
+    while (attempts < maxAttempts) {
+        attempts++;
+        try {
+            // Check if there's an existing record with current period_key
+            const existingRecord = session
+                ? await this.findOne(query).session(session)
+                : await this.findOne(query);
 
-    // ✅ FIX: ALWAYS check ALL period_keys to find the maximum usage
-    // This ensures we're incrementing from the highest usage value
-    // regardless of which period_key it's stored in
-    let maxUsageAcrossPeriods = currentPeriodUsage;
+            const currentPeriodUsage = existingRecord?.used_count || 0;
 
-    // Check TOTAL period_key (for usage from unlimited license)
-    if (periodKey !== 'TOTAL') {
-        const totalRecord = session
-            ? await this.findOne({ user_id: userId, feature_code: featureCodeUpper, period_key: 'TOTAL' }).session(session)
-            : await this.findOne({ user_id: userId, feature_code: featureCodeUpper, period_key: 'TOTAL' });
+            // ✅ FIX: ALWAYS check ALL period_keys to find the maximum usage
+            let maxUsageAcrossPeriods = currentPeriodUsage;
 
-        if (totalRecord && totalRecord.used_count > maxUsageAcrossPeriods) {
-            maxUsageAcrossPeriods = totalRecord.used_count;
+            // Check TOTAL period_key
+            if (periodKey !== 'TOTAL') {
+                const totalRecord = session
+                    ? await this.findOne({ user_id: userId, feature_code: featureCodeUpper, period_key: 'TOTAL' }).session(session)
+                    : await this.findOne({ user_id: userId, feature_code: featureCodeUpper, period_key: 'TOTAL' });
+
+                if (totalRecord && totalRecord.used_count > maxUsageAcrossPeriods) {
+                    maxUsageAcrossPeriods = totalRecord.used_count;
+                }
+            }
+
+            // Check current MONTHLY period_key
+            const monthlyPeriodKey = this.getPeriodKey('MONTHLY');
+            if (periodKey !== monthlyPeriodKey) {
+                const monthlyRecord = session
+                    ? await this.findOne({ user_id: userId, feature_code: featureCodeUpper, period_key: monthlyPeriodKey }).session(session)
+                    : await this.findOne({ user_id: userId, feature_code: featureCodeUpper, period_key: monthlyPeriodKey });
+
+                if (monthlyRecord && monthlyRecord.used_count > maxUsageAcrossPeriods) {
+                    maxUsageAcrossPeriods = monthlyRecord.used_count;
+                }
+            }
+
+            // Calculate the new usage value
+            const newUsageValue = maxUsageAcrossPeriods + amount;
+
+            const update = {
+                $set: {
+                    used_count: newUsageValue,
+                    last_used_at: new Date(),
+                    limit_type: limitType,
+                },
+                $setOnInsert: {
+                    user_id: userId,
+                    feature_code: featureCodeUpper,
+                    period_key: periodKey,
+                },
+            };
+
+            const options = {
+                upsert: true,
+                new: true,
+                ...(session && { session }),
+            };
+
+            const result = await this.findOneAndUpdate(query, update, options);
+            return result;
+        } catch (err) {
+            const isWriteConflict =
+                err?.code === 112 ||
+                err?.codeName === 'WriteConflict' ||
+                err?.message?.includes('Write conflict') ||
+                err?.errorLabels?.includes('TransientTransactionError');
+
+            if (isWriteConflict && attempts < maxAttempts) {
+                await new Promise((res) => setTimeout(res, 50 * attempts));
+                continue;
+            }
+            throw err;
         }
     }
-
-    // Check current MONTHLY period_key (for usage from limited license)
-    const monthlyPeriodKey = this.getPeriodKey('MONTHLY');
-    if (periodKey !== monthlyPeriodKey) {
-        const monthlyRecord = session
-            ? await this.findOne({ user_id: userId, feature_code: featureCodeUpper, period_key: monthlyPeriodKey }).session(session)
-            : await this.findOne({ user_id: userId, feature_code: featureCodeUpper, period_key: monthlyPeriodKey });
-
-        if (monthlyRecord && monthlyRecord.used_count > maxUsageAcrossPeriods) {
-            maxUsageAcrossPeriods = monthlyRecord.used_count;
-        }
-    }
-
-    // Calculate the new usage value
-    const newUsageValue = maxUsageAcrossPeriods + amount;
-
-    // Use findOneAndUpdate with upsert for atomic operation
-    // Always use $set with the calculated value to ensure consistency
-    const update = {
-        $set: {
-            used_count: newUsageValue,
-            last_used_at: new Date(),
-            limit_type: limitType,
-        },
-        $setOnInsert: {
-            user_id: userId,
-            feature_code: featureCodeUpper,
-            period_key: periodKey,
-        },
-    };
-
-    const options = {
-        upsert: true,
-        new: true,
-        ...(session && { session }),
-    };
-
-    const result = await this.findOneAndUpdate(query, update, options);
-
-    return result;
 };
 
 /**

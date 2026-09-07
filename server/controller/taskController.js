@@ -113,10 +113,15 @@ export const recalculateParentTaskStatusAndProgress = async (
     const openCount = allSubtasks.filter(
       (st) => st.status === "OPEN" && !st.approvalStatus,
     ).length;
+    const cancelledCount = allSubtasks.filter(
+      (st) => st.status === "CANCELLED" || st.approvalStatus === "rejected",
+    ).length;
 
     let newParentStatus = parentTask.status;
 
-    if (doneCount === allSubtasks.length) {
+    if (parentTask.status === "CANCELLED" || (cancelledCount > 0 && doneCount + cancelledCount === allSubtasks.length)) {
+      newParentStatus = "CANCELLED";
+    } else if (doneCount === allSubtasks.length) {
       newParentStatus = "DONE";
     } else if (openCount === allSubtasks.length) {
       newParentStatus = "OPEN";
@@ -202,7 +207,182 @@ const STATUS_COLOR_MAP = {
   approval: "#F59E0B", // Amber/Yellow
 };
 
-// Default organization status seed (used when org has no TaskStatusConfig yet)
+/**
+ * 👥 Helper to fetch manager subordinate user IDs (via subordinates array and managerId ref)
+ */
+export const getManagerSubordinateIds = async (userId, organizationId) => {
+  try {
+    if (!userId) return [];
+    const managerUser = await User.findById(userId).select("subordinates").lean();
+    let subordinateIds = (managerUser?.subordinates || []).map((id) => id.toString());
+
+    const directReports = await User.find({
+      managerId: userId,
+      status: "active",
+    })
+      .select("_id")
+      .lean();
+
+    const directReportIds = directReports.map((u) => u._id.toString());
+    const combinedSet = new Set([...subordinateIds, ...directReportIds]);
+
+    return Array.from(combinedSet);
+  } catch (error) {
+    console.error("Error fetching manager subordinates:", error);
+    return [];
+  }
+};
+
+/**
+ * 🔒 Check if a user has visibility/access to a single task or subtask
+ */
+export const checkTaskOrSubtaskVisibility = (
+  taskOrSubtask,
+  user,
+  subordinateIds = [],
+  userRoles = [],
+  activeRole = null
+) => {
+  if (!taskOrSubtask || !user) return false;
+
+  const currentUserId = (user.id || user._id || user.userId)?.toString();
+  if (!currentUserId) return false;
+
+  const roles =
+    Array.isArray(userRoles) && userRoles.length > 0
+      ? userRoles
+      : Array.isArray(user.role)
+        ? user.role
+        : [user.role || "employee"];
+
+  const isOrgAdmin =
+    roles.includes("org_admin") ||
+    roles.includes("super_admin") ||
+    roles.includes("super-admin") ||
+    roles.includes("company-admin") ||
+    roles.includes("tasksetu-admin");
+
+  if (
+    isOrgAdmin &&
+    (!activeRole || activeRole === "org_admin" || activeRole === "super_admin")
+  ) {
+    return true;
+  }
+
+  const isManager = roles.includes("manager");
+
+  // Extract Assignee ID
+  const assignedTo = taskOrSubtask.assignedTo;
+  const assignedToId =
+    assignedTo?._id?.toString() ||
+    assignedTo?.id?.toString() ||
+    (typeof assignedTo === "string" ? assignedTo : null);
+
+  // Extract Creator ID
+  const createdBy = taskOrSubtask.createdBy;
+  const createdById =
+    createdBy?._id?.toString() ||
+    createdBy?.id?.toString() ||
+    (typeof createdBy === "string" ? createdBy : null);
+
+  // Direct assignment
+  if (assignedToId === currentUserId) return true;
+  // Direct creation
+  if (createdById === currentUserId) return true;
+
+  // Multi-assignees
+  if (Array.isArray(taskOrSubtask.assignees)) {
+    const isMultiAssignee = taskOrSubtask.assignees.some((a) => {
+      const aId =
+        a?._id?.toString() ||
+        a?.id?.toString() ||
+        (typeof a === "string" ? a : null);
+      return aId === currentUserId;
+    });
+    if (isMultiAssignee) return true;
+  }
+
+  // Collaborators
+  if (Array.isArray(taskOrSubtask.collaborators)) {
+    const isCollab = taskOrSubtask.collaborators.some((c) => {
+      const cId =
+        c?._id?.toString() ||
+        c?.id?.toString() ||
+        (typeof c === "string" ? c : null);
+      return cId === currentUserId;
+    });
+    if (isCollab) return true;
+  }
+
+  // Approvers
+  if (Array.isArray(taskOrSubtask.approvers)) {
+    const isApp = taskOrSubtask.approvers.some((ap) => {
+      const apId =
+        ap?._id?.toString() ||
+        ap?.id?.toString() ||
+        (typeof ap === "string" ? ap : null);
+      return apId === currentUserId;
+    });
+    if (isApp) return true;
+  }
+
+  // Contributors
+  if (Array.isArray(taskOrSubtask.contributors)) {
+    const isContrib = taskOrSubtask.contributors.some((cb) => {
+      const cbId =
+        cb?._id?.toString() ||
+        cb?.id?.toString() ||
+        (typeof cb === "string" ? cb : null);
+      return cbId === currentUserId;
+    });
+    if (isContrib) return true;
+  }
+
+  // Manager subordinates
+  if (isManager && subordinateIds && subordinateIds.length > 0) {
+    if (assignedToId && subordinateIds.includes(assignedToId)) return true;
+    if (createdById && subordinateIds.includes(createdById)) return true;
+  }
+
+  return false;
+};
+
+/**
+ * 🔒 Filter an array of subtasks to only those visible to the user
+ */
+export const filterVisibleSubtasks = (
+  subtasks,
+  user,
+  subordinateIds = [],
+  userRoles = [],
+  activeRole = null
+) => {
+  if (!Array.isArray(subtasks) || subtasks.length === 0) return [];
+  const roles =
+    Array.isArray(userRoles) && userRoles.length > 0
+      ? userRoles
+      : Array.isArray(user.role)
+        ? user.role
+        : [user.role || "employee"];
+
+  const isOrgAdmin =
+    roles.includes("org_admin") ||
+    roles.includes("super_admin") ||
+    roles.includes("super-admin") ||
+    roles.includes("company-admin") ||
+    roles.includes("tasksetu-admin");
+
+  if (
+    isOrgAdmin &&
+    (!activeRole || activeRole === "org_admin" || activeRole === "super_admin")
+  ) {
+    return subtasks;
+  }
+
+  return subtasks.filter((st) =>
+    checkTaskOrSubtaskVisibility(st, user, subordinateIds, roles, activeRole)
+  );
+};
 // ✅ Lifecycle Flow: OPEN → IN PROGRESS → DONE
 //                          ↘ ON HOLD
 //                          ↘ CANCELLED
@@ -517,6 +697,189 @@ async function createTaskNotification(triggerEvent, task, options = {}) {
     return notification;
   } catch (error) {
     console.error("Error creating task notification:", error);
+  }
+}
+
+// 🔔 Helper: Notify approval task approvers when a re-initiated context step is completed
+async function checkAndNotifyApprovalTaskOnContextStepCompletion(completedSubtask, completerUser) {
+  try {
+    if (!completedSubtask) return;
+    const Task = (await import("../modals/taskModal.js")).default;
+    const subtaskIdStr = (completedSubtask._id || completedSubtask.id)?.toString();
+
+    let rawParentId = completedSubtask.parentTask || completedSubtask.parentTaskId || completedSubtask.parentId;
+    if (typeof rawParentId === "object" && rawParentId !== null) {
+      rawParentId = rawParentId._id || rawParentId.id || rawParentId;
+    }
+    const parentIdStr = rawParentId ? rawParentId.toString() : null;
+
+    if (!parentIdStr) return;
+
+    const parentTaskDoc = await Task.findById(parentIdStr);
+    if (!parentTaskDoc) return;
+
+    let approvalSubtasks = [];
+    if (Array.isArray(parentTaskDoc.subtasks)) {
+      approvalSubtasks = parentTaskDoc.subtasks.filter(
+        (st) => st.isApprovalTask || st.taskType === "approval"
+      );
+    }
+
+    const dbSubtasks = await Task.find({
+      parentTask: parentIdStr,
+      $or: [{ isApprovalTask: true }, { taskType: "approval" }],
+      isDeleted: { $ne: true },
+    });
+
+    const allApprovals = [...approvalSubtasks, ...dbSubtasks];
+    const completerName = completerUser
+      ? `${completerUser.firstName || ""} ${completerUser.lastName || ""}`.trim() || completerUser.email || "Assignee"
+      : "Context Step Assignee";
+
+    for (const appSt of allApprovals) {
+      if (!Array.isArray(appSt.approvalCycles) || appSt.approvalCycles.length === 0) continue;
+
+      const lastCycle = appSt.approvalCycles[appSt.approvalCycles.length - 1];
+      const reinitIdStr = lastCycle?.reinitiatedSubtaskId ? lastCycle.reinitiatedSubtaskId.toString() : null;
+
+      if (
+        lastCycle?.actionTaken === "reinitiate_context_step" &&
+        (!reinitIdStr || reinitIdStr === subtaskIdStr)
+      ) {
+        // ✅ Sync approval subtask document status in DB so approver views show Pending immediately
+        if (appSt._id || appSt.id) {
+          const targetAppId = (appSt._id || appSt.id).toString();
+          const targetAppDoc = await Task.findById(targetAppId);
+          if (targetAppDoc) {
+            if (Array.isArray(targetAppDoc.approvalCycles) && targetAppDoc.approvalCycles.length > 0) {
+              const cycleIndex = targetAppDoc.approvalCycles.length - 1;
+              targetAppDoc.approvalCycles[cycleIndex].isResolved = true;
+              targetAppDoc.approvalCycles[cycleIndex].contextStepCompleted = true;
+              targetAppDoc.approvalCycles[cycleIndex].resolvedAt = new Date();
+            }
+            targetAppDoc.approvalStatus = "pending";
+            targetAppDoc.contextStepCompleted = true;
+            targetAppDoc.markModified("approvalCycles");
+            await targetAppDoc.save();
+          }
+        }
+        if (Array.isArray(parentTaskDoc.subtasks)) {
+          const appIdx = parentTaskDoc.subtasks.findIndex(
+            (st) => (st._id || st.id)?.toString() === (appSt._id || appSt.id)?.toString()
+          );
+          if (appIdx >= 0) {
+            const embeddedApp = parentTaskDoc.subtasks[appIdx];
+            if (Array.isArray(embeddedApp.approvalCycles) && embeddedApp.approvalCycles.length > 0) {
+              const cycleIndex = embeddedApp.approvalCycles.length - 1;
+              embeddedApp.approvalCycles[cycleIndex].isResolved = true;
+              embeddedApp.approvalCycles[cycleIndex].contextStepCompleted = true;
+              embeddedApp.approvalCycles[cycleIndex].resolvedAt = new Date();
+            }
+            embeddedApp.approvalStatus = "pending";
+            embeddedApp.contextStepCompleted = true;
+            parentTaskDoc.markModified("subtasks");
+            await parentTaskDoc.save();
+          }
+        }
+
+        const approverIds = [];
+        if (Array.isArray(appSt.approvers)) {
+          appSt.approvers.forEach((appr) => {
+            const apprId = typeof appr === "object" ? (appr._id || appr.id) : appr;
+            if (apprId) approverIds.push(apprId.toString());
+          });
+        }
+        if (lastCycle.decidedBy) {
+          approverIds.push(lastCycle.decidedBy.toString());
+        }
+
+        const uniqueApproverIds = Array.from(new Set(approverIds));
+        const contextStepTitle = completedSubtask.title || completedSubtask.name || "Context Step";
+        const approvalTitle = appSt.title || appSt.name || "Approval Subtask";
+
+        for (const targetUserId of uniqueApproverIds) {
+          await createTaskNotification(TriggerEvent.TASK_UPDATED, parentTaskDoc, {
+            targetUserId,
+            title: `Context Step Completed - ${approvalTitle} Ready`,
+            message: `The re-initiated context step "${contextStepTitle}" has been completed by ${completerName}. Approval subtask "${approvalTitle}" is now ready for your review and approval (Cycle ${appSt.currentCycle || (lastCycle.cycleNumber + 1)}).`,
+            priority: NotificationPriority.HIGH,
+            channels: [ChannelType.IN_APP, ChannelType.EMAIL],
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error in checkAndNotifyApprovalTaskOnContextStepCompletion:", err);
+  }
+}
+
+// 🔄 Self-healing helper: Sync approval states for parent tasks where context step was finished
+async function syncParentTaskApprovalStates(parentTaskDoc) {
+  try {
+    if (!parentTaskDoc || !Array.isArray(parentTaskDoc.subtasks)) return;
+    let isModified = false;
+
+    for (const st of parentTaskDoc.subtasks) {
+      if (st.isApprovalTask || st.taskType === "approval") {
+        if (Array.isArray(st.approvalCycles) && st.approvalCycles.length > 0) {
+          const lastCycle = st.approvalCycles[st.approvalCycles.length - 1];
+          if (lastCycle?.actionTaken === "reinitiate_context_step" && (!lastCycle.isResolved || !st.contextStepCompleted)) {
+            let reinitiatedStId = lastCycle.reinitiatedSubtaskId ? lastCycle.reinitiatedSubtaskId.toString() : null;
+            let targetSt = null;
+
+            if (reinitiatedStId) {
+              targetSt = parentTaskDoc.subtasks.find((s) => (s._id || s.id)?.toString() === reinitiatedStId);
+            }
+            if (!targetSt) {
+              const appIdx = parentTaskDoc.subtasks.findIndex((s) => (s._id || s.id)?.toString() === (st._id || st.id)?.toString());
+              if (appIdx > 0) {
+                targetSt = parentTaskDoc.subtasks[appIdx - 1];
+              }
+            }
+
+            if (targetSt) {
+              const stStatus = String(targetSt.status || "").toUpperCase();
+              if (stStatus === "DONE" || stStatus === "COMPLETED") {
+                lastCycle.isResolved = true;
+                lastCycle.contextStepCompleted = true;
+                st.contextStepCompleted = true;
+                st.approvalStatus = "pending";
+                isModified = true;
+
+                // Also update standalone task doc if present
+                const stIdStr = (st._id || st.id)?.toString();
+                if (stIdStr) {
+                  try {
+                    const Task = (await import("../modals/taskModal.js")).default;
+                    const standaloneDoc = await Task.findById(stIdStr);
+                    if (standaloneDoc) {
+                      if (Array.isArray(standaloneDoc.approvalCycles) && standaloneDoc.approvalCycles.length > 0) {
+                        const lc = standaloneDoc.approvalCycles[standaloneDoc.approvalCycles.length - 1];
+                        lc.isResolved = true;
+                        lc.contextStepCompleted = true;
+                      }
+                      standaloneDoc.contextStepCompleted = true;
+                      standaloneDoc.approvalStatus = "pending";
+                      standaloneDoc.markModified("approvalCycles");
+                      await standaloneDoc.save();
+                    }
+                  } catch (e) {
+                    console.error("Error updating standalone approval doc:", e);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (isModified && typeof parentTaskDoc.save === "function") {
+      parentTaskDoc.markModified("subtasks");
+      await parentTaskDoc.save();
+    }
+  } catch (err) {
+    console.error("Error in syncParentTaskApprovalStates:", err);
   }
 }
 
@@ -1861,6 +2224,15 @@ export const getTeamTasks = async (req, res) => {
       sort: { createdAt: -1 },
     });
 
+    const subordinateIdStrs = (subordinates || []).map((id) => id.toString());
+    if (Array.isArray(tasks)) {
+      tasks.forEach((t) => {
+        if (Array.isArray(t.subtasks)) {
+          t.subtasks = filterVisibleSubtasks(t.subtasks, user, subordinateIdStrs, userRoles);
+        }
+      });
+    }
+
     // Count total tasks for pagination
     const totalTasks = await storage.countTasksByFilter(filter);
     const totalPages = Math.ceil(totalTasks / parseInt(limit));
@@ -2927,6 +3299,21 @@ export const getSubtasks = async (req, res) => {
       }
     }
 
+    const userRoles = Array.isArray(user.role) ? user.role : [user.role || "employee"];
+    let subordinateIds = [];
+    if (userRoles.includes("manager")) {
+      subordinateIds = await getManagerSubordinateIds(user.id, user.organizationId);
+      if (subordinateIds.length === 0 && user.organizationId) {
+        const orgEmployees = await User.find({
+          organization_id: user.organizationId,
+          role: { $in: ["employee", "manager"] },
+          _id: { $ne: user.id },
+          status: "active",
+        }).select("_id");
+        subordinateIds = orgEmployees.map((u) => u._id.toString());
+      }
+    }
+
     // Build filter for subtasks
     const filter = {
       parentTaskId: parentTaskId,
@@ -2944,16 +3331,26 @@ export const getSubtasks = async (req, res) => {
       ];
     }
 
-    // Get subtasks
-    const subtasks = await storage.getTasksByFilter(filter, {
-      page: parseInt(page),
-      limit: parseInt(limit),
+    // Get all matching subtasks for this parent
+    const allSubtasks = await storage.getTasksByFilter(filter, {
+      page: 1,
+      limit: 1000,
       sort: { createdAt: -1 },
     });
 
-    // Count total subtasks for pagination
-    const totalSubtasks = await storage.countTasksByFilter(filter);
-    const totalPages = Math.ceil(totalSubtasks / parseInt(limit));
+    // 🔒 Filter subtasks to only those visible to the user
+    const visibleSubtasks = filterVisibleSubtasks(
+      allSubtasks,
+      user,
+      subordinateIds,
+      userRoles
+    );
+
+    // Apply pagination on visible subtasks
+    const totalSubtasks = visibleSubtasks.length;
+    const totalPages = Math.ceil(totalSubtasks / parseInt(limit)) || 1;
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const paginatedSubtasks = visibleSubtasks.slice(startIndex, startIndex + parseInt(limit));
     const hasNext = parseInt(page) < totalPages;
     const hasPrev = parseInt(page) > 1;
 
@@ -2966,7 +3363,7 @@ export const getSubtasks = async (req, res) => {
           title: parentTask.title,
           status: parentTask.status,
         },
-        subtasks: subtasks,
+        subtasks: paginatedSubtasks,
         pagination: {
           currentPage: parseInt(page),
           totalPages,
@@ -3128,6 +3525,41 @@ export const updateSubtask = async (req, res) => {
       });
     }
 
+    // 🔒 TITLE LOCK & ASSIGNEE PERMISSION CHECK FOR SUBTASK TITLE EDITS
+    if (updates.title !== undefined && updates.title.trim() !== (subtask.title || "").trim()) {
+      const subStatusStr = String(subtask.status || "").toUpperCase();
+      const subAppStatusStr = String(subtask.approvalStatus || "").toUpperCase();
+      const parentStatusStr = String(parentTask.status || "").toUpperCase();
+      const lockedStatuses = [
+        "CANCELLED",
+        "CANCELED",
+        "REJECTED",
+        "TERMINATED",
+        "DONE",
+        "COMPLETED",
+      ];
+
+      if (
+        lockedStatuses.includes(subStatusStr) ||
+        lockedStatuses.includes(subAppStatusStr) ||
+        lockedStatuses.includes(parentStatusStr)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Title is locked and cannot be edited for tasks/subtasks with status CANCELLED, REJECTED, TERMINATED, DONE, or COMPLETED.",
+        });
+      }
+
+      const isAdmin = isTasksetuAdmin || isOrgAdmin;
+      if (!isAssignedToSelf && !isAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied: Only the assigned user can edit the subtask title.",
+        });
+      }
+    }
+
     // Track previous assignee for counter adjustments
     const prevAssignee = subtask.assignedTo?.toString();
 
@@ -3265,11 +3697,15 @@ export const updateSubtask = async (req, res) => {
       user.id,
     );
 
-    // 🔗 Trigger Linked Task Engine auto-initiate if completed
+    // 🔗 Trigger Linked Task Engine auto-initiate & Approval Notification if completed
     if (["DONE", "COMPLETED"].includes(String(updatedSubtask?.status || "").toUpperCase())) {
       await LinkedTaskService.onTaskCompleted(subtaskId).catch((err) =>
         console.error("❌ Auto-initiate failed in updateSubtask:", err.message)
       );
+      const fullSubtaskDoc = await storage.getTaskById(subtaskId);
+      if (fullSubtaskDoc) {
+        await checkAndNotifyApprovalTaskOnContextStepCompletion(fullSubtaskDoc, user);
+      }
     }
 
     // 📧 🔔 Trigger Email & Approval notifications when subtask status moves to IN_PROGRESS
@@ -6331,14 +6767,34 @@ export const getTasks = async (req, res) => {
       sort: { createdAt: -1 },
     });
 
+    const userRoles = Array.isArray(user.role) ? user.role : [user.role || "employee"];
+    let subordinateIds = [];
+    if (userRoles.includes("manager")) {
+      subordinateIds = await getManagerSubordinateIds(user.id, user.organizationId);
+      if (subordinateIds.length === 0 && user.organizationId) {
+        const orgEmployees = await User.find({
+          organization_id: user.organizationId,
+          role: { $in: ["employee", "manager"] },
+          _id: { $ne: user.id },
+          status: "active",
+        }).select("_id");
+        subordinateIds = orgEmployees.map((u) => u._id.toString());
+      }
+    }
+
+    if (Array.isArray(tasks)) {
+      tasks.forEach((t) => {
+        if (Array.isArray(t.subtasks)) {
+          t.subtasks = filterVisibleSubtasks(t.subtasks, user, subordinateIds, userRoles);
+        }
+      });
+    }
 
     const userTimezone = await TimezoneHelper.getUserTimezone(user.id);
 
     // 🔄 Enhanced Debug: Log ALL task data with focus on recurring tasks
     if (tasks && tasks.length > 0) {
-
       tasks.forEach((task, index) => {
-
         // Special focus on recurring tasks
         if (task.isRecurring) {
         }
@@ -6354,10 +6810,7 @@ export const getTasks = async (req, res) => {
       const recurringTasksWithNextDueDate = recurringTasks.filter(
         (task) => task.nextDueDate,
       );
-
-
     }
-
 
     res.json({
       success: true,
@@ -6387,6 +6840,21 @@ export const getTaskById = async (req, res) => {
       });
     }
 
+    const userRoles = Array.isArray(user.role) ? user.role : [user.role || "employee"];
+    let subordinateIds = [];
+    if (userRoles.includes("manager")) {
+      subordinateIds = await getManagerSubordinateIds(user.id, user.organizationId);
+      if (subordinateIds.length === 0 && user.organizationId) {
+        const orgEmployees = await User.find({
+          organization_id: user.organizationId,
+          role: { $in: ["employee", "manager"] },
+          _id: { $ne: user.id },
+          status: "active",
+        }).select("_id");
+        subordinateIds = orgEmployees.map((u) => u._id.toString());
+      }
+    }
+
     // Check if user has access to this task
     // Handle organization-based access control with proper null checks
     if (task.organization && user.organizationId) {
@@ -6400,25 +6868,31 @@ export const getTaskById = async (req, res) => {
           message: "Access denied",
         });
       }
+
+      // Check subtask or parent visibility within the organization
+      const isSubtask = task.isSubtask || !!task.parentTaskId;
+      if (isSubtask) {
+        const hasAccess = checkTaskOrSubtaskVisibility(task, user, subordinateIds, userRoles);
+        if (!hasAccess) {
+          return res.status(403).json({
+            success: false,
+            message: "Access denied: You do not have permission to view this subtask",
+          });
+        }
+      } else {
+        const isParentVisible = checkTaskOrSubtaskVisibility(task, user, subordinateIds, userRoles);
+        const visibleSubtasks = filterVisibleSubtasks(task.subtasks, user, subordinateIds, userRoles);
+        if (!isParentVisible && visibleSubtasks.length === 0) {
+          return res.status(403).json({
+            success: false,
+            message: "Access denied",
+          });
+        }
+      }
     } else if (!task.organization && !user.organizationId) {
-      // For individual users without organization, check if they have access to the task
-      const userId = user.id?.toString() || user._id?.toString();
-      const createdById =
-        task.createdBy?._id?.toString() || task.createdBy?.toString();
-      const assignedToId =
-        task.assignedTo?._id?.toString() || task.assignedTo?.toString();
-
-      // Check if user is creator, assignee, collaborator, or contributor
-      const isCreator = createdById === userId;
-      const isAssignee = assignedToId === userId;
-      const isCollaborator = task.collaborators?.some(
-        (collab) => (collab._id?.toString() || collab.toString()) === userId,
-      );
-      const isContributor = task.contributors?.some(
-        (contrib) => (contrib._id?.toString() || contrib.toString()) === userId,
-      );
-
-      if (!isCreator && !isAssignee && !isCollaborator && !isContributor) {
+      const hasAccess = checkTaskOrSubtaskVisibility(task, user, subordinateIds, userRoles);
+      const visibleSubtasks = filterVisibleSubtasks(task.subtasks, user, subordinateIds, userRoles);
+      if (!hasAccess && visibleSubtasks.length === 0) {
         return res.status(403).json({
           success: false,
           message: "Access denied",
@@ -6550,6 +7024,17 @@ export const getTaskById = async (req, res) => {
       }
     }
 
+    // 🔒 Filter subtasks to only those visible to the requesting user (unless requested for approval re-initiation workflow)
+    const isApprovalContextReq = req.query.forApproval === "true" || req.query.includeAllProcessSubtasks === "true";
+    if (!isApprovalContextReq && taskData.subtasks && Array.isArray(taskData.subtasks)) {
+      taskData.subtasks = filterVisibleSubtasks(
+        taskData.subtasks,
+        user,
+        subordinateIds,
+        userRoles
+      );
+    }
+
     // Normalize subtasks' user fields and collaborators
     if (taskData.subtasks && Array.isArray(taskData.subtasks)) {
       taskData.subtasks = taskData.subtasks.map((st) => {
@@ -6647,6 +7132,39 @@ export const updateTask = async (req, res) => {
       task.assignedTo?._id?.toString() || task.assignedTo?.toString();
     const taskCreatedBy =
       task.createdBy?._id?.toString() || task.createdBy?.toString();
+
+    // 🔒 TITLE LOCK & ASSIGNEE PERMISSION CHECK FOR TASK TITLE EDITS
+    if (updates.title !== undefined && updates.title.trim() !== (task.title || "").trim()) {
+      const taskStatusStr = String(task.status || "").toUpperCase();
+      const taskAppStatusStr = String(task.approvalStatus || "").toUpperCase();
+      const lockedStatuses = [
+        "CANCELLED",
+        "CANCELED",
+        "REJECTED",
+        "TERMINATED",
+        "DONE",
+        "COMPLETED",
+      ];
+
+      if (
+        lockedStatuses.includes(taskStatusStr) ||
+        lockedStatuses.includes(taskAppStatusStr)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Title is locked and cannot be edited for tasks with status CANCELLED, REJECTED, TERMINATED, DONE, or COMPLETED.",
+        });
+      }
+
+      const isUserAdmin = ["company-admin", "org_admin", "admin", "super-admin", "tasksetu-admin"].includes(userRole);
+      if (taskAssignedTo !== userId && !isUserAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied: Only the assigned user can edit the task title.",
+        });
+      }
+    }
 
 
     // 🚫 CONTRIBUTORS PERMISSION CHECK: Recurring task contributors cannot edit
@@ -7796,6 +8314,10 @@ export const updateTaskStatus = async (req, res) => {
         await LinkedTaskService.onTaskCompleted(id).catch((err) =>
           console.error("❌ Auto-initiate failed in updateTaskStatus (subtask):", err.message)
         );
+        const fullSubtaskDoc = await Task.findById(id);
+        if (fullSubtaskDoc) {
+          await checkAndNotifyApprovalTaskOnContextStepCompletion(fullSubtaskDoc, user);
+        }
       }
 
       // 📧 🔔 Trigger Email & Approval notifications when subtask status moves to IN_PROGRESS
@@ -9101,7 +9623,7 @@ export const deleteTask = async (req, res) => {
 export const approveOrRejectTask = async (req, res) => {
   try {
     const { id } = req.params;
-    const { action, comment } = req.body; // action: 'approve' or 'reject'
+    const { action, comment, rejectionMode, reinitiateSubtaskId } = req.body; // action: 'approve' or 'reject'
     const user = req.user;
 
     // Use Task.findById() to get Mongoose document with .save() method
@@ -9113,6 +9635,11 @@ export const approveOrRejectTask = async (req, res) => {
         message: "Approval task not found",
       });
     }
+
+    const approverUser = await User.findById(user.id).select("firstName lastName email");
+    const approverName = approverUser
+      ? `${approverUser.firstName || ""} ${approverUser.lastName || ""}`.trim() || user.email
+      : user.email || "Approver";
 
     // ✅ SECURITY: Prevent creator self-approval (unless explicitly in approvers list)
     if (task.createdBy && task.createdBy.toString() === user.id.toString()) {
@@ -9133,6 +9660,56 @@ export const approveOrRejectTask = async (req, res) => {
         console.warn(
           `⚠️  SELF-APPROVAL WARNING: Creator ${user.email} is approving their own task ${task._id}`,
         );
+      }
+    }
+
+    // 🔐 CONTEXT TASK COMPLETION VALIDATION: Prevent approval/rejection if linked context task is not completed yet
+    const isSubtaskApproval = Boolean(task.isSubtask || task.parentTaskId || task.parentTask);
+    const configuredContextTaskId =
+      task.contextTaskId ||
+      task.contextTask ||
+      task.context_task_id ||
+      task.contextStepId ||
+      task.contextSubtaskId ||
+      task.linkedTaskId ||
+      task.configuration?.contextTaskId ||
+      task.configuration?.linkedTaskId;
+
+    if (isSubtaskApproval || configuredContextTaskId) {
+      const parentId = task.parentTaskId || task.parentTask;
+      let targetContextSubtask = null;
+
+      if (configuredContextTaskId) {
+        const contextIdStr = typeof configuredContextTaskId === "object" ? (configuredContextTaskId._id || configuredContextTaskId.id) : configuredContextTaskId;
+        targetContextSubtask = await Task.findById(contextIdStr);
+        if (!targetContextSubtask && parentId) {
+          const parentDoc = await Task.findById(parentId);
+          if (parentDoc && Array.isArray(parentDoc.subtasks)) {
+            targetContextSubtask = parentDoc.subtasks.find(st => (st._id || st.id)?.toString() === contextIdStr.toString());
+          }
+        }
+      } else if (parentId) {
+        const parentDoc = await Task.findById(parentId);
+        if (parentDoc && Array.isArray(parentDoc.subtasks)) {
+          const currentIdStr = task._id.toString();
+          const currentIdx = parentDoc.subtasks.findIndex(st => (st._id || st.id)?.toString() === currentIdStr);
+          if (currentIdx > 0) {
+            targetContextSubtask = parentDoc.subtasks[currentIdx - 1];
+          }
+        }
+      }
+
+      if (targetContextSubtask) {
+        const stStatus = String(targetContextSubtask.status || "").toUpperCase();
+        const isDone = stStatus === "DONE" || stStatus === "COMPLETED";
+        if (!isDone) {
+          const contextTitle = targetContextSubtask.title || targetContextSubtask.name || "Context Step";
+          return res.status(400).json({
+            success: false,
+            message: `Cannot approve or reject this task until the linked context step "${contextTitle}" is completed.`,
+            error: "LINKED_CONTEXT_TASK_NOT_COMPLETED",
+          });
+        }
       }
     }
 
@@ -9186,6 +9763,9 @@ export const approveOrRejectTask = async (req, res) => {
     task.approvalDecisions = task.approvalDecisions || [];
     task.approvalDecisions.push(approvalDecision);
 
+    const currentCycleNum = task.currentCycle || 1;
+    task.approvalCycles = task.approvalCycles || [];
+
     // ✅ Process based on approval mode
     if (task.approvalMode === "sequential") {
       const currentIndex = task.currentApproverIndex || 0;
@@ -9225,12 +9805,186 @@ export const approveOrRejectTask = async (req, res) => {
           // ✅ All approved in sequence
           task.approvalStatus = "approved";
           task.status = "DONE";
+          task.progress = 100;
+
+          // Record cycle completion
+          task.approvalCycles.push({
+            cycleNumber: currentCycleNum,
+            status: "approved",
+            actionTaken: "approved",
+            decidedBy: user.id,
+            decidedByName: approverName,
+            decidedAt: new Date(),
+            decisions: [...task.approvalDecisions],
+          });
         }
       } else if (action === "reject") {
-        // ✅ Sequential: One rejection ends the chain
-        task.approvalStatus = "rejected";
-        task.status = "CANCELLED";
-        task.progress = 100;
+        if (isSubtaskApproval && rejectionMode === "reinitiate") {
+          // 🔁 RE-INITIATE CONTEXT SUBTASK
+          let reinitiatedTitle = "Previous Context Step";
+          let targetSubtaskIdToUpdate = reinitiateSubtaskId || (task.contextTaskId ? task.contextTaskId.toString() : null);
+
+          if (task.parentTaskId) {
+            try {
+              const parentTaskDoc = await Task.findById(task.parentTaskId);
+              if (parentTaskDoc && Array.isArray(parentTaskDoc.subtasks) && parentTaskDoc.subtasks.length > 0) {
+                let targetStIndex = -1;
+
+                if (targetSubtaskIdToUpdate) {
+                  targetStIndex = parentTaskDoc.subtasks.findIndex(
+                    (st) => (st._id || st.id)?.toString() === targetSubtaskIdToUpdate.toString()
+                  );
+                }
+
+                // Fallback: If target subtask not found, pick preceding subtask
+                if (targetStIndex === -1) {
+                  const currentStIndex = parentTaskDoc.subtasks.findIndex(
+                    (st) => (st._id || st.id)?.toString() === task._id.toString()
+                  );
+                  if (currentStIndex > 0) {
+                    targetStIndex = currentStIndex - 1;
+                  } else {
+                    // Pick first non-approval subtask or first subtask
+                    targetStIndex = parentTaskDoc.subtasks.findIndex(
+                      (st) => (st._id || st.id)?.toString() !== task._id.toString()
+                    );
+                    if (targetStIndex === -1) targetStIndex = 0;
+                  }
+                }
+
+                if (targetStIndex >= 0 && parentTaskDoc.subtasks[targetStIndex]) {
+                  const targetSt = parentTaskDoc.subtasks[targetStIndex];
+                  targetSt.status = "IN_PROGRESS";
+                  reinitiatedTitle = targetSt.title || targetSt.name || "Context Subtask";
+                  targetSubtaskIdToUpdate = (targetSt._id || targetSt.id)?.toString();
+                  parentTaskDoc.markModified("subtasks");
+                  await parentTaskDoc.save();
+                }
+              }
+
+              if (targetSubtaskIdToUpdate) {
+                await Task.findByIdAndUpdate(targetSubtaskIdToUpdate, { status: "IN_PROGRESS" });
+              }
+            } catch (reinitErr) {
+              console.error("Error re-initiating context subtask:", reinitErr);
+            }
+          }
+
+          task.approvalCycles.push({
+            cycleNumber: currentCycleNum,
+            status: "rejected",
+            actionTaken: "reinitiate_context_step",
+            rejectionReason: comment || "Rejected for context step revision",
+            reinitiatedSubtaskId: targetSubtaskIdToUpdate || null,
+            reinitiatedSubtaskTitle: reinitiatedTitle,
+            decidedBy: user.id,
+            decidedByName: approverName,
+            decidedAt: new Date(),
+            decisions: [...task.approvalDecisions],
+          });
+
+          // 📧 🔔 Send Notification 1 to owner/assignee of the re-initiated context task
+          try {
+            let contextAssigneeId = null;
+            if (targetSubtaskIdToUpdate) {
+              const targetStDoc = await Task.findById(targetSubtaskIdToUpdate);
+              if (targetStDoc) {
+                contextAssigneeId = targetStDoc.assignedTo || targetStDoc.createdBy;
+              }
+            }
+            if (!contextAssigneeId && parentTaskDoc && Array.isArray(parentTaskDoc.subtasks)) {
+              const matchSt = parentTaskDoc.subtasks.find(
+                (st) => (st._id || st.id)?.toString() === targetSubtaskIdToUpdate
+              );
+              if (matchSt) {
+                contextAssigneeId = matchSt.assignedTo || matchSt.createdBy;
+              }
+            }
+
+            if (contextAssigneeId) {
+              const contextUserIdStr = typeof contextAssigneeId === "object" ? (contextAssigneeId._id || contextAssigneeId.id) : contextAssigneeId;
+              await createTaskNotification(TriggerEvent.TASK_UPDATED, parentTaskDoc || task, {
+                targetUserId: contextUserIdStr,
+                title: `Task Re-initiated: ${reinitiatedTitle}`,
+                message: `Approver ${approverName} re-initiated your task "${reinitiatedTitle}" for revision. Reason: "${comment || "Rejected for context step revision"}". Please fix and complete your task to resubmit for approval.`,
+                priority: NotificationPriority.HIGH,
+                channels: [ChannelType.IN_APP, ChannelType.EMAIL],
+              });
+            }
+          } catch (notifErr) {
+            console.error("Error sending re-initiation notification:", notifErr);
+          }
+
+          // Reset approval subtask for Cycle N+1
+          task.currentCycle = currentCycleNum + 1;
+          task.approvalStatus = "pending";
+          task.contextStepCompleted = false;
+          task.status = "OPEN";
+          task.progress = 0;
+          task.approvalDecisions = [];
+          task.currentApproverIndex = 0;
+          if (Array.isArray(task.approverOrder)) {
+            task.approverOrder.forEach((ao, idx) => {
+              ao.status = idx === 0 ? "pending" : "awaiting_turn";
+              ao.decidedAt = null;
+            });
+          }
+        } else {
+          // ❌ TERMINATE PROCESS / STANDARD REJECTION
+          task.approvalStatus = "rejected";
+          task.status = "CANCELLED";
+          task.progress = 100;
+
+          task.approvalCycles.push({
+            cycleNumber: currentCycleNum,
+            status: "rejected",
+            actionTaken: "terminate_process",
+            rejectionReason: comment || "Approval rejected - process terminated",
+            decidedBy: user.id,
+            decidedByName: approverName,
+            decidedAt: new Date(),
+            decisions: [...task.approvalDecisions],
+          });
+
+          if (task.parentTaskId) {
+            try {
+              const parentTask = await Task.findById(task.parentTaskId);
+              if (parentTask) {
+                parentTask.status = "CANCELLED";
+                if (Array.isArray(parentTask.subtasks)) {
+                  parentTask.subtasks.forEach((st) => {
+                    const stId = (st._id || st.id)?.toString();
+                    const stStatus = String(st.status || "").toUpperCase();
+                    const isDoneOrApproved =
+                      st.approvalStatus === "approved" ||
+                      stStatus === "DONE" ||
+                      stStatus === "COMPLETED";
+
+                    if (!isDoneOrApproved || stId === task._id.toString()) {
+                      st.status = "CANCELLED";
+                      st.progress = 100;
+                      if (st.isApprovalTask || st.taskType === "approval") {
+                        st.approvalStatus = "rejected";
+                      }
+                    }
+                  });
+                  parentTask.markModified("subtasks");
+                }
+                await parentTask.save();
+              }
+              await Task.updateMany(
+                {
+                  parentTaskId: task.parentTaskId,
+                  status: { $nin: ["DONE", "completed", "DONE"] },
+                  approvalStatus: { $ne: "approved" },
+                },
+                { $set: { status: "CANCELLED", progress: 100 } }
+              );
+            } catch (err) {
+              console.error("Error cancelling parent process & open subtasks:", err);
+            }
+          }
+        }
       }
     } else {
       // ✅ Any/All mode logic
@@ -9241,25 +9995,181 @@ export const approveOrRejectTask = async (req, res) => {
         (d) => d.decision === "reject",
       ).length;
 
-      if (task.approvalMode === "any" && approvedCount > 0) {
-        task.approvalStatus = "approved";
-        task.status = "DONE";
-        task.progress = 100;
-      } else if (
-        task.approvalMode === "all" &&
-        approvedCount === task.approvers.length
+      if (
+        (task.approvalMode === "any" && approvedCount > 0) ||
+        (task.approvalMode === "all" && approvedCount === task.approvers.length)
       ) {
         task.approvalStatus = "approved";
         task.status = "DONE";
         task.progress = 100;
-      } else if (rejectedCount > 0 && task.approvalMode === "any") {
-        task.approvalStatus = "rejected";
-        task.status = "CANCELLED";
-        task.progress = 100;
-      } else if (rejectedCount > 0 && task.approvalMode === "all") {
-        task.approvalStatus = "rejected";
-        task.status = "CANCELLED";
-        task.progress = 100;
+
+        task.approvalCycles.push({
+          cycleNumber: currentCycleNum,
+          status: "approved",
+          actionTaken: "approved",
+          decidedBy: user.id,
+          decidedByName: approverName,
+          decidedAt: new Date(),
+          decisions: [...task.approvalDecisions],
+        });
+      } else if (rejectedCount > 0) {
+        if (isSubtaskApproval && rejectionMode === "reinitiate") {
+          // 🔁 RE-INITIATE CONTEXT SUBTASK
+          let reinitiatedTitle = "Previous Context Step";
+          let targetSubtaskIdToUpdate = reinitiateSubtaskId || (task.contextTaskId ? task.contextTaskId.toString() : null);
+
+          if (task.parentTaskId) {
+            try {
+              const parentTaskDoc = await Task.findById(task.parentTaskId);
+              if (parentTaskDoc && Array.isArray(parentTaskDoc.subtasks) && parentTaskDoc.subtasks.length > 0) {
+                let targetStIndex = -1;
+
+                if (targetSubtaskIdToUpdate) {
+                  targetStIndex = parentTaskDoc.subtasks.findIndex(
+                    (st) => (st._id || st.id)?.toString() === targetSubtaskIdToUpdate.toString()
+                  );
+                }
+
+                // Fallback: If target subtask not found, pick preceding subtask
+                if (targetStIndex === -1) {
+                  const currentStIndex = parentTaskDoc.subtasks.findIndex(
+                    (st) => (st._id || st.id)?.toString() === task._id.toString()
+                  );
+                  if (currentStIndex > 0) {
+                    targetStIndex = currentStIndex - 1;
+                  } else {
+                    targetStIndex = parentTaskDoc.subtasks.findIndex(
+                      (st) => (st._id || st.id)?.toString() !== task._id.toString()
+                    );
+                    if (targetStIndex === -1) targetStIndex = 0;
+                  }
+                }
+
+                if (targetStIndex >= 0 && parentTaskDoc.subtasks[targetStIndex]) {
+                  const targetSt = parentTaskDoc.subtasks[targetStIndex];
+                  targetSt.status = "IN_PROGRESS";
+                  reinitiatedTitle = targetSt.title || targetSt.name || "Context Subtask";
+                  targetSubtaskIdToUpdate = (targetSt._id || targetSt.id)?.toString();
+                  parentTaskDoc.markModified("subtasks");
+                  await parentTaskDoc.save();
+                }
+              }
+
+              if (targetSubtaskIdToUpdate) {
+                await Task.findByIdAndUpdate(targetSubtaskIdToUpdate, { status: "IN_PROGRESS" });
+              }
+            } catch (reinitErr) {
+              console.error("Error re-initiating context subtask:", reinitErr);
+            }
+          }
+
+          task.approvalCycles.push({
+            cycleNumber: currentCycleNum,
+            status: "rejected",
+            actionTaken: "reinitiate_context_step",
+            rejectionReason: comment || "Rejected for context step revision",
+            reinitiatedSubtaskId: targetSubtaskIdToUpdate || null,
+            reinitiatedSubtaskTitle: reinitiatedTitle,
+            decidedBy: user.id,
+            decidedByName: approverName,
+            decidedAt: new Date(),
+            decisions: [...task.approvalDecisions],
+          });
+
+          // 📧 🔔 Send Notification 1 to owner/assignee of the re-initiated context task
+          try {
+            let contextAssigneeId = null;
+            if (targetSubtaskIdToUpdate) {
+              const targetStDoc = await Task.findById(targetSubtaskIdToUpdate);
+              if (targetStDoc) {
+                contextAssigneeId = targetStDoc.assignedTo || targetStDoc.createdBy;
+              }
+            }
+            if (!contextAssigneeId && parentTaskDoc && Array.isArray(parentTaskDoc.subtasks)) {
+              const matchSt = parentTaskDoc.subtasks.find(
+                (st) => (st._id || st.id)?.toString() === targetSubtaskIdToUpdate
+              );
+              if (matchSt) {
+                contextAssigneeId = matchSt.assignedTo || matchSt.createdBy;
+              }
+            }
+
+            if (contextAssigneeId) {
+              const contextUserIdStr = typeof contextAssigneeId === "object" ? (contextAssigneeId._id || contextAssigneeId.id) : contextAssigneeId;
+              await createTaskNotification(TriggerEvent.TASK_UPDATED, parentTaskDoc || task, {
+                targetUserId: contextUserIdStr,
+                title: `Task Re-initiated: ${reinitiatedTitle}`,
+                message: `Approver ${approverName} re-initiated your task "${reinitiatedTitle}" for revision. Reason: "${comment || "Rejected for context step revision"}". Please fix and complete your task to resubmit for approval.`,
+                priority: NotificationPriority.HIGH,
+                channels: [ChannelType.IN_APP, ChannelType.EMAIL],
+              });
+            }
+          } catch (notifErr) {
+            console.error("Error sending re-initiation notification:", notifErr);
+          }
+
+          // Reset approval subtask for Cycle N+1
+          task.currentCycle = currentCycleNum + 1;
+          task.approvalStatus = "pending";
+          task.status = "OPEN";
+          task.progress = 0;
+          task.approvalDecisions = [];
+        } else {
+          // ❌ TERMINATE PROCESS / STANDARD REJECTION
+          task.approvalStatus = "rejected";
+          task.status = "CANCELLED";
+          task.progress = 100;
+
+          task.approvalCycles.push({
+            cycleNumber: currentCycleNum,
+            status: "rejected",
+            actionTaken: "terminate_process",
+            rejectionReason: comment || "Approval rejected - process terminated",
+            decidedBy: user.id,
+            decidedByName: approverName,
+            decidedAt: new Date(),
+            decisions: [...task.approvalDecisions],
+          });
+
+          if (task.parentTaskId) {
+            try {
+              const parentTask = await Task.findById(task.parentTaskId);
+              if (parentTask) {
+                parentTask.status = "CANCELLED";
+                if (Array.isArray(parentTask.subtasks)) {
+                  parentTask.subtasks.forEach((st) => {
+                    const stId = (st._id || st.id)?.toString();
+                    const stStatus = String(st.status || "").toUpperCase();
+                    const isDoneOrApproved =
+                      st.approvalStatus === "approved" ||
+                      stStatus === "DONE" ||
+                      stStatus === "COMPLETED";
+
+                    if (!isDoneOrApproved || stId === task._id.toString()) {
+                      st.status = "CANCELLED";
+                      st.progress = 100;
+                      if (st.isApprovalTask || st.taskType === "approval") {
+                        st.approvalStatus = "rejected";
+                      }
+                    }
+                  });
+                  parentTask.markModified("subtasks");
+                }
+                await parentTask.save();
+              }
+              await Task.updateMany(
+                {
+                  parentTaskId: task.parentTaskId,
+                  status: { $nin: ["DONE", "completed", "DONE"] },
+                  approvalStatus: { $ne: "approved" },
+                },
+                { $set: { status: "CANCELLED", progress: 100 } }
+              );
+            } catch (err) {
+              console.error("Error cancelling parent process & open subtasks:", err);
+            }
+          }
+        }
       }
     }
 
@@ -9269,7 +10179,7 @@ export const approveOrRejectTask = async (req, res) => {
 
     await task.save();
 
-    // ✅ Sync approval subtask status & progress to parent task's subtasks array
+    // ✅ Sync approval subtask status, progress & cycles to parent task's subtasks array
     if (task.parentTaskId) {
       try {
         const parentTask = await Task.findById(task.parentTaskId);
@@ -9284,6 +10194,8 @@ export const approveOrRejectTask = async (req, res) => {
               task.approvalStatus === "approved" || task.approvalStatus === "rejected" || task.status === "DONE" || task.status === "CANCELLED" ? 100 : (task.progress || 0);
             parentTask.subtasks[stIndex].approvalDecisions = task.approvalDecisions;
             parentTask.subtasks[stIndex].approverOrder = task.approverOrder;
+            parentTask.subtasks[stIndex].currentCycle = task.currentCycle;
+            parentTask.subtasks[stIndex].approvalCycles = task.approvalCycles;
             parentTask.markModified("subtasks");
             await parentTask.save();
           }
@@ -9339,39 +10251,93 @@ export const approveOrRejectTask = async (req, res) => {
           }
         }
       } else if (action === "reject") {
-        // Notify task creator
-        if (
-          task.createdBy &&
-          task.createdBy.toString() !== user.id.toString()
-        ) {
-          await createTaskNotification(TriggerEvent.APPROVAL_DENIED, task, {
-            targetUserId: task.createdBy,
-            title: "Approval Denied",
-            message: `${approverName} rejected your task: "${task.title}"${comment ? " - Reason: " + comment : ""}`,
-            priority: NotificationPriority.URGENT,
-            metadata: {
-              approverName: approverName,
-              comment: comment || null,
-            },
-          });
-        }
+        const lastCycle = Array.isArray(task.approvalCycles) && task.approvalCycles.length > 0
+          ? task.approvalCycles[task.approvalCycles.length - 1]
+          : null;
 
-        // Notify assignee about rejection
-        if (
-          task.assignedTo &&
-          task.assignedTo.toString() !== user.id.toString() &&
-          task.assignedTo.toString() !== task.createdBy?.toString()
-        ) {
-          await createTaskNotification(TriggerEvent.APPROVAL_DENIED, task, {
-            targetUserId: task.assignedTo,
-            title: "Task Rejected",
-            message: `Task "${task.title}" was rejected${comment ? " - Reason: " + comment : ""}`,
-            priority: NotificationPriority.URGENT,
-            metadata: {
-              approverName: approverName,
-              comment: comment || null,
-            },
-          });
+        const isTermination =
+          rejectionMode === "terminate" ||
+          lastCycle?.actionTaken === "terminate_process" ||
+          task.status === "CANCELLED";
+
+        if (isTermination) {
+          // 🚫 PROCESS TERMINATED NOTIFICATIONS TO ALL ASSIGNED/AFFECTED USERS
+          const recipients = new Set();
+
+          const addUserId = (uId) => {
+            if (!uId) return;
+            const strId = typeof uId === "object" ? (uId._id || uId.id) : uId;
+            if (strId && strId.toString() !== user.id.toString()) {
+              recipients.add(strId.toString());
+            }
+          };
+
+          addUserId(task.createdBy);
+          addUserId(task.assignedTo);
+
+          if (task.parentTaskId) {
+            try {
+              const parentTaskDoc = await Task.findById(task.parentTaskId);
+              if (parentTaskDoc) {
+                addUserId(parentTaskDoc.createdBy);
+                addUserId(parentTaskDoc.assignedTo);
+
+                if (Array.isArray(parentTaskDoc.subtasks)) {
+                  parentTaskDoc.subtasks.forEach((st) => {
+                    addUserId(st.assignedTo);
+                    addUserId(st.createdBy);
+                  });
+                }
+              }
+            } catch (pErr) {
+              console.error("Error fetching parent task for termination notification:", pErr);
+            }
+          }
+
+          const terminationTitle = `Approval Process Terminated`;
+          const terminationMessage = `Approver ${approverName} terminated the approval process for task "${task.title}". Reason: "${comment || "Process terminated by approver"}". The task and associated process have been cancelled.`;
+
+          for (const targetUserId of Array.from(recipients)) {
+            await createTaskNotification(TriggerEvent.APPROVAL_DENIED, task, {
+              targetUserId,
+              title: terminationTitle,
+              message: terminationMessage,
+              priority: NotificationPriority.URGENT,
+              channels: [ChannelType.IN_APP, ChannelType.EMAIL],
+              metadata: {
+                approverName,
+                comment: comment || null,
+                actionTaken: "terminate_process",
+              },
+            });
+          }
+        } else {
+          // 🔁 RE-INITIATED FOR REVISION NOTIFICATION
+          const reinitTitle = `Task Sent Back for Revision`;
+          const reinitMessage = `Approver ${approverName} sent task "${task.title}" back for revision. Reason: "${comment || "Context step revision required"}".`;
+
+          const recipients = new Set();
+          if (task.createdBy && task.createdBy.toString() !== user.id.toString()) {
+            recipients.add(task.createdBy.toString());
+          }
+          if (task.assignedTo && task.assignedTo.toString() !== user.id.toString()) {
+            recipients.add(task.assignedTo.toString());
+          }
+
+          for (const targetUserId of Array.from(recipients)) {
+            await createTaskNotification(TriggerEvent.TASK_UPDATED, task, {
+              targetUserId,
+              title: reinitTitle,
+              message: reinitMessage,
+              priority: NotificationPriority.HIGH,
+              channels: [ChannelType.IN_APP, ChannelType.EMAIL],
+              metadata: {
+                approverName,
+                comment: comment || null,
+                actionTaken: "reinitiate_context_step",
+              },
+            });
+          }
         }
       }
     } catch (notificationError) {
@@ -9683,8 +10649,32 @@ export const getTasksByType = async (req, res) => {
     const groupedTasks = {};
     roleList.forEach((role) => (groupedTasks[role] = []));
 
+    let subordinateIds = [];
+    if (userRoles.includes("manager")) {
+      subordinateIds = await getManagerSubordinateIds(user.id, user.organizationId);
+      if (subordinateIds.length === 0 && user.organizationId) {
+        const orgEmployees = await User.find({
+          organization_id: user.organizationId,
+          role: { $in: ["employee", "manager"] },
+          _id: { $ne: user.id },
+          status: "active",
+        }).select("_id");
+        subordinateIds = orgEmployees.map((u) => u._id.toString());
+      }
+    }
+
     if (tasks && tasks.length > 0) {
       for (let task of tasks) {
+        // 🔒 Filter subtasks of this task
+        if (Array.isArray(task.subtasks)) {
+          task.subtasks = filterVisibleSubtasks(
+            task.subtasks,
+            user,
+            subordinateIds,
+            userRoles
+          );
+        }
+
         task.statusColor = STATUS_COLOR_MAP[task.status] || "#6B7280";
 
         // ✅ Log recurring task details for debugging
@@ -9850,26 +10840,20 @@ export const getMyTasks = async (req, res) => {
     const user = req.user;
     const userRoles = Array.isArray(user.role) ? user.role : [user.role];
 
-    // ✅ FIX: subordinates fetch karo (teamMembers nahi)
-    // ✅ FALLBACK: agar subordinates empty hai toh org ke saare employees fetch karo
+    // ✅ subordinates fetch karo (teamMembers + managerId reverse ref)
     let teamMemberIds = [];
     if (userRoles.includes("manager")) {
-      const managerUser = await User.findById(user.id).select("subordinates");
-      const subordinateIds = (managerUser?.subordinates || []).map((id) =>
-        id.toString(),
-      );
-
+      const subordinateIds = await getManagerSubordinateIds(user.id, user.organizationId);
 
       if (subordinateIds.length > 0) {
-        // ✅ subordinates properly set hain — use karo
         teamMemberIds = subordinateIds;
       } else {
-        // ✅ FALLBACK: subordinates empty hai, same org ke saare employees fetch karo
+        // ✅ FALLBACK: agar subordinates empty hai, same org ke saare employees fetch karo
         if (user.organizationId) {
           const orgEmployees = await User.find({
             organization_id: user.organizationId,
             role: { $in: ["employee", "manager"] },
-            _id: { $ne: user.id }, // manager ko exclude karo
+            _id: { $ne: user.id },
             status: "active",
           }).select("_id");
 
@@ -9913,7 +10897,7 @@ export const getMyTasks = async (req, res) => {
       ];
     }
 
-    // ✅ Find parentTaskIds where the user or team members are assigned to subtasks
+    // ✅ Find parentTaskIds where the user or team members are assigned/collaborators to subtasks
     const subtaskQuery = {
       isDeleted: { $ne: true },
       parentTaskId: { $exists: true, $ne: null },
@@ -9938,11 +10922,12 @@ export const getMyTasks = async (req, res) => {
         filter.organization = user.organizationId;
       }
     } else if (userRoles.includes("manager")) {
-      // ✅ FIX: Manager sees own tasks + team members tasks + parent tasks of assigned subtasks + approval tasks where user is approver
+      // ✅ FIX: Manager sees own tasks + team members tasks + parent tasks of assigned subtasks + approval tasks where user is approver + collaborator tasks
       filter.$or = [
         { assignedTo: user.id },
         { createdBy: user.id },
         { approvers: user.id },
+        { collaborators: user.id },
         ...(parentTaskIdsFromSubtasks.length > 0
           ? [{ _id: { $in: parentTaskIdsFromSubtasks } }]
           : []),
@@ -9950,6 +10935,7 @@ export const getMyTasks = async (req, res) => {
           ? [
               { assignedTo: { $in: teamMemberIds } },
               { createdBy: { $in: teamMemberIds } },
+              { collaborators: { $in: teamMemberIds } },
             ]
           : []),
       ];
@@ -9958,6 +10944,7 @@ export const getMyTasks = async (req, res) => {
         { assignedTo: user.id },
         { createdBy: user.id },
         { approvers: user.id },
+        { collaborators: user.id },
         ...(parentTaskIdsFromSubtasks.length > 0
           ? [{ _id: { $in: parentTaskIdsFromSubtasks } }]
           : []),
@@ -9967,6 +10954,7 @@ export const getMyTasks = async (req, res) => {
         { createdBy: user.id },
         { assignedTo: user.id },
         { approvers: user.id },
+        { collaborators: user.id },
         ...(parentTaskIdsFromSubtasks.length > 0
           ? [{ _id: { $in: parentTaskIdsFromSubtasks } }]
           : []),
@@ -9987,6 +10975,9 @@ export const getMyTasks = async (req, res) => {
     const allTasksWithSubtasks = [];
 
     for (const task of allTasksFromDB) {
+      if (Array.isArray(task.subtasks) && task.subtasks.length > 0) {
+        await syncParentTaskApprovalStates(task);
+      }
       const existingSubtasks = task.subtasks || [];
 
       const enhancedSubtasks = existingSubtasks.map((subtask) => ({
@@ -10007,9 +10998,18 @@ export const getMyTasks = async (req, res) => {
         statusColor: STATUS_COLOR_MAP[subtask.status] || "#6B7280",
       }));
 
+      // 🔒 Filter subtasks to ONLY those visible to current user
+      const visibleSubtasks = filterVisibleSubtasks(
+        enhancedSubtasks,
+        user,
+        teamMemberIds,
+        userRoles,
+        activeRole
+      );
+
       const taskWithSubtasks = {
         ...task,
-        subtasks: enhancedSubtasks || [],
+        subtasks: visibleSubtasks || [],
         isSnooze: task.isSnooze || false,
         snoozeUntil: task.snoozeUntil || null,
         snoozeReason: task.snoozeReason || null,
@@ -10045,17 +11045,13 @@ export const getMyTasks = async (req, res) => {
           const appStr = typeof app === "object" ? (app._id?.toString() || app.id?.toString()) : app?.toString();
           return appStr === user.id.toString();
         });
-        const hasAssignedSubtask = (enhancedSubtasks || []).some((st) => {
-          const stAssignee = st.assignedTo?._id?.toString() || st.assignedTo?.toString() || st.assignedTo;
-          const stCreator = st.createdBy?._id?.toString() || st.createdBy?.toString() || st.createdBy;
-          const stApprover = (st.approvers || []).some((app) => {
-            const appStr = typeof app === "object" ? (app._id?.toString() || app.id?.toString()) : app?.toString();
-            return appStr === user.id.toString();
-          });
-          return stAssignee === user.id.toString() || stCreator === user.id.toString() || stApprover;
+        const isUserCollaborator = (task.collaborators || []).some((collab) => {
+          const collabStr = typeof collab === "object" ? (collab._id?.toString() || collab.id?.toString()) : collab?.toString();
+          return collabStr === user.id.toString();
         });
+        const hasAssignedSubtask = visibleSubtasks.length > 0;
 
-        // ✅ FIX: teamMemberIds mein ab subordinates ya fallback org employees hain
+        // teamMemberIds contains manager's subordinates
         const isTeamMemberAssignee = teamMemberIds.includes(taskAssigneeId);
         const isTeamMemberCreator = teamMemberIds.includes(taskCreatorId);
 
@@ -10064,6 +11060,7 @@ export const getMyTasks = async (req, res) => {
             isUserCreator ||
             isUserAssignee ||
             isUserApprover ||
+            isUserCollaborator ||
             hasAssignedSubtask ||
             isTeamMemberAssignee ||
             isTeamMemberCreator
@@ -10077,7 +11074,7 @@ export const getMyTasks = async (req, res) => {
         } else if (activeRole === "employee") {
           if (isUserCreator) {
             isVisibleForActiveRole = taskCreatedByRoles.includes("employee");
-          } else if (isUserAssignee || isUserApprover || hasAssignedSubtask) {
+          } else if (isUserAssignee || isUserApprover || isUserCollaborator || hasAssignedSubtask) {
             isVisibleForActiveRole = true;
           } else {
             isVisibleForActiveRole = false;
@@ -10085,14 +11082,9 @@ export const getMyTasks = async (req, res) => {
         } else {
           if (isUserCreator) {
             isVisibleForActiveRole = taskCreatedByRoles.includes(activeRole);
-          } else if (isUserAssignee || isUserApprover || hasAssignedSubtask) {
-            if (taskCreatedByRoles.includes("org_admin")) {
-              isVisibleForActiveRole =
-                activeRole === "employee" || activeRole === "manager";
-            } else {
-              isVisibleForActiveRole =
-                activeRole === "employee" || activeRole === "manager";
-            }
+          } else if (isUserAssignee || isUserApprover || isUserCollaborator || hasAssignedSubtask) {
+            isVisibleForActiveRole =
+              activeRole === "employee" || activeRole === "manager";
           } else {
             isVisibleForActiveRole = activeRole === "org_admin";
           }

@@ -16,6 +16,7 @@ import {
   getPriorityBadge,
   canEditTaskStatus,
   canMarkAsCompleted,
+  canEditTaskTitle,
 } from "../../utils/taskHelpers";
 import {
   ClockAlert,
@@ -30,6 +31,121 @@ import {
   CheckSquare,
   Mail,
 } from "lucide-react";
+
+const getApprovalTaskStatusInfo = (item, parentSubtasks = []) => {
+  if (!item) return { label: "Pending", color: "#eab308" };
+
+  const lastCycle =
+    Array.isArray(item.approvalCycles) && item.approvalCycles.length > 0
+      ? item.approvalCycles[item.approvalCycles.length - 1]
+      : null;
+
+  const isTerminated =
+    item.status === "CANCELLED" ||
+    item.approvalStatus === "rejected" ||
+    lastCycle?.actionTaken === "terminate_process";
+
+  const isApproved =
+    item.approvalStatus === "approved" ||
+    item.status === "DONE" ||
+    item.status === "completed";
+
+  if (isTerminated) {
+    return {
+      label: "Terminated",
+      color: "#dc2626",
+    };
+  }
+
+  if (isApproved) {
+    return {
+      label: "Approved",
+      color: "#16a34a",
+    };
+  }
+
+  // Check if re-initiated and whether context step is still in progress or completed
+  if (lastCycle?.actionTaken === "reinitiate_context_step") {
+    // 🎯 If DB approval cycle or item is marked contextStepCompleted or isResolved, show Pending!
+    if (
+      item.contextStepCompleted === true ||
+      lastCycle.isResolved === true ||
+      lastCycle.contextStepCompleted === true
+    ) {
+      return {
+        label: "Pending",
+        color: "#eab308",
+      };
+    }
+    let sublist = parentSubtasks;
+    if ((!sublist || sublist.length === 0) && Array.isArray(item.parentTask?.subtasks)) {
+      sublist = item.parentTask.subtasks;
+    }
+
+    let targetSt = null;
+    if (lastCycle.reinitiatedSubtaskId && Array.isArray(sublist) && sublist.length > 0) {
+      targetSt = sublist.find(
+        (st) => String(st._id || st.id || "") === String(lastCycle.reinitiatedSubtaskId)
+      );
+    }
+
+    if (!targetSt && typeof item.contextTaskId === "object" && item.contextTaskId !== null) {
+      targetSt = item.contextTaskId;
+    }
+    if (!targetSt && typeof item.contextTask === "object" && item.contextTask !== null) {
+      targetSt = item.contextTask;
+    }
+
+    if (targetSt) {
+      const stStatus = String(targetSt.status || "").toUpperCase();
+      const isContextStepDone = stStatus === "DONE" || stStatus === "COMPLETED";
+
+      // ✅ If the context step has been re-completed, show Pending for Cycle N+1!
+      if (isContextStepDone) {
+        return {
+          label: "Pending",
+          color: "#eab308",
+        };
+      }
+    }
+
+    // 🎯 Fallback for subtask visibility filtering:
+    // If targetSt is not directly in this user's list, but sublist has a completed context subtask:
+    if (!targetSt && Array.isArray(sublist)) {
+      const completedContextSt = sublist.find(
+        (st) =>
+          !st.isApprovalTask &&
+          st.taskType !== "approval" &&
+          ["DONE", "COMPLETED"].includes(String(st.status || "").toUpperCase())
+      );
+      if (completedContextSt) {
+        return {
+          label: "Pending",
+          color: "#eab308",
+        };
+      }
+    }
+
+    // Whether targetSt is found in this user's visible list or not, as long as it's not resolved/completed, show Re-initiated (Cycle N)!
+    return {
+      label: lastCycle?.cycleNumber ? `Re-initiated (Cycle ${lastCycle.cycleNumber})` : "Re-initiated",
+      color: "#d97706",
+    };
+  }
+
+  const rawStatus = String(item.status || "").toUpperCase();
+  if (rawStatus === "OPEN") {
+    return {
+      label: "Open",
+      color: "#6c757d",
+    };
+  }
+
+  return {
+    label: "Pending",
+    color: "#eab308",
+  };
+};
 
 const TaskTable = React.memo(function TaskTable({
   paginatedTasks,
@@ -358,9 +474,17 @@ const TaskTable = React.memo(function TaskTable({
                               className="cursor-pointer hover:bg-gray-50 px-2 py-1 rounded transition-all duration-200 inline-block flex-1 editable-task-title"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleTaskTitleClick(task);
+                                if (canEditTaskTitle(task, currentUser)) {
+                                  handleTaskTitleClick(task);
+                                } else {
+                                  handleNavigateToTask(task.id || task._id);
+                                }
                               }}
-                              title={task.title}
+                              title={
+                                !canEditTaskTitle(task, currentUser)
+                                  ? `${task.title}`
+                                  : task.title
+                              }
                             >
                               {task.isRisk && (
                                 <span
@@ -411,35 +535,18 @@ const TaskTable = React.memo(function TaskTable({
 
                   {/* Status Cell */}
                   <TableCell className="px-6 py-1.5 text-nowrap text-left">
-                    {task.isApprovalTask ? (
-                      <span
-                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-white shadow-sm"
-                        style={{
-                          backgroundColor:
-                            task.status === "CANCELLED" ||
-                            task.approvalStatus === "rejected"
-                              ? "#dc2626"
-                              : task.approvalStatus === "approved" ||
-                                  task.status === "DONE" ||
-                                  task.status === "completed"
-                                ? "#16a34a"
-                                : String(task.status || "").toUpperCase() ===
-                                    "OPEN"
-                                  ? "#6c757d"
-                                  : "#eab308",
-                        }}
-                      >
-                        {task.status === "CANCELLED" ||
-                        task.approvalStatus === "rejected"
-                          ? "Rejected"
-                          : task.approvalStatus === "approved" ||
-                              task.status === "DONE" ||
-                              task.status === "completed"
-                            ? "Approved"
-                            : String(task.status || "").toUpperCase() === "OPEN"
-                              ? "Open"
-                              : "Pending"}
-                      </span>
+                    {task.isApprovalTask || task.taskType === "approval" ? (
+                      (() => {
+                        const statusInfo = getApprovalTaskStatusInfo(task, task.subtasks);
+                        return (
+                          <span
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-white shadow-sm"
+                            style={{ backgroundColor: statusInfo.color }}
+                          >
+                            {statusInfo.label}
+                          </span>
+                        );
+                      })()
                     ) : (
                       <div onClick={(e) => e.stopPropagation()}>
                         <TaskStatusDropdown
@@ -695,13 +802,21 @@ const TaskTable = React.memo(function TaskTable({
                             ) : (
                               <span
                                 className="font-medium text-gray-800 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded transition-all duration-200 inline-block flex-1"
-                                onClick={() =>
-                                  handleSubtaskTitleClick(
-                                    subtask,
-                                    task._id || task.id,
-                                  )
+                                onClick={() => {
+                                  if (canEditTaskTitle(subtask, currentUser)) {
+                                    handleSubtaskTitleClick(
+                                      subtask,
+                                      task._id || task.id,
+                                    );
+                                  } else {
+                                    handleNavigateToTask(task._id || task.id);
+                                  }
+                                }}
+                                title={
+                                  !canEditTaskTitle(subtask, currentUser)
+                                    ? `${subtask.title} `
+                                    : subtask.title
                                 }
-                                title={subtask.title}
                               >
                                 {subtask.isRisk && (
                                   <span className="text-yellow-700 cursor-help">
@@ -753,37 +868,17 @@ const TaskTable = React.memo(function TaskTable({
                           <div onClick={(e) => e.stopPropagation()}>
                             {subtask.isApprovalTask ||
                             subtask.taskType === "approval" ? (
-                              <span
-                                className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium text-white shadow-sm"
-                                style={{
-                                  backgroundColor:
-                                    subtask.status === "CANCELLED" ||
-                                    subtask.approvalStatus === "rejected"
-                                      ? "#dc2626"
-                                      : subtask.approvalStatus === "approved" ||
-                                          subtask.status === "DONE" ||
-                                          subtask.status === "completed"
-                                        ? "#16a34a"
-                                        : String(
-                                              subtask.status || "",
-                                            ).toUpperCase() === "OPEN"
-                                          ? "#6c757d"
-                                          : "#eab308",
-                                }}
-                              >
-                                {subtask.status === "CANCELLED" ||
-                                subtask.approvalStatus === "rejected"
-                                  ? "Rejected"
-                                  : subtask.approvalStatus === "approved" ||
-                                      subtask.status === "DONE" ||
-                                      subtask.status === "completed"
-                                    ? "Approved"
-                                    : String(
-                                          subtask.status || "",
-                                        ).toUpperCase() === "OPEN"
-                                      ? "Open"
-                                      : "Pending"}
-                              </span>
+                              (() => {
+                                const statusInfo = getApprovalTaskStatusInfo(subtask, task.subtasks);
+                                return (
+                                  <span
+                                    className="inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium text-white shadow-sm"
+                                    style={{ backgroundColor: statusInfo.color }}
+                                  >
+                                    {statusInfo.label}
+                                  </span>
+                                );
+                              })()
                             ) : (
                               <TaskStatusDropdown
                                 task={subtask}

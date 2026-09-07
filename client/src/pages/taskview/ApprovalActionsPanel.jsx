@@ -8,7 +8,166 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
   const [comment, setComment] = useState("");
   const [showCommentBox, setShowCommentBox] = useState(false);
   const [selectedAction, setSelectedAction] = useState(null);
+  const [rejectionMode, setRejectionMode] = useState("reinitiate"); // "reinitiate" | "terminate"
+  const [reinitiateSubtaskId, setReinitiateSubtaskId] = useState("");
   const { showSuccessToast, showErrorToast } = useShowToast();
+
+  const getParentTaskId = (t) => {
+    if (!t) return null;
+    if (t.parentTaskId) {
+      if (typeof t.parentTaskId === "object" && t.parentTaskId !== null) {
+        return t.parentTaskId._id || t.parentTaskId.id || String(t.parentTaskId);
+      }
+      return String(t.parentTaskId);
+    }
+    if (t.parentTask) {
+      if (typeof t.parentTask === "object" && t.parentTask !== null) {
+        return t.parentTask._id || t.parentTask.id || String(t.parentTask);
+      }
+      return String(t.parentTask);
+    }
+    return null;
+  };
+
+  // 🎯 Explicit Classification based on database fields (isSubtask, isApprovalTask, taskType)
+  const isApprovalTask = Boolean(
+    task?.isApprovalTask ||
+    task?.taskType === "approval" ||
+    task?.mainTaskType === "approval"
+  );
+  const isSubtask = Boolean(
+    task?.isSubtask ||
+    task?.parentTaskId ||
+    task?.parentTask
+  );
+
+  // Case 1: Normal Standalone Approval Task (isSubtask = false, isApprovalTask = true)
+  const isNormalApprovalTask = isApprovalTask && !isSubtask;
+
+  // Case 2: Approval Subtask in a Process (isSubtask = true, isApprovalTask = true)
+  const isApprovalSubtask = isApprovalTask && isSubtask;
+
+  const [parentSubtasks, setParentSubtasks] = React.useState([]);
+  const [configuredTaskDoc, setConfiguredTaskDoc] = React.useState(null);
+
+  React.useEffect(() => {
+    const parentId = getParentTaskId(task);
+    if (parentId) {
+      const token = localStorage.getItem("token");
+      axios
+        .get(`/api/tasks/${parentId}?forApproval=true`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        .then((res) => {
+          const fetchedSubtasks = res.data?.data?.subtasks || res.data?.subtasks || [];
+          if (Array.isArray(fetchedSubtasks) && fetchedSubtasks.length > 0) {
+            setParentSubtasks(fetchedSubtasks);
+          }
+        })
+        .catch((err) => console.error("Error loading parent task subtasks:", err));
+    }
+  }, [task?.parentTaskId, task?.parentTask, task?._id]);
+
+  // Extract configured context task ID if set on the approval subtask
+  const configuredContextTaskId = React.useMemo(() => {
+    const rawContext =
+      task?.contextTaskId ||
+      task?.contextTask ||
+      task?.context_task_id ||
+      task?.contextStepId ||
+      task?.contextSubtaskId ||
+      task?.linkedTaskId ||
+      task?.configuration?.contextTaskId ||
+      task?.configuration?.linkedTaskId;
+
+    if (!rawContext) return null;
+    if (typeof rawContext === "object" && rawContext !== null) {
+      return (rawContext._id || rawContext.id)?.toString() || null;
+    }
+    return String(rawContext);
+  }, [task]);
+
+  // Fetch configured context task directly if missing from parent subtasks
+  React.useEffect(() => {
+    if (configuredContextTaskId) {
+      const token = localStorage.getItem("token");
+      axios
+        .get(`/api/tasks/${configuredContextTaskId}?forApproval=true`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        .then((res) => {
+          if (res.data?.success && res.data?.data) {
+            setConfiguredTaskDoc(res.data.data);
+          }
+        })
+        .catch((err) => console.error("Error fetching configured context task:", err));
+    }
+  }, [configuredContextTaskId]);
+
+  // Extract sibling subtasks available for re-initiation
+  const availableContextSubtasks = React.useMemo(() => {
+    let sublist = [];
+    if (Array.isArray(parentSubtasks) && parentSubtasks.length > 0) {
+      sublist = parentSubtasks;
+    } else if (Array.isArray(task?.parentTask?.subtasks)) {
+      sublist = task.parentTask.subtasks;
+    } else if (Array.isArray(task?.subtasks)) {
+      sublist = task.subtasks;
+    }
+
+    const currentId = String(task?._id || task?.id || "");
+
+    // 🎯 Rule 1: If a specific contextTaskId is configured on this approval subtask, ONLY show that task!
+    if (configuredContextTaskId) {
+      const specificTask = sublist.find(
+        (st) => String(st._id || st.id || "") === configuredContextTaskId
+      );
+      if (specificTask) {
+        return [specificTask];
+      }
+      if (configuredTaskDoc) {
+        return [configuredTaskDoc];
+      }
+      if (typeof task?.contextTaskId === "object" && task?.contextTaskId !== null) {
+        return [task.contextTaskId];
+      }
+      if (typeof task?.contextTask === "object" && task?.contextTask !== null) {
+        return [task.contextTask];
+      }
+    }
+
+    // 🎯 Rule 2: If no contextTaskId configured, only show preceding context subtasks (steps before current approval step)
+    const currentIdx = sublist.findIndex(
+      (st) => String(st._id || st.id || "") === currentId
+    );
+
+    let candidates = sublist;
+    if (currentIdx > 0) {
+      // Pick steps preceding current approval step
+      candidates = sublist.slice(0, currentIdx);
+    } else {
+      // Filter out current task and future open tasks that haven't been initiated
+      candidates = sublist.filter((st) => {
+        const stId = String(st._id || st.id || "");
+        if (stId === currentId) return false;
+        const stStatus = String(st.status || "").toUpperCase();
+        return ["DONE", "COMPLETED", "IN_PROGRESS", "INPROGRESS"].includes(stStatus);
+      });
+    }
+
+    return candidates.filter((st) => String(st._id || st.id || "") !== currentId);
+  }, [task, parentSubtasks, configuredContextTaskId, configuredTaskDoc]);
+
+  // Set default reinitiateSubtaskId when list changes
+  React.useEffect(() => {
+    if (availableContextSubtasks.length > 0) {
+      const defaultSt = availableContextSubtasks[0];
+      const defaultId = String(defaultSt._id || defaultSt.id || "");
+      if (defaultId && defaultId !== reinitiateSubtaskId) {
+        setReinitiateSubtaskId(defaultId);
+      }
+    }
+  }, [availableContextSubtasks]);
 
   // Debug logging
   console.log("🔍 ApprovalActionsPanel Debug:", {
@@ -36,31 +195,9 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
   // Get current user ID
   const currentUserId = (currentUser?.id || currentUser?._id)?.toString();
 
-  console.log("🔑 ID Comparison Debug:");
-  console.log("  currentUserId:", currentUserId);
-  console.log("  approvers array:", task?.approvers);
-  task?.approvers?.forEach((approver, idx) => {
-    const approverId = getApproverId(approver);
-    console.log(
-      `  approver[${idx}]:`,
-      approver,
-      "→ ID:",
-      approverId,
-      "Match:",
-      approverId === currentUserId,
-    );
-  });
-
   // Check if current user is an approver
   const isApprover = task?.approvers?.some(
     (approver) => getApproverId(approver) === currentUserId,
-  );
-
-  console.log(
-    "✅ isApprover check:",
-    isApprover,
-    "currentUserId:",
-    currentUserId,
   );
 
   // For sequential mode, check if it's current user's turn
@@ -71,12 +208,6 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
       const isCurrentTurn =
         currentApproverInOrder &&
         getApproverId(currentApproverInOrder.approverId) === currentUserId;
-      console.log(
-        "🔄 Sequential mode - isCurrentTurn:",
-        isCurrentTurn,
-        "currentIndex:",
-        currentIndex,
-      );
       return isCurrentTurn;
     }
     return isApprover;
@@ -87,23 +218,137 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
     (decision) => getApproverId(decision.approverId) === currentUserId,
   );
 
-  // Task must be in IN_PROGRESS status to be active for approval
-  const isTaskActiveForApproval = ["IN_PROGRESS", "INPROGRESS"].includes(
+  // Task must be in OPEN, PENDING, or IN_PROGRESS status to be active for approval
+  const isTaskActiveForApproval = ["OPEN", "PENDING", "IN_PROGRESS", "INPROGRESS"].includes(
     String(task?.status || "").toUpperCase()
   );
+
+  const lastCycle = React.useMemo(() => {
+    if (Array.isArray(task?.approvalCycles) && task.approvalCycles.length > 0) {
+      return task.approvalCycles[task.approvalCycles.length - 1];
+    }
+    return null;
+  }, [task?.approvalCycles]);
+
+  const isWaitingForReinitiatedStep = React.useMemo(() => {
+    if (!lastCycle || lastCycle.actionTaken !== "reinitiate_context_step") {
+      return false;
+    }
+    if (task?.contextStepCompleted === true || lastCycle.isResolved === true || lastCycle.contextStepCompleted === true) {
+      return false;
+    }
+
+    let sublist = [];
+    if (Array.isArray(parentSubtasks) && parentSubtasks.length > 0) {
+      sublist = [...parentSubtasks];
+    }
+    if (Array.isArray(task?.parentTask?.subtasks)) {
+      sublist = [...sublist, ...task.parentTask.subtasks];
+    }
+    if (Array.isArray(task?.subtasks)) {
+      sublist = [...sublist, ...task.subtasks];
+    }
+
+    // 🎯 Instant check: If sublist contains ANY completed context step, return false immediately on frame 1!
+    const hasCompletedContextStep = sublist.some(
+      (st) =>
+        !st.isApprovalTask &&
+        st.taskType !== "approval" &&
+        ["DONE", "COMPLETED"].includes(String(st.status || "").toUpperCase())
+    );
+    if (hasCompletedContextStep) {
+      return false;
+    }
+
+    let reinitiatedSt = null;
+    if (lastCycle.reinitiatedSubtaskId) {
+      if (sublist.length > 0) {
+        reinitiatedSt = sublist.find(
+          (st) => String(st._id || st.id || "") === String(lastCycle.reinitiatedSubtaskId)
+        );
+      }
+      if (!reinitiatedSt && configuredTaskDoc && String(configuredTaskDoc._id || configuredTaskDoc.id || "") === String(lastCycle.reinitiatedSubtaskId)) {
+        reinitiatedSt = configuredTaskDoc;
+      }
+      if (!reinitiatedSt && typeof task?.contextTaskId === "object" && task?.contextTaskId !== null) {
+        reinitiatedSt = task.contextTaskId;
+      }
+      if (!reinitiatedSt && typeof task?.contextTask === "object" && task?.contextTask !== null) {
+        reinitiatedSt = task.contextTask;
+      }
+    }
+
+    if (reinitiatedSt) {
+      const stStatus = String(reinitiatedSt.status || "").toUpperCase();
+      const isDone = stStatus === "DONE" || stStatus === "COMPLETED";
+      return !isDone;
+    }
+
+    // 🎯 Fallback: If sublist contains any completed context subtask, the re-initiated step is finished!
+    if (Array.isArray(sublist) && sublist.length > 0) {
+      const completedContextSt = sublist.find(
+        (st) =>
+          !st.isApprovalTask &&
+          st.taskType !== "approval" &&
+          ["DONE", "COMPLETED"].includes(String(st.status || "").toUpperCase())
+      );
+      if (completedContextSt) {
+        return false;
+      }
+    }
+
+    return true;
+  }, [lastCycle, parentSubtasks, task?.parentTask?.subtasks, task?.subtasks, configuredTaskDoc, task?.contextTaskId, task?.contextTask, task?.contextStepCompleted]);
+
+  // 🎯 Check if configured/linked context task is completed before enabling approval actions
+  const contextTaskCompletionStatus = React.useMemo(() => {
+    if (!isApprovalSubtask && !configuredContextTaskId) {
+      return { isRequired: false, isCompleted: true, title: "", status: "" };
+    }
+
+    let targetTask = null;
+
+    if (configuredContextTaskId) {
+      if (configuredTaskDoc && String(configuredTaskDoc._id || configuredTaskDoc.id || "") === configuredContextTaskId) {
+        targetTask = configuredTaskDoc;
+      } else if (Array.isArray(parentSubtasks) && parentSubtasks.length > 0) {
+        targetTask = parentSubtasks.find((st) => String(st._id || st.id || "") === configuredContextTaskId);
+      } else if (typeof task?.contextTaskId === "object" && task?.contextTaskId !== null) {
+        targetTask = task.contextTaskId;
+      } else if (typeof task?.contextTask === "object" && task?.contextTask !== null) {
+        targetTask = task.contextTask;
+      }
+    } else if (isApprovalSubtask && Array.isArray(parentSubtasks) && parentSubtasks.length > 0) {
+      const currentId = String(task._id || task.id || "");
+      const currentIdx = parentSubtasks.findIndex((st) => String(st._id || st.id || "") === currentId);
+      if (currentIdx > 0) {
+        targetTask = parentSubtasks[currentIdx - 1];
+      }
+    }
+
+    if (!targetTask) {
+      return { isRequired: false, isCompleted: true, title: "", status: "" };
+    }
+
+    const stStatus = String(targetTask.status || "").toUpperCase();
+    const isCompleted = stStatus === "DONE" || stStatus === "COMPLETED";
+    const title = targetTask.title || targetTask.name || targetTask.taskName || "Context Task";
+
+    return {
+      isRequired: true,
+      isCompleted,
+      title,
+      status: stStatus.replace("_", " "),
+    };
+  }, [isApprovalSubtask, configuredContextTaskId, configuredTaskDoc, parentSubtasks, task]);
 
   const canApprove =
     isTaskActiveForApproval &&
     isApprover &&
     !userDecision &&
+    !isWaitingForReinitiatedStep &&
+    contextTaskCompletionStatus.isCompleted &&
     task?.approvalStatus === "pending";
-
-  console.log("🎯 Final decision:", {
-    canApprove,
-    isApprover,
-    hasDecided: !!userDecision,
-    approvalStatus: task.approvalStatus,
-  });
 
   const handleApprovalAction = async (action) => {
     if (!canApprove) return;
@@ -121,14 +366,28 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
   const submitApproval = async () => {
     if (!selectedAction) return;
 
+    if (selectedAction === "reject" && isApprovalSubtask && rejectionMode === "reinitiate" && availableContextSubtasks.length > 0 && !reinitiateSubtaskId) {
+      showErrorToast("Please select a context subtask to re-initiate.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      const payload = {
+        action: selectedAction,
+        comment: comment.trim(),
+      };
+
+      if (selectedAction === "reject" && isApprovalSubtask && availableContextSubtasks.length > 0) {
+        payload.rejectionMode = rejectionMode;
+        payload.reinitiateSubtaskId = reinitiateSubtaskId;
+      } else if (selectedAction === "reject") {
+        payload.rejectionMode = "terminate";
+      }
+
       const response = await axios.post(
         `/api/tasks/${task._id}/approve`,
-        {
-          action: selectedAction,
-          comment: comment.trim(),
-        },
+        payload,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -138,7 +397,11 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
 
       if (response.data.success) {
         showSuccessToast(
-          `Task ${selectedAction === "approve" ? "approved" : "rejected"} successfully`,
+          selectedAction === "approve"
+            ? "Task approved successfully"
+            : rejectionMode === "reinitiate"
+              ? "Task rejected & context step re-initiated successfully"
+              : "Task rejected & process terminated successfully",
         );
         setComment("");
         setShowCommentBox(false);
@@ -192,8 +455,10 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
         return "bg-green-100 text-green-800 border-green-200";
       case "rejected":
         return "bg-red-100 text-red-800 border-red-200";
+      case "reinitiated":
+        return "bg-red-100 text-red-800 border-red-200 font-bold";
       case "awaiting_turn":
-        return "bg-blue-100 text-blue-800 border-blue-200";
+        return "bg-gray-100 text-gray-600 border-gray-200";
       case "skipped":
         return "bg-gray-100 text-gray-600 border-gray-200";
       case "pending":
@@ -208,6 +473,8 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
         return "Approved";
       case "rejected":
         return "Rejected";
+      case "reinitiated":
+        return `Rejected (Cycle ${lastCycle?.cycleNumber || 1})`;
       case "awaiting_turn":
         return "Awaiting Turn";
       case "skipped":
@@ -258,13 +525,22 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
           (d) => getApproverId(d.approverId) === approverIdStr,
         );
 
+        let status = ao.status || "pending";
+        if (
+          isWaitingForReinitiatedStep &&
+          lastCycle &&
+          String(lastCycle.decidedBy || "") === approverIdStr
+        ) {
+          status = "reinitiated";
+        }
+
         return {
           id: approverIdStr,
           name,
           email,
           avatar,
           order: ao.order,
-          status: ao.status || "pending",
+          status,
           decidedAt: ao.decidedAt || decision?.decidedAt || null,
           comment: decision?.comment || "",
         };
@@ -314,6 +590,14 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
             : "rejected";
       }
 
+      if (
+        isWaitingForReinitiatedStep &&
+        lastCycle &&
+        String(lastCycle.decidedBy || "") === approverIdStr
+      ) {
+        status = "reinitiated";
+      }
+
       return {
         id: approverIdStr,
         name,
@@ -321,8 +605,8 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
         avatar,
         order: null,
         status,
-        decidedAt: decision?.decidedAt || null,
-        comment: decision?.comment || "",
+        decidedAt: decision?.decidedAt || (isWaitingForReinitiatedStep ? lastCycle?.decidedAt : null),
+        comment: decision?.comment || (isWaitingForReinitiatedStep ? lastCycle?.rejectionReason : ""),
       };
     });
   };
@@ -370,38 +654,39 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
               Overall Status:
             </label>
             <p className="mt-1">
-              <span
-                className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  isCancelled
-                    ? "bg-red-100 text-red-800"
-                    : String(task.status).toUpperCase() === "OPEN"
-                    ? "bg-blue-100 text-blue-800"
-                    : getStatusBadgeColor(task.approvalStatus)
-                }`}
-              >
-                {isCancelled
-                  ? "Cancelled"
-                  : String(task.status).toUpperCase() === "OPEN"
-                  ? "Open (Draft)"
-                  : task.approvalStatus
-                  ? task.approvalStatus.charAt(0).toUpperCase() +
-                    task.approvalStatus.slice(1)
-                  : "Pending"}
-              </span>
+              {isWaitingForReinitiatedStep ? (
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                  Re-initiated (Cycle {lastCycle?.cycleNumber || 1})
+                </span>
+              ) : isCancelled || task.approvalStatus === "rejected" ? (
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-300">
+                  Terminated
+                </span>
+              ) : task.approvalStatus === "approved" || task.status === "DONE" ? (
+                <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-300">
+                  Approved
+                </span>
+              ) : (
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    String(task.status).toUpperCase() === "OPEN"
+                      ? "bg-blue-100 text-blue-800"
+                      : getStatusBadgeColor(task.approvalStatus)
+                  }`}
+                >
+                  {String(task.status).toUpperCase() === "OPEN"
+                    ? "Open (Draft)"
+                    : task.approvalStatus
+                    ? task.approvalStatus.charAt(0).toUpperCase() +
+                      task.approvalStatus.slice(1)
+                    : "Pending"}
+                </span>
+              )}
             </p>
           </div>
         </div>
 
-        {/* OPEN Status Notice */}
-        {String(task.status).toUpperCase() === "OPEN" && (
-          <div className="mt-3 pt-3 border-t border-gray-200">
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-sm">
-              <p className="text-xs text-blue-800 font-semibold flex items-center gap-1.5">
-                <span>ℹ️</span> Task Status is <strong>OPEN</strong>. Approval actions will become active for approvers when this task transitions to <strong>IN_PROGRESS</strong>.
-              </p>
-            </div>
-          </div>
-        )}
+
 
         {/* Auto-approval info */}
         {task.autoApproveEnabled && task.autoApproveAfter && (
@@ -513,6 +798,48 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
 
       {!isCancelled && (
         <>
+          {/* Re-initiated Notice Card */}
+          {isWaitingForReinitiatedStep && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-md">
+                <div className="flex items-start gap-2.5">
+                  <span className="text-amber-600 text-base shrink-0 mt-0.5">🔁</span>
+                  <div>
+                    <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-2">
+                      <span>Re-initiated for Revision</span>
+                      <span className="px-1.5 py-0.5 bg-red-100 text-red-800 rounded text-[10px]">
+                        Cycle {lastCycle?.cycleNumber || 1} Rejected
+                      </span>
+                    </h4>
+                    <p className="text-xs text-amber-800 mt-1">
+                      This approval task was rejected in Cycle {lastCycle?.cycleNumber || 1} and sent back to step{" "}
+                      <strong>"{lastCycle?.reinitiatedSubtaskTitle || "Context Subtask"}"</strong>. Approval action buttons are hidden until that context step is completed.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Linked Context Task Not Completed Notice Card */}
+          {contextTaskCompletionStatus.isRequired && !contextTaskCompletionStatus.isCompleted && !isWaitingForReinitiatedStep && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="flex items-start gap-2.5">
+                  <span className="text-blue-600 text-base shrink-0 mt-0.5">⏳</span>
+                  <div>
+                    <h4 className="text-xs font-bold text-blue-900 uppercase tracking-wider">
+                      Waiting for Linked Context Task Completion
+                    </h4>
+                    <p className="text-xs text-blue-800 mt-1">
+                      This approval subtask is linked to step <strong>"{contextTaskCompletionStatus.title}"</strong> (Status: <span className="font-semibold">{contextTaskCompletionStatus.status}</span>). Approval and rejection actions will become active once that context step is completed.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Action Buttons - Only show if user can approve */}
           {canApprove && (
             <div className="mt-4 pt-4 border-t border-gray-200">
@@ -577,7 +904,7 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       {selectedAction === "approve"
                         ? "Approval Comment (Optional)"
-                        : "Rejection Reason (Optional)"}
+                        : "Rejection Reason (Required)"}
                     </label>
                     <textarea
                       value={comment}
@@ -588,10 +915,82 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
                           : "Explain why you're rejecting this task..."
                       }
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
                     />
                   </div>
-                  <div className="flex gap-3">
+
+                  {selectedAction === "reject" && isApprovalSubtask && availableContextSubtasks.length > 0 && (
+                    <div className="p-3 bg-red-50/50 border border-red-200 rounded-md space-y-3">
+                      <label className="block text-xs font-bold text-red-800 uppercase tracking-wider">
+                        Rejection Action
+                      </label>
+
+                      <div className="space-y-2 text-xs">
+                        <label className="flex items-start gap-2 cursor-pointer p-2.5 rounded border bg-white border-red-200 hover:border-red-300 transition-colors">
+                          <input
+                            type="radio"
+                            name="rejectionMode"
+                            value="reinitiate"
+                            checked={rejectionMode === "reinitiate"}
+                            onChange={() => setRejectionMode("reinitiate")}
+                            className="mt-0.5 text-red-600 focus:ring-red-500"
+                          />
+                          <div>
+                            <span className="font-bold text-gray-800 block">Reject & Re-initiate Context Subtask</span>
+                            <span className="text-gray-500 text-[11px]">
+                              Send process back to a previous step. Step will become <strong>In-Progress</strong> and current rejection logged as Cycle {task.currentCycle || 1}.
+                            </span>
+                          </div>
+                        </label>
+
+                        {rejectionMode === "reinitiate" && (
+                          <div className="pl-6 pt-1 space-y-1">
+                            <label className="block text-[11px] font-semibold text-gray-700">
+                              Select Context Step to Re-initiate:
+                            </label>
+                            <select
+                              value={reinitiateSubtaskId}
+                              onChange={(e) => setReinitiateSubtaskId(e.target.value)}
+                              className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-red-500"
+                            >
+                              {availableContextSubtasks.map((st) => {
+                                const stId = String(st._id || st.id || "");
+                                const title = st.title || st.name || st.taskName || "Context Subtask Step";
+                                const status = (st.status || "OPEN").replace("_", " ");
+                                return (
+                                  <option key={stId} value={stId}>
+                                    {title} ({status})
+                                  </option>
+                                );
+                              })}
+                              {availableContextSubtasks.length === 0 && (
+                                <option value="">Default Context Subtask Step</option>
+                              )}
+                            </select>
+                          </div>
+                        )}
+
+                        <label className="flex items-start gap-2 cursor-pointer p-2.5 rounded border bg-white border-red-200 hover:border-red-300 transition-colors">
+                          <input
+                            type="radio"
+                            name="rejectionMode"
+                            value="terminate"
+                            checked={rejectionMode === "terminate"}
+                            onChange={() => setRejectionMode("terminate")}
+                            className="mt-0.5 text-red-600 focus:ring-red-500"
+                          />
+                          <div>
+                            <span className="font-bold text-gray-800 block">Reject & Terminate Process</span>
+                            <span className="text-gray-500 text-[11px]">
+                              Exit process completely. Parent process and all subtasks will be marked as <strong>Cancelled</strong>. And this task is marked as <strong>Terminated</strong>.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 pt-1">
                     <Button
                       variant={
                         selectedAction === "approve" ? "primary" : "destructive"
@@ -660,6 +1059,73 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
             </div>
           )}
         </>
+      )}
+
+      {/* Approval Cycles Audit Log UI */}
+      {Array.isArray(task.approvalCycles) && task.approvalCycles.length > 0 && (
+        <div className="mt-5 pt-4 border-t border-gray-200">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+              <span>🔄</span> Approval Cycles Audit Log ({task.approvalCycles.length} {task.approvalCycles.length === 1 ? 'Cycle' : 'Cycles'})
+            </h4>
+            <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+              Current: Cycle {task.currentCycle || task.approvalCycles.length + 1}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {task.approvalCycles.map((cycle, idx) => (
+              <div key={idx} className="p-3 rounded border border-gray-200 bg-slate-50/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    Approval Cycle {cycle.cycleNumber || idx + 1}
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase ${
+                      cycle.status === "approved"
+                        ? "bg-green-100 text-green-800 border border-green-200"
+                        : cycle.status === "rejected"
+                          ? "bg-red-100 text-red-800 border border-red-200"
+                          : "bg-blue-100 text-blue-800 border border-blue-200"
+                    }`}
+                  >
+                    {cycle.status === "rejected"
+                      ? cycle.actionTaken === "reinitiate_context_step"
+                        ? "Rejected (Re-initiated)"
+                        : "Rejected (Terminated)"
+                      : cycle.status}
+                  </span>
+                </div>
+
+                <div className="text-xs text-gray-600 space-y-1">
+                  {cycle.decidedByName && (
+                    <p>
+                      <strong>Decided By:</strong> {cycle.decidedByName} ({new Date(cycle.decidedAt).toLocaleString()})
+                    </p>
+                  )}
+
+                  {cycle.rejectionReason && (
+                    <p className="bg-red-50 text-red-800 p-2 rounded border border-red-100 italic">
+                      "{cycle.rejectionReason}"
+                    </p>
+                  )}
+
+                  {cycle.actionTaken === "reinitiate_context_step" && (
+                    <p className="text-purple-700 font-semibold text-[11px] flex items-center gap-1">
+                      ↳ Re-initiated Context Step: <strong>{cycle.reinitiatedSubtaskTitle || "Context Step"}</strong>
+                    </p>
+                  )}
+
+                  {cycle.actionTaken === "terminate_process" && (
+                    <p className="text-red-700 font-semibold text-[11px]">
+                      ✕ Process Terminated & Cancelled
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Redirect, useLocation } from "wouter";
 import axios from "axios";
 import { useTaskStatuses } from "../../hooks/useTaskStatuses";
+import { canEditTaskTitle } from "../../utils/taskHelpers";
 import { Check, Flag } from "lucide-react";
 
 export default function AllTasks({
@@ -587,6 +588,10 @@ export default function AllTasks({
   };
 
   const handleTaskTitleClick = (task) => {
+    if (!canEditTaskTitle(task, currentUser)) {
+      onNavigateToTask?.(task.id || task._id);
+      return;
+    }
     setEditingTaskId(task.id);
     setEditingTitle(task.title);
   };
@@ -1912,20 +1917,58 @@ function TaskStatusDropdown({
   const [showTooltip, setShowTooltip] = useState(false);
   const [validTransitions, setValidTransitions] = useState([]);
 
-  const currentStatusObj = statuses.find(
-    (s) => s.code === currentStatus && s.active,
+  const normStatus = (str) =>
+    String(str || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+
+  let currentStatusObj = statuses.find(
+    (s) => s.code === currentStatus && s.active !== false,
   );
-  const badgeStyle = currentStatusObj
-    ? {
-        backgroundColor: currentStatusObj.color,
-        color: "white",
-      }
-    : {};
+  if (!currentStatusObj && currentStatus) {
+    currentStatusObj = statuses.find(
+      (s) => normStatus(s.code) === normStatus(currentStatus) && s.active !== false,
+    );
+  }
+  if (!currentStatusObj && currentStatus) {
+    currentStatusObj = statuses.find(
+      (s) => normStatus(s.label) === normStatus(currentStatus) && s.active !== false,
+    );
+  }
+
+  const isNormInProgress = normStatus(currentStatus) === "inprogress";
+  const isNormDone = normStatus(currentStatus) === "done" || normStatus(currentStatus) === "completed";
+  const isNormOpen = normStatus(currentStatus) === "open";
+
+  const displayLabel = currentStatusObj?.label || (
+    isNormInProgress
+      ? "In Progress"
+      : isNormDone
+        ? "Completed"
+        : isNormOpen
+          ? "Open"
+          : currentStatus
+  );
+
+  const displayColor = currentStatusObj?.color || (
+    isNormInProgress
+      ? "#3b82f6"
+      : isNormDone
+        ? "#16a34a"
+        : isNormOpen
+          ? "#6c757d"
+          : "#6c757d"
+  );
+
+  const badgeStyle = {
+    backgroundColor: displayColor,
+    color: "white",
+  };
 
   // Calculate valid transitions when dropdown opens
   React.useEffect(() => {
     if (isOpen && currentStatusObj) {
-      const transitions = currentStatusObj.allowedTransitions.filter(
+      const transitions = (currentStatusObj.allowedTransitions || []).filter(
         (transitionCode) => {
           const targetStatus = statuses.find(
             (s) => s.code === transitionCode && s.active,
@@ -1964,7 +2007,7 @@ function TaskStatusDropdown({
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
         >
-          {currentStatusObj?.label || currentStatus}
+          {displayLabel}
           <svg
             className="ml-1 w-3 h-3 opacity-50"
             fill="currentColor"
@@ -1995,7 +2038,7 @@ function TaskStatusDropdown({
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
       >
-        {currentStatusObj?.label || currentStatus}
+        {displayLabel}
         <svg className="ml-1 w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
           <path
             fillRule="evenodd"

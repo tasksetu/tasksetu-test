@@ -134,20 +134,25 @@ class LinkedTaskServiceClass {
           }
         }
 
-        // 🔔 Trigger approval notifications for auto-initiated Approval Task
+        // 🔔 Trigger approval notifications for auto-initiated Approval Task (skip if it's a re-initiated cycle, as checkAndNotifyApprovalTaskOnContextStepCompletion handles it)
         if (waitingTask.taskType === "approval" || waitingTask.subtaskType === "approval") {
-          try {
-            const EnhancedNotificationHelper = (await import("../services/enhancedNotificationHelper.js")).default;
-            EnhancedNotificationHelper.notifyTaskCreation(waitingTask, {
-              taskType: "approval",
-              createdBy: waitingTask.createdBy,
-              collaborators: waitingTask.collaborators || [],
-              approvers: waitingTask.approvers || [],
-            }).catch((aErr) =>
-              console.error("[LinkedTaskService] Auto-initiated approval notification failed:", aErr)
-            );
-          } catch (aErr) {
-            console.error("[LinkedTaskService] Failed to load EnhancedNotificationHelper:", aErr);
+          const isReinitiatedCycle = Array.isArray(waitingTask.approvalCycles) && 
+            waitingTask.approvalCycles.some((c) => c.actionTaken === "reinitiate_context_step");
+
+          if (!isReinitiatedCycle) {
+            try {
+              const EnhancedNotificationHelper = (await import("../services/enhancedNotificationHelper.js")).default;
+              EnhancedNotificationHelper.notifyTaskCreation(waitingTask, {
+                taskType: "approval",
+                createdBy: waitingTask.createdBy,
+                collaborators: waitingTask.collaborators || [],
+                approvers: waitingTask.approvers || [],
+              }).catch((aErr) =>
+                console.error("[LinkedTaskService] Auto-initiated approval notification failed:", aErr)
+              );
+            } catch (aErr) {
+              console.error("[LinkedTaskService] Failed to load EnhancedNotificationHelper:", aErr);
+            }
           }
         }
 

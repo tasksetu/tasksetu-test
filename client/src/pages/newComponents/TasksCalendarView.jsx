@@ -85,7 +85,7 @@ export default function TasksCalendarView({
     return instances;
   };
 
-  // Filter tasks to show all tasks with due dates (for calendar view) including recurring instances
+  // Filter tasks to show all tasks with due dates (for calendar view) including recurring instances and subtasks
   const getTasksWithDueDates = () => {
     const startDate = new Date(currentDate);
     startDate.setMonth(startDate.getMonth() - 1); // Show 1 month before for recurring tasks
@@ -93,22 +93,67 @@ export default function TasksCalendarView({
     endDate.setMonth(endDate.getMonth() + 2); // Show 2 months after for recurring tasks
 
     const allTasks = [];
+    const processedIds = new Set();
 
     effectiveTasks.forEach((task) => {
-      if (task.dueDate) {
+      const taskId = task.id || task._id;
+
+      // Top-level task handling
+      if (task.dueDate || task.due_date) {
+        const taskDueDate = task.dueDate || task.due_date;
         if (task.isRecurring) {
           // Generate recurring instances only within the date range
           const instances = generateRecurringTaskInstances(
-            task,
+            { ...task, dueDate: taskDueDate },
             startDate,
             endDate,
           );
-          allTasks.push(...instances);
+          instances.forEach((inst) => {
+            allTasks.push(inst);
+          });
         } else {
-          // For regular tasks, include all tasks regardless of date range
-          // This allows users to navigate to any month and see their tasks
-          allTasks.push(task);
+          if (taskId) processedIds.add(String(taskId));
+          allTasks.push({
+            ...task,
+            dueDate: taskDueDate,
+          });
         }
+      }
+
+      // Subtasks handling (embedded subtasks in task.subtasks)
+      if (Array.isArray(task.subtasks) && task.subtasks.length > 0) {
+        task.subtasks.forEach((subtask, index) => {
+          const subId = subtask._id || subtask.id || `${taskId}_sub_${index}`;
+          if (processedIds.has(String(subId))) return; // Avoid duplicates
+
+          const subDueDate =
+            subtask.dueDate ||
+            subtask.due_date ||
+            task.dueDate ||
+            task.due_date;
+
+          if (subDueDate) {
+            processedIds.add(String(subId));
+            allTasks.push({
+              ...subtask,
+              id: subId,
+              _id: subId,
+              title: subtask.title || subtask.name || subtask.text || "Untitled Subtask",
+              dueDate: subDueDate,
+              status: subtask.status || "OPEN",
+              priority: subtask.priority || task.priority || "medium",
+              assignee:
+                subtask.assignedTo?.name ||
+                (typeof subtask.assignedTo === "string" ? subtask.assignedTo : null) ||
+                subtask.assignee?.name ||
+                (typeof subtask.assignee === "string" ? subtask.assignee : null) ||
+                task.assignee,
+              isSubtask: true,
+              parentTaskId: taskId,
+              parentTitle: task.title,
+            });
+          }
+        });
       }
     });
 
@@ -782,12 +827,28 @@ Note: Live feed URLs require server-side implementation.`;
 
   // New function for task type color coding (Google Calendar style)
   const getTaskTypeColor = (task) => {
-    // Check if task is overdue
     const today = formatDateString(new Date());
-    const isOverdue = task.dueDate < today && task.status !== "completed";
+    const s = String(task.status || "").toLowerCase().replace(/[^a-z]/g, "");
+    const isFinished = [
+      "completed",
+      "done",
+      "cancelled",
+      "canceled",
+      "terminated",
+      "rejected",
+    ].includes(s);
 
+    if (s === "cancelled" || s === "canceled" || s === "terminated" || s === "rejected") {
+      return "bg-gray-100 text-gray-600 border-gray-400"; // Grey badge for cancelled/terminated
+    }
+
+    const isOverdue = task.dueDate < today && !isFinished;
     if (isOverdue) {
       return "bg-red-100 text-red-800 border-red-500"; // Overdue = Light Red with Red border
+    }
+
+    if (task.isSubtask) {
+      return "bg-indigo-50 text-indigo-800 border-indigo-400"; // Subtask = Light Indigo with Indigo border
     }
 
     if (task.isApprovalTask) {
@@ -801,15 +862,26 @@ Note: Live feed URLs require server-side implementation.`;
     return "bg-blue-100 text-blue-800 border-blue-500"; // Normal = Light Blue with Blue border
   };
 
-  // Function to get completed task styling
+  // Function to get completed / cancelled / terminated task styling
   const getCompletedTaskStyle = (task) => {
-    if (task.status === "completed") {
+    const s = String(task.status || "").toLowerCase().replace(/[^a-z]/g, "");
+    if (
+      [
+        "completed",
+        "done",
+        "cancelled",
+        "canceled",
+        "terminated",
+        "rejected",
+      ].includes(s)
+    ) {
       return "opacity-60 line-through";
     }
     return "";
   };
 
   const getTaskTypeIcon = (task) => {
+    if (task.isSubtask) return "↳";
     if (task.isApprovalTask) return "A";
     if (task.isRecurring || task.recurringFromTaskId) return "R";
     if (task.type === "milestone") return "M";
@@ -833,6 +905,7 @@ Note: Live feed URLs require server-side implementation.`;
 
     // Get task type icon (single character for small view)
     const getTaskTypeIcon = () => {
+      if (task.isSubtask) return size === "small" ? "↳" : "↳ ";
       if (task.isApprovalTask) return size === "small" ? "A" : "🟣";
       if (task.type === "milestone") return size === "small" ? "M" : "⭐";
       if (task.isRecurring || task.recurringFromTaskId)
@@ -863,7 +936,7 @@ Note: Live feed URLs require server-side implementation.`;
           e.stopPropagation();
           onClick(task);
         }}
-        title={`${task.title} - ${task.priority} Priority - Assigned to: ${task.assignee || "Unassigned"} - ${task.status} (${task.progress || 0}%)`}
+        title={`${task.isSubtask ? `[Subtask of "${task.parentTitle || "Parent Task"}"] ` : ""}${task.title} - ${task.priority} Priority - Assigned to: ${task.assignee || "Unassigned"} - ${task.status} (${task.progress || 0}%)`}
       >
         <div className="flex items-center w-full min-w-0 gap-1">
           {/* Task type icon */}
@@ -1353,80 +1426,54 @@ Note: Live feed URLs require server-side implementation.`;
                   >
                     {date && (
                       <>
-                        {/* Date number header - fixed height */}
-                        <div className="flex items-center justify-between mb-1 h-6">
-                          <div
-                            className={`text-sm font-medium relative ${
-                              isToday
-                                ? "text-blue-700 font-bold"
-                                : "text-gray-900"
-                            }`}
-                          >
-                            {isToday ? (
-                              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
-                                {date.getDate()}
-                              </div>
-                            ) : (
-                              date.getDate()
+                        {/* Date number header & task count - fixed top area */}
+                        <div className="flex-shrink-0 mb-1">
+                          <div className="flex items-center justify-between">
+                            <div
+                              className={`text-sm font-medium relative ${
+                                isToday
+                                  ? "text-blue-700 font-bold"
+                                  : "text-gray-900"
+                              }`}
+                            >
+                              {isToday ? (
+                                <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
+                                  {date.getDate()}
+                                </div>
+                              ) : (
+                                date.getDate()
+                              )}
+                            </div>
+                            {isToday && (
+                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                             )}
                           </div>
-                          {isToday && (
-                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                          )}
-                        </div>
-
-                        {/* Tasks container - flexible height with scroll */}
-                        <div className="flex-1 overflow-hidden">
-                          {/* Task count indicator */}
                           {tasksForDate.length > 0 && (
-                            <div className="text-xs text-gray-500 mb-1 font-medium">
+                            <div className="text-xs text-gray-500 font-medium mt-0.5">
                               {tasksForDate.length} task
                               {tasksForDate.length !== 1 ? "s" : ""}
                             </div>
                           )}
+                        </div>
 
-                          {/* Tasks list */}
-                          <div className="space-y-1 h-full">
-                            {tasksForDate.length === 0 ? (
-                              <div className="h-full flex items-center justify-center">
-                                <div className="text-xs text-gray-400 text-center">
-                                  Click to add task
-                                </div>
+                        {/* Tasks container - scrollable list below fixed count header */}
+                        <div className="flex-1 overflow-y-auto min-h-0 pr-0.5 space-y-1">
+                          {tasksForDate.length === 0 ? (
+                            <div className="h-full flex items-center justify-center">
+                              <div className="text-xs text-gray-400 text-center">
+                                Click to add task
                               </div>
-                            ) : (
-                              <>
-                                {/* Show first 3 tasks */}
-                                {tasksForDate.slice(0, 3).map((task) => (
-                                  <TaskEventBar
-                                    key={task.id}
-                                    task={task}
-                                    onClick={handleTaskClick}
-                                    size="small"
-                                  />
-                                ))}
-
-                                {/* Show "more" indicator if there are more than 3 tasks */}
-                                {tasksForDate.length > 3 && (
-                                  <div
-                                    className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-sm border cursor-pointer hover:bg-gray-200 transition-colors text-center font-medium"
-                                    title={`View all ${tasksForDate.length} tasks for this date`}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const dateStr = formatDateString(date);
-                                      if (onDueDateFilter) {
-                                        onDueDateFilter(
-                                          "specific_date",
-                                          dateStr,
-                                        );
-                                      }
-                                    }}
-                                  >
-                                    +{tasksForDate.length - 3} more
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
+                            </div>
+                          ) : (
+                            tasksForDate.map((task) => (
+                              <TaskEventBar
+                                key={task.id || task._id}
+                                task={task}
+                                onClick={handleTaskClick}
+                                size="small"
+                              />
+                            ))
+                          )}
                         </div>
                       </>
                     )}
@@ -1697,6 +1744,12 @@ Note: Live feed URLs require server-side implementation.`;
                 T
               </span>
               <span>Task</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 bg-indigo-50 border border-indigo-300 rounded text-xs flex items-center justify-center font-bold text-indigo-700">
+                ↳
+              </span>
+              <span>Subtask</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 bg-white border border-gray-300 rounded text-xs flex items-center justify-center font-bold">

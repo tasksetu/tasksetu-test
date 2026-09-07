@@ -1769,6 +1769,9 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
     // 2. Any task that has linked tasks (linkedTaskId, linkedToMilestone, linkedItems, linkedTasks, linkedTaskIds)
     const hasLinkedItems =
       !!t?.linkedTaskId ||
+      !!t?.contextTaskId ||
+      !!t?.contextTask ||
+      !!t?.context_task_id ||
       !!t?.linkedToMilestone ||
       (Array.isArray(t?.linkedItems) && t.linkedItems.length > 0) ||
       (Array.isArray(t?.linkedTasks) && t.linkedTasks.length > 0) ||
@@ -1783,7 +1786,7 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
     if (Array.isArray(t.linkedItems) && t.linkedItems.length > 0) return t.linkedItems.length;
     if (Array.isArray(t.linkedTasks) && t.linkedTasks.length > 0) return t.linkedTasks.length;
     if (Array.isArray(t.linkedTaskIds) && t.linkedTaskIds.length > 0) return t.linkedTaskIds.length;
-    if (t.linkedTaskId || t.linkedToMilestone) return 1;
+    if (t.linkedTaskId || t.contextTaskId || t.contextTask || t.context_task_id || t.linkedToMilestone) return 1;
     return 0;
   };
 
@@ -3386,6 +3389,10 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                       {isTaskEditable ? (
                         <>
                           <strong>Task Editable:</strong> Assignees can edit task details (recipients, email body, approvers, description, etc.) while status is <strong>OPEN</strong> without changing status.
+                        </>
+                      ) : String(task?.status || "").toUpperCase() === "OPEN" ? (
+                        <>
+                          <strong>Task View Only:</strong> You are not authorized to edit this task configuration. Only task owner, assignee, or collaborators can edit.
                         </>
                       ) : (
                         <>
@@ -5407,31 +5414,72 @@ function LinkedTasksTab({ task, taskId, rawTaskData, onRefresh, currentUser }) {
       const token = localStorage.getItem("token");
 
       const t = rawTaskData || task;
-      const directLinkedId =
-        t?.linkedTaskId?._id ||
+      const rawDirectLinked =
+        t?.contextTaskId ||
+        t?.contextTask ||
+        t?.context_task_id ||
         t?.linkedTaskId ||
-        t?.linkedToMilestone?._id ||
         t?.linkedToMilestone;
 
-      // If task has a direct linkedTaskId/linkedToMilestone and is not a milestone master
+      // If rawDirectLinked is already a populated object with details
+      if (
+        rawDirectLinked &&
+        typeof rawDirectLinked === "object" &&
+        (rawDirectLinked.title || rawDirectLinked.name)
+      ) {
+        setLinkedTasks([rawDirectLinked]);
+        setIsLoading(false);
+        return;
+      }
+
+      const directLinkedId =
+        typeof rawDirectLinked === "object" && rawDirectLinked !== null
+          ? String(rawDirectLinked._id || rawDirectLinked.id || "")
+          : String(rawDirectLinked || "");
+
+      // If task has a direct contextTaskId/linkedTaskId/linkedToMilestone and is not a milestone master
       if (
         directLinkedId &&
-        typeof directLinkedId === "string" &&
         t?.taskType !== "milestone" &&
         t?.taskType !== "Milestone" &&
         !t?.isMilestone
       ) {
         try {
-          const res = await axios.get(`/api/tasks/${directLinkedId}`, {
+          const res = await axios.get(`/api/tasks/${directLinkedId}?forApproval=true`, {
             headers: { Authorization: `Bearer ${token}` },
           });
-          if (res.data?.success && res.data?.data) {
-            setLinkedTasks([res.data.data]);
+          const fetchedItem = res.data?.data || res.data;
+          if (fetchedItem && (fetchedItem._id || fetchedItem.id)) {
+            setLinkedTasks([fetchedItem]);
             setIsLoading(false);
             return;
           }
         } catch (err) {
           console.log("Direct linked task fetch fallback:", err);
+        }
+
+        // Fallback for embedded process subtasks: fetch parent task subtasks
+        const parentId = t?.parentTaskId || t?.parentTask?._id || t?.parentTask;
+        const parentIdStr = typeof parentId === "object" ? (parentId._id || parentId.id) : parentId;
+        if (parentIdStr) {
+          try {
+            const parentRes = await axios.get(`/api/tasks/${parentIdStr}?forApproval=true`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const parentDoc = parentRes.data?.data || parentRes.data;
+            if (parentDoc && Array.isArray(parentDoc.subtasks)) {
+              const matchedSubtask = parentDoc.subtasks.find(
+                (st) => String(st._id || st.id || "") === directLinkedId
+              );
+              if (matchedSubtask) {
+                setLinkedTasks([matchedSubtask]);
+                setIsLoading(false);
+                return;
+              }
+            }
+          } catch (parentErr) {
+            console.log("Parent task subtasks fetch fallback:", parentErr);
+          }
         }
       }
 
