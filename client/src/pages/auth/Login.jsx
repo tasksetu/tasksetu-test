@@ -924,7 +924,7 @@ export default function Login() {
                     TS
                   </div>
                   <span className="text-2xl font-semibold text-gray-800">
-                    TaskSetu
+                    TaskSetu-UAT
                   </span>
                 </div>
 
