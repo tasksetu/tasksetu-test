@@ -664,17 +664,43 @@ export const getFeatureAccessSummary = async (userId, organizationId) => {
       usageMap[usage.feature_code] = usage;
     });
 
-    const featuresWithUsage = features.map((feature) => ({
-      feature_code: feature.feature_code,
-      is_enabled: feature.is_enabled,
-      usage_limit: feature.usage_limit,
-      limit_type: feature.limit_type,
-      is_unlimited: feature.usage_limit === -1,
-      current_usage: usageMap[feature.feature_code]?.usage_count || 0,
-      remaining: usageMap[feature.feature_code]?.remaining || feature.usage_limit,
-      percentage: usageMap[feature.feature_code]?.percentage || 0,
-      is_limit_exceeded: usageMap[feature.feature_code]?.isLimitExceeded || false,
-    }));
+    let userUsageMap = {};
+    try {
+      const { UserFeatureUsage } = await import('../modals/userFeatureUsageModal.js');
+      userUsageMap = await UserFeatureUsage.getUserCurrentUsage(userId, features);
+    } catch (err) {
+      // Fallback if import fails
+    }
+
+    const featuresWithUsage = features.map((feature) => {
+      const uData = userUsageMap[feature.feature_code];
+      const legacyUData = usageMap[feature.feature_code];
+      const current = uData?.used !== undefined ? uData.used : (legacyUData?.usage_count || 0);
+      const limit = feature.usage_limit;
+      const isUnlimited = limit === -1;
+      const remaining = isUnlimited ? -1 : Math.max(0, limit - current);
+      const percentage = isUnlimited || limit === 0 ? 0 : Math.round((current / limit) * 100);
+      const isLimitExceeded = !isUnlimited && limit > 0 && current >= limit;
+
+      return {
+        feature_code: feature.feature_code,
+        is_enabled: feature.is_enabled,
+        usage_limit: feature.usage_limit,
+        limit_type: feature.limit_type,
+        is_unlimited: isUnlimited,
+        current_usage: current,
+        usage: {
+          current,
+          limit,
+          remaining,
+          percentage,
+          isUnlimited,
+        },
+        remaining,
+        percentage,
+        is_limit_exceeded: isLimitExceeded,
+      };
+    });
 
     return {
       hasSubscription: true,

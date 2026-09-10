@@ -16,7 +16,8 @@ const FEATURE_DISPLAY_NAMES = {
   SUBTASK_EMAIL: 'Email Subtasks',
   SUBTASK_MILESTONE: 'Milestone Subtasks',
   SUBTASK_APPROVAL: 'Approval Subtasks',
-  PROC_CREATE: 'Processes',
+  PROC_CREATE: 'Process Builder Creation',
+  PROC_LAUNCH: 'Process Builder Launch',
   FORM_CREATE: 'Forms',
 };
 

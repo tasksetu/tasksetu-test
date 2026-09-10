@@ -167,10 +167,16 @@ const OrgAdminView = ({
                     icon="📝"
                 />
                 <UsageCard
-                    title="Procedures"
+                    title="Process Creation"
                     feature="PROC_CREATE"
                     usage={usage}
-                    icon="📊"
+                    icon="⚙️"
+                />
+                <UsageCard
+                    title="Process Launch"
+                    feature="PROC_LAUNCH"
+                    usage={usage}
+                    icon="🚀"
                 />
                 <UsageCard
                     title="Approvals"
@@ -534,7 +540,8 @@ const getFeatureName = (code) => {
         'TASK_APPROVAL': 'Approvals',
         'TASK_MSTONE': 'Milestones',
         'FORM_CREATE': 'Forms',
-        'PROC_CREATE': 'Procedures',
+        'PROC_CREATE': 'Process Creation',
+        'PROC_LAUNCH': 'Process Launch',
         'COLLAB_COMMENT': 'Comments',
         'SSO_LOGIN': 'SSO Login'
     };

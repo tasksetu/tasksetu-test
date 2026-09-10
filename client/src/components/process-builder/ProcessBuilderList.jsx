@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   useProcesses,
   useCreateProcess,
@@ -47,7 +48,10 @@ import {
   Sparkles,
   Zap,
   Activity,
+  Lock,
+  ShieldAlert,
 } from "lucide-react";
+import { useLicense } from "@/hooks/useLicense";
 import CommonLoader from "@/components/common/CommonLoader";
 import ConfirmDialog from "@/components/common/ConfirmDialog";
 
@@ -65,6 +69,35 @@ export function ProcessBuilderList() {
   const updateProcessMutation = useUpdateProcess();
   const deleteProcessMutation = useDeleteProcess();
   const startProcessMutation = useStartProcess();
+
+  // Centralized License Hook
+  const { license: hookLicense, refreshLicense } = useLicense();
+
+  // Instant Real-Time License Usage (staleTime 0 guarantees immediate fresh cache)
+  const { data: licenseData, refetch: refetchLicense } = useQuery({
+    queryKey: ["/api/license/current"],
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
+
+  const currentUsageObj = licenseData?.usage || hookLicense?.usage || {};
+  const launchUsage = currentUsageObj?.PROC_LAUNCH;
+  const isLaunchLimitReached = Boolean(
+    launchUsage &&
+      !launchUsage.isUnlimited &&
+      launchUsage.limit > 0 &&
+      (launchUsage.used ?? 0) >= launchUsage.limit
+  );
+
+  const creationUsage = currentUsageObj?.PROC_CREATE;
+  const isCreationLimitReached = Boolean(
+    creationUsage &&
+      !creationUsage.isUnlimited &&
+      creationUsage.limit > 0 &&
+      (creationUsage.used ?? 0) >= creationUsage.limit
+  );
 
   // Local states
   const [searchTerm, setSearchTerm] = useState("");
@@ -84,6 +117,12 @@ export function ProcessBuilderList() {
 
   // Handlers
   const handleOpenCreateForm = () => {
+    if (isCreationLimitReached) {
+      showErrorToast(
+        `License limit reached: You have reached your limit of ${creationUsage.limit} process creations (${creationUsage.used}/${creationUsage.limit} used). Please upgrade your plan.`
+      );
+      return;
+    }
     setEditingProcess(null);
     setIsFormOpen(true);
   };
@@ -91,6 +130,19 @@ export function ProcessBuilderList() {
   const handleOpenEditForm = (process) => {
     setEditingProcess(process);
     setIsFormOpen(true);
+  };
+
+  const extractErrorMessage = (err, defaultMsg) => {
+    if (!err) return defaultMsg;
+    const raw = err?.message || String(err);
+    if (raw.includes("{")) {
+      try {
+        const jsonPart = raw.substring(raw.indexOf("{"));
+        const parsed = JSON.parse(jsonPart);
+        if (parsed.message) return parsed.message;
+      } catch (e) {}
+    }
+    return raw.replace(/^\d+:\s*/, "") || defaultMsg;
   };
 
   const handleSaveProcess = (formData) => {
@@ -104,18 +156,28 @@ export function ProcessBuilderList() {
             setEditingProcess(null);
           },
           onError: (err) => {
-            showErrorToast(err?.message || "Failed to update process");
+            showErrorToast(extractErrorMessage(err, "Failed to update process"));
           },
         }
       );
     } else {
+      if (isCreationLimitReached) {
+        showErrorToast(
+          `License limit reached: You have reached your limit of ${creationUsage.limit} process creations (${creationUsage.used}/${creationUsage.limit} used). Please upgrade your plan.`
+        );
+        return;
+      }
       createProcessMutation.mutate(formData, {
         onSuccess: () => {
           showSuccessToast("New process created successfully!");
           setIsFormOpen(false);
+          refetchLicense();
+          refreshLicense();
         },
         onError: (err) => {
-          showErrorToast(err?.message || "Failed to create process");
+          showErrorToast(extractErrorMessage(err, "Failed to create process"));
+          refetchLicense();
+          refreshLicense();
         },
       });
     }
@@ -128,19 +190,35 @@ export function ProcessBuilderList() {
         showSuccessToast("Process deleted successfully!");
         setIsDeleteOpen(false);
         setProcessToDelete(null);
+        refetchLicense();
+        refreshLicense();
       },
       onError: (err) => {
-        showErrorToast(err?.message || "Failed to delete process");
+        showErrorToast(extractErrorMessage(err, "Failed to delete process"));
+        refetchLicense();
+        refreshLicense();
       },
     });
   };
 
   const handleOpenStartModal = (process) => {
+    if (isLaunchLimitReached) {
+      showErrorToast(
+        `License limit reached: You have reached your limit of ${launchUsage.limit} process launches (${launchUsage.used}/${launchUsage.limit} used). Please upgrade your plan.`
+      );
+      return;
+    }
     setSelectedProcessForStart(process);
     setIsStartModalOpen(true);
   };
 
   const handleConfirmLaunchProcess = (launchData) => {
+    if (isLaunchLimitReached) {
+      showErrorToast(
+        `License limit reached: You have reached your limit of ${launchUsage.limit} process launches (${launchUsage.used}/${launchUsage.limit} used). Please upgrade your plan.`
+      );
+      return;
+    }
     startProcessMutation.mutate(launchData, {
       onSuccess: (newInstance) => {
         showSuccessToast(
@@ -148,9 +226,13 @@ export function ProcessBuilderList() {
         );
         setIsStartModalOpen(false);
         setSelectedProcessForStart(null);
+        refetchLicense();
+        refreshLicense();
       },
       onError: (err) => {
-        showErrorToast(err?.message || "Failed to launch process");
+        showErrorToast(extractErrorMessage(err, "Failed to launch process"));
+        refetchLicense();
+        refreshLicense();
       },
     });
   };
@@ -182,9 +264,9 @@ export function ProcessBuilderList() {
   );
 
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-hidden text-gray-900">
-      {/* FIXED TOP SECTION (Header, Metrics, Toolbar) */}
-      <div className="shrink-0 space-y-3 pb-2">
+    <div className="space-y-4 text-gray-900">
+      {/* TOP SECTION (Header, Metrics, Toolbar) */}
+      <div className="space-y-3">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between pb-2 border-b border-gray-200">
           <div>
@@ -209,13 +291,51 @@ export function ProcessBuilderList() {
             <Button
               onClick={handleOpenCreateForm}
               size="sm"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium gap-1.5 h-9 px-4 shadow-sm"
+              className={`${
+                isCreationLimitReached
+                  ? "bg-gray-500 hover:bg-gray-600 opacity-90 cursor-pointer"
+                  : "bg-indigo-600 hover:bg-indigo-700"
+              } text-white font-medium gap-1.5 h-9 px-4 shadow-sm transition-all`}
             >
-              <Plus className="w-4 h-4" />
+              {isCreationLimitReached ? (
+                <Lock className="w-4 h-4 text-amber-200" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
               Create Process Builder
+              {isCreationLimitReached && (
+                <span className="ml-1 text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded-full font-bold">
+                  Limit Reached
+                </span>
+              )}
             </Button>
           </div>
         </div>
+
+        {/* Real-Time License Limit Alerts */}
+        {isCreationLimitReached && (
+          <div className="flex items-center justify-between p-2.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900 shadow-2xs">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                <strong>Process Creation Limit Reached:</strong> You have used all{" "}
+                <strong>{creationUsage?.limit}</strong> process template creations allowed by your plan ({creationUsage?.used}/{creationUsage?.limit} used). Please upgrade your plan to create more.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {isLaunchLimitReached && (
+          <div className="flex items-center justify-between p-2.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900 shadow-2xs">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                <strong>Process Launch Limit Reached:</strong> You have reached your limit of{" "}
+                <strong>{launchUsage?.limit}</strong> process launches ({launchUsage?.used}/{launchUsage?.limit} used). Please upgrade your plan to launch more.
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Metrics Overview Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -351,8 +471,8 @@ export function ProcessBuilderList() {
         </div>
       </div>
 
-      {/* SCROLLABLE TEMPLATES SECTION ONLY */}
-      <div className="flex-1 min-h-0 overflow-y-auto pr-1 pb-4 space-y-3">
+      {/* TEMPLATES LIST SECTION */}
+      <div className="space-y-3 pb-8">
         {isLoading ? (
           <div className="py-12 text-center">
             <CommonLoader text="Loading process templates..." />
@@ -428,9 +548,21 @@ export function ProcessBuilderList() {
                         <Button
                           onClick={() => handleOpenStartModal(proc)}
                           size="sm"
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium gap-1.5 h-8 px-3 text-xs shadow-sm"
+                          className={`${
+                            isLaunchLimitReached
+                              ? "bg-gray-500 hover:bg-gray-600 opacity-90 cursor-pointer"
+                              : "bg-emerald-600 hover:bg-emerald-700"
+                          } text-white font-medium gap-1.5 h-8 px-3 text-xs shadow-sm transition-all`}
                         >
-                          <Play className="w-3.5 h-3.5 fill-white" /> Start Process
+                          {isLaunchLimitReached ? (
+                            <>
+                              <Lock className="w-3.5 h-3.5 text-amber-200" /> Launch Limit Reached
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3.5 h-3.5 fill-white" /> Start Process
+                            </>
+                          )}
                         </Button>
 
                         <DropdownMenu modal={false}>

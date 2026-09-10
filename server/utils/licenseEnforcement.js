@@ -15,6 +15,7 @@
 import LicenseInstance from '../modals/licenseInstanceModal.js';
 import { License } from '../modals/licenseModal.js';
 import { User } from '../modals/userModal.js';
+import { LicenseFeatureMapping } from '../modals/licenseFeatureMappingModal.js';
 import TimezoneHelper from './timezoneHelper.js';
 
 /**
@@ -301,6 +302,91 @@ export async function checkLicenseLimit(userId, limitType, currentUsage) {
         limit,
         usage: currentUsage,
         message: currentUsage >= limit ? `You have reached your ${limitType} limit (${limit})` : null
+    };
+}
+
+/**
+ * Check if user has reached specific feature_code limit (e.g. PROC_CREATE, PROC_LAUNCH)
+ * @param {string|ObjectId} userId - User ID
+ * @param {string} featureCode - Feature code
+ * @param {number} currentUsage - Current usage count
+ * @returns {Object} { allowed: boolean, limit: number, usage: number, message: string }
+ */
+export async function checkFeatureCodeLimit(userId, featureCode, currentUsage = 0) {
+    const license = await getUserLicense(userId);
+
+    if (!license || !license.hasLicense) {
+        return {
+            allowed: false,
+            limit: 0,
+            usage: currentUsage,
+            licenseCode: 'NONE',
+            message: 'No active license assigned'
+        };
+    }
+
+    const mapping = await LicenseFeatureMapping.findOne({
+        license_code: license.license_code,
+        feature_code: featureCode,
+    });
+
+    if (!mapping || mapping.is_enabled === false) {
+        return {
+            allowed: false,
+            limit: 0,
+            usage: currentUsage,
+            licenseCode: license.license_code,
+            message: `Your ${license.license_code} license does not include access to this feature.`
+        };
+    }
+
+    const limit = mapping.usage_limit;
+    if (limit === -1) {
+        return {
+            allowed: true,
+            limit: Infinity,
+            usage: currentUsage,
+            licenseCode: license.license_code
+        };
+    }
+
+    // 📊 Fetch authoritative usage from UserFeatureUsage model as well as passed DB count
+    let effectiveUsage = typeof currentUsage === 'number' ? currentUsage : 0;
+    try {
+        const { UserFeatureUsage } = await import('../modals/userFeatureUsageModal.js');
+        const limitType = mapping.limit_type || 'MONTHLY';
+        const trackedUsage = await UserFeatureUsage.getCurrentUsage(userId, featureCode, limitType);
+        effectiveUsage = Math.max(effectiveUsage, trackedUsage || 0);
+
+        // Also check any record in UserFeatureUsage for this user & feature across any period
+        const allRecords = await UserFeatureUsage.find({
+            user_id: userId,
+            feature_code: featureCode.toUpperCase()
+        }).lean();
+        for (const r of allRecords) {
+            if ((r.used_count || 0) > effectiveUsage) {
+                effectiveUsage = r.used_count;
+            }
+        }
+    } catch (err) {
+        // Fallback to passed currentUsage
+    }
+
+    const allowed = effectiveUsage < limit;
+    const featureLabel = featureCode === 'PROC_CREATE'
+        ? 'process builder creations'
+        : featureCode === 'PROC_LAUNCH'
+        ? 'process builder launches'
+        : featureCode;
+
+    return {
+        allowed,
+        limit,
+        usage: effectiveUsage,
+        licenseCode: license.license_code,
+        message: !allowed
+            ? `License limit reached: Your ${license.license_code} license allows up to ${limit} ${featureLabel} (${effectiveUsage}/${limit} used). Please upgrade your plan.`
+            : null
     };
 }
 

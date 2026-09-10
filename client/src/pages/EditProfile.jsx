@@ -203,14 +203,14 @@ export default function EditProfile() {
   );
 
   // Fetch current user profile - try auth/verify first as fallback
-  const { data: authUser } = useQuery({
+  const { data: authUser, isLoading: isAuthLoading } = useQuery({
     queryKey: ["/api/auth/verify"],
     retry: false,
   });
 
   const {
     data: user,
-    isLoading,
+    isLoading: isProfileLoading,
     error,
   } = useQuery({
     queryKey: ["/api/profile"],
@@ -229,6 +229,8 @@ export default function EditProfile() {
 
     enabled: !!authUser?.id,
   });
+
+  const isLoading = isAuthLoading || (!!authUser?.id && isProfileLoading);
   // Fetch organization details once
   const { data: organization } = useQuery({
     queryKey: ["/api/organization/details"],
@@ -952,13 +954,43 @@ export default function EditProfile() {
   })();
   // Helper functions
   const isOrgUser = () => {
-    return currentUser?.role !== "individual" && currentUser?.organizationId;
+    if (!currentUser?.organizationId) return false;
+    const roles = Array.isArray(currentUser.role)
+      ? currentUser.role
+      : currentUser.role
+      ? [currentUser.role]
+      : [];
+    const isIndividual =
+      roles.length > 0 &&
+      roles.every(
+        (r) =>
+          typeof r === "string" &&
+          (r.toLowerCase() === "individual" ||
+            r.toLowerCase() === "individual-user"),
+      );
+    return !isIndividual;
   };
 
   // Check if user is admin and should have read-only organization info
   const isAdminWithReadOnlyOrg = () => {
-    const adminRoles = ["admin", "company_admin", "owner", "super_admin"];
-    return adminRoles.includes(currentUser?.role[0]?.toLowerCase());
+    if (!currentUser?.role) return false;
+    const adminRoles = [
+      "admin",
+      "company_admin",
+      "company-admin",
+      "owner",
+      "super_admin",
+      "superadmin",
+      "super-admin",
+      "org_admin",
+      "tasksetu-admin",
+    ];
+    const roles = Array.isArray(currentUser.role)
+      ? currentUser.role
+      : [currentUser.role];
+    return roles.some(
+      (r) => typeof r === "string" && adminRoles.includes(r.toLowerCase()),
+    );
   };
 
   // Check if organization section should be shown
@@ -978,6 +1010,7 @@ export default function EditProfile() {
   };
 
   const getRoleDisplayName = (role) => {
+    if (!role) return "User";
     const names = {
       org_admin: "Org Admin",
       admin: "Org Admin",
@@ -1320,14 +1353,14 @@ export default function EditProfile() {
                     name="organizationName"
                     value={formData.organizationName}
                     onChange={handleInputChange}
-                    disabled={!user.isPrimaryAdmin}
+                    disabled={!currentUser?.isPrimaryAdmin}
                     className={
-                      !user.isPrimaryAdmin
+                      !currentUser?.isPrimaryAdmin
                         ? "bg-gray-100 cursor-not-allowed"
                         : ""
                     }
                     placeholder={
-                      !user.isPrimaryAdmin ? "Enter organization name" : ""
+                      !currentUser?.isPrimaryAdmin ? "Enter organization name" : ""
                     }
                     data-testid="input-organization"
                   />
@@ -1337,7 +1370,7 @@ export default function EditProfile() {
                             administrators
                           </p>
                         )} */}
-                  {!user.isPrimaryAdmin && (
+                  {!currentUser?.isPrimaryAdmin && (
                     <p className="text-xs text-gray-500 mt-1">
                       Organization name is managed by administrators
                     </p>

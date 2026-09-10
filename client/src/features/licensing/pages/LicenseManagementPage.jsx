@@ -31,6 +31,7 @@ import {
   CheckSquare,
   FileText,
   Workflow,
+  PlayCircle,
   BarChart3,
   RefreshCcw,
   Info,
@@ -106,7 +107,7 @@ function LicenseDifferencesSection({
       }
       
       if (mapping.usage_limit === -1) {
-        const limitCodes = ["TASK_BASIC", "TASK_SUB", "SUBTASK_EMAIL", "SUBTASK_MILESTONE", "SUBTASK_APPROVAL", "FORM_CREATE", "PROC_CREATE", "REPORT_BASIC"];
+        const limitCodes = ["TASK_BASIC", "TASK_SUB", "SUBTASK_EMAIL", "SUBTASK_MILESTONE", "SUBTASK_APPROVAL", "FORM_CREATE", "PROC_CREATE", "PROC_LAUNCH", "REPORT_BASIC"];
         if (limitCodes.includes(featureCode)) {
           return "Unlimited";
         }
@@ -116,7 +117,7 @@ function LicenseDifferencesSection({
       return true;
     };
 
-    const limitCodes = ["TASK_BASIC", "TASK_SUB", "SUBTASK_EMAIL", "SUBTASK_MILESTONE", "SUBTASK_APPROVAL", "FORM_CREATE", "PROC_CREATE", "REPORT_BASIC"];
+    const limitCodes = ["TASK_BASIC", "TASK_SUB", "SUBTASK_EMAIL", "SUBTASK_MILESTONE", "SUBTASK_APPROVAL", "FORM_CREATE", "PROC_CREATE", "PROC_LAUNCH", "REPORT_BASIC"];
     const usageLimitsGroup = {
       category: "Usage Limits",
       icon: "📊",
@@ -606,10 +607,10 @@ export default function LicenseManagementPage() {
       if (!response.ok) throw new Error("Failed to fetch current license");
       return response.json();
     },
-    staleTime: 2 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     placeholderData: (previousData) => previousData,
   });
 
@@ -797,6 +798,7 @@ export default function LicenseManagementPage() {
       TASK_BASIC: 10,
       FORM_CREATE: 2,
       PROC_CREATE: 1,
+      PROC_LAUNCH: 1,
       REPORT_BASIC: 5,
     }),
     [],
@@ -924,6 +926,7 @@ export default function LicenseManagementPage() {
       "SUBTASK_APPROVAL",
       "FORM_CREATE",
       "PROC_CREATE",
+      "PROC_LAUNCH",
       "REPORT_BASIC",
     ];
 
@@ -976,7 +979,12 @@ export default function LicenseManagementPage() {
           PROC_CREATE: {
             label: "Create Processes",
             icon: Workflow,
-            desc: "Flows",
+            desc: "Templates",
+          },
+          PROC_LAUNCH: {
+            label: "Launch Processes",
+            icon: PlayCircle,
+            desc: "Instances",
           },
           // "REPORT_BASIC": { label: "Reports", icon: BarChart3, desc: "Total reports" },
           REPORT_ACTIVITY: {
@@ -1641,7 +1649,8 @@ export default function LicenseManagementPage() {
               { key: "SUBTASK_MILESTONE", label: "milestone subtasks" },
               { key: "SUBTASK_APPROVAL", label: "approval subtasks" },
               { key: "FORM_CREATE", label: "forms" },
-              { key: "PROC_CREATE", label: "processes" },
+              { key: "PROC_CREATE", label: "process creations" },
+              { key: "PROC_LAUNCH", label: "process launches" },
               { key: "REPORT_BASIC", label: "reports" },
             ].filter(({ key }) => {
               const status = getUsageStatus(key);
@@ -2518,7 +2527,8 @@ export default function LicenseManagementPage() {
                       {[
                         { key: "TASK_BASIC", label: "Tasks", icon: "📋" },
                         { key: "FORM_CREATE", label: "Forms", icon: "📝" },
-                        { key: "PROC_CREATE", label: "Processes", icon: "⚙️" },
+                        { key: "PROC_CREATE", label: "Process Creation", icon: "⚙️" },
+                        { key: "PROC_LAUNCH", label: "Process Launch", icon: "🚀" },
                         { key: "REPORT_BASIC", label: "Reports", icon: "📊" },
                       ].map(({ key, label, icon }) => {
                         const status = getUsageStatus(key);

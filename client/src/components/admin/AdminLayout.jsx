@@ -37,7 +37,7 @@ function AdminLayoutInner({ children, user, sidebarCollapsed, sidebarOpen,
   const currentTasks = tasksResponse?.tasks || tasksResponse?.data || tasksResponse || [];
 
   return (
-    <div className="flex min-h-screen overflow-hidden">
+    <div className="flex min-h-screen overflow-x-hidden">
        <div className={`
         ${sidebarOpen ? "translate-x-0 w-[280px]" : "-translate-x-full"} 
         lg:translate-x-0

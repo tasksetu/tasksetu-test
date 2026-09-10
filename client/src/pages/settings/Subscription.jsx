@@ -67,8 +67,13 @@ function LicenseDifferencesSection({ plans, currentPlanCode }) {
           limits: { explore: 2, plan: 10, execute: 50, optimize: -1 },
         },
         {
-          name: "Processes",
+          name: "Process Creation",
           code: "PROC_CREATE",
+          limits: { explore: 1, plan: 5, execute: 20, optimize: -1 },
+        },
+        {
+          name: "Process Launch",
+          code: "PROC_LAUNCH",
           limits: { explore: 1, plan: 5, execute: 20, optimize: -1 },
         },
         {

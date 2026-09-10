@@ -218,3 +218,115 @@ export const applyFiltering = (tasks, filters) => {
     return matchesSearch && matchesStatus && matchesPriority && matchesTaskType && matchesDueDate;
   });
 };
+
+export const getCreatorRole = (task) => {
+  if (!task) return "employee";
+
+  const allRoles = [];
+
+  const addRoles = (val) => {
+    if (!val) return;
+    if (Array.isArray(val)) {
+      val.forEach((r) => {
+        if (typeof r === "string" && r.trim()) allRoles.push(r.toLowerCase().trim());
+      });
+    } else if (typeof val === "string" && val.trim()) {
+      allRoles.push(val.toLowerCase().trim());
+    }
+  };
+
+  // 1. Populated createdBy user object roles
+  if (task.createdBy && typeof task.createdBy === "object") {
+    addRoles(task.createdBy.role);
+    addRoles(task.createdBy.roles);
+    addRoles(task.createdBy.activeRole);
+  }
+
+  // 2. Direct createdByRole and creatorRole fields on task
+  addRoles(task.createdByRole);
+  addRoles(task.creatorRole);
+
+  // 3. Resolve role by hierarchy
+  if (allRoles.length > 0) {
+    if (allRoles.some((r) => ["super_admin", "super-admin", "tasksetu-admin"].includes(r))) return "super_admin";
+    if (allRoles.some((r) => ["org_admin", "org-admin", "admin", "company-admin"].includes(r))) return "org_admin";
+    if (allRoles.includes("manager")) return "manager";
+    if (allRoles.includes("employee")) return "employee";
+    if (allRoles.includes("individual")) return "individual";
+    return allRoles[0];
+  }
+
+  return "employee";
+};
+
+export const getCreatorDisplayName = (task) => {
+  if (!task) return "";
+  if (task.createdBy && typeof task.createdBy === "object") {
+    const first = task.createdBy.firstName || "";
+    const last = task.createdBy.lastName || "";
+    const full = `${first} ${last}`.trim();
+    if (full) return full;
+    if (task.createdBy.name) return task.createdBy.name;
+    if (task.createdBy.email) return task.createdBy.email;
+  }
+  if (typeof task.createdBy === "string" && task.createdBy.length > 0 && !/^[0-9a-fA-F]{24}$/.test(task.createdBy)) {
+    return task.createdBy;
+  }
+  if (task.creatorName) return task.creatorName;
+  return "";
+};
+
+export const getCreatorRoleInfo = (task) => {
+  const role = getCreatorRole(task);
+  const creatorName = getCreatorDisplayName(task);
+
+  const roleMeta = {
+    super_admin: {
+      role: "super_admin",
+      label: "Super Admin",
+      shortLabel: "Super Admin",
+      colorClass: "bg-rose-100 text-rose-700 border-rose-200 hover:bg-rose-200",
+      badgeClass: "bg-rose-50 text-rose-700 border-rose-300",
+    },
+    org_admin: {
+      role: "org_admin",
+      label: "Org Admin",
+      shortLabel: "Org Admin",
+      colorClass: "bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-200",
+      badgeClass: "bg-purple-50 text-purple-700 border-purple-300",
+    },
+    manager: {
+      role: "manager",
+      label: "Manager",
+      shortLabel: "Manager",
+      colorClass: "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200",
+      badgeClass: "bg-blue-50 text-blue-700 border-blue-300",
+    },
+    employee: {
+      role: "employee",
+      label: "Employee",
+      shortLabel: "Employee",
+      colorClass: "bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200",
+      badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-300",
+    },
+    individual: {
+      role: "individual",
+      label: "Individual",
+      shortLabel: "Individual",
+      colorClass: "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200",
+      badgeClass: "bg-amber-50 text-amber-700 border-amber-300",
+    },
+  };
+
+  const meta = roleMeta[role] || roleMeta.employee;
+
+  const tooltip = creatorName
+    ? `Created by ${creatorName} (${meta.label})`
+    : `Created by ${meta.label}`;
+
+  return {
+    ...meta,
+    creatorName,
+    tooltip,
+  };
+};

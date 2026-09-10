@@ -125,7 +125,8 @@ export default function UpgradePage() {
                 limits: {
                     tasks: plan.features?.find(f => f.feature_code === 'TASK_BASIC')?.usage_limit || 0,
                     forms: plan.features?.find(f => f.feature_code === 'FORM_CREATE')?.usage_limit || 0,
-                    processes: plan.features?.find(f => f.feature_code === 'PROC_CREATE')?.usage_limit || 0,
+                    process_creations: plan.features?.find(f => f.feature_code === 'PROC_CREATE')?.usage_limit || 0,
+                    process_launches: plan.features?.find(f => f.feature_code === 'PROC_LAUNCH')?.usage_limit || 0,
                     reports: plan.features?.find(f => f.feature_code === 'REPORT_BASIC')?.usage_limit || 0,
                 },
             }));

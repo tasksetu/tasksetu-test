@@ -18,6 +18,7 @@ import {
   canMarkAsCompleted,
   canEditTaskTitle,
 } from "../../utils/taskHelpers";
+import CreatorRoleIcon from "@/components/common/CreatorRoleIcon";
 import {
   ClockAlert,
   ClockAlertIcon,
@@ -434,9 +435,10 @@ const TaskTable = React.memo(function TaskTable({
                           />
                         ) : (
                           <>
+                            <CreatorRoleIcon task={task} />
                             {task.isRecurringPattern && (
                               <span
-                                className="text-green-800 cursor-help"
+                                className="text-green-800 cursor-default"
                                 title="Recurring Task Pattern"
                               >
                                 <span className="text-green-600">🔄</span>
@@ -444,7 +446,7 @@ const TaskTable = React.memo(function TaskTable({
                             )}
                             {task.isApprovalTask && (
                               <span
-                                className="text-orange-600 cursor-help"
+                                className="text-orange-600 cursor-default"
                                 title="Approval Task"
                               >
                                 ✅
@@ -456,7 +458,7 @@ const TaskTable = React.memo(function TaskTable({
                                 "email" ||
                               task.classification === "EMAIL") && (
                               <span
-                                className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-purple-100 text-purple-700 cursor-help shrink-0"
+                                className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-purple-100 text-purple-700 cursor-default shrink-0"
                                 title="Email Task"
                               >
                                 <Mail className="w-3.5 h-3.5 text-purple-600" />
@@ -464,7 +466,7 @@ const TaskTable = React.memo(function TaskTable({
                             )}
                             {task.taskType === "milestone" && (
                               <span
-                                className="text-purple-600 cursor-help"
+                                className="text-purple-600 cursor-default"
                                 title="Milestone"
                               >
                                 🎯
@@ -488,7 +490,7 @@ const TaskTable = React.memo(function TaskTable({
                             >
                               {task.isRisk && (
                                 <span
-                                  className="text-yellow-700 cursor-help"
+                                  className="text-yellow-700 cursor-default"
                                   title={`Risk: ${task.riskLevel || "medium"}`}
                                 >
                                   ⚠️
@@ -496,7 +498,7 @@ const TaskTable = React.memo(function TaskTable({
                               )}
                               {(snoozedTasks.has(task.id) || task.isSnooze) && (
                                 <span
-                                  className="text-emerald-700 cursor-help"
+                                  className="text-emerald-700 cursor-default"
                                   title="Snoozed"
                                 >
                                   ⏸️
@@ -775,6 +777,7 @@ const TaskTable = React.memo(function TaskTable({
                             ) : (
                               <span className="text-blue-500 font-bold">↳</span>
                             )}
+                            <CreatorRoleIcon task={subtask} size="sm" />
                             {editingSubtaskId ===
                             (subtask._id || subtask.id) ? (
                               <input
@@ -819,12 +822,12 @@ const TaskTable = React.memo(function TaskTable({
                                 }
                               >
                                 {subtask.isRisk && (
-                                  <span className="text-yellow-700 cursor-help">
+                                  <span className="text-yellow-700 cursor-default">
                                     ⚠️
                                   </span>
                                 )}
                                 {subtask.isSnooze && (
-                                  <span className="text-emerald-700 cursor-help">
+                                  <span className="text-emerald-700 cursor-default">
                                     ⏸️
                                   </span>
                                 )}
@@ -1087,6 +1090,7 @@ const TaskTable = React.memo(function TaskTable({
                             >
                               ↻
                             </span>
+                            <CreatorRoleIcon task={instance} size="sm" />
                             <span
                               className={`font-medium cursor-pointer hover:underline px-1 py-0.5 rounded
                                 ${isOverdue ? "text-red-700" : isDone ? "text-gray-400 line-through" : "text-gray-800"}

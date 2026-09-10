@@ -2567,7 +2567,7 @@ export class MongoStorage {
 
     const tasks = await Task.find(filter)
       .populate("assignedTo", "firstName lastName email status")
-      .populate("createdBy", "firstName lastName email")
+      .populate("createdBy", "firstName lastName email role roles")
       .populate(
         "approvers",
         "firstName lastName email avatar role roles department designation",
@@ -2603,7 +2603,7 @@ export class MongoStorage {
           isDeleted: { $ne: true },
         })
           .populate("assignedTo", "firstName lastName email status")
-          .populate("createdBy", "firstName lastName email")
+          .populate("createdBy", "firstName lastName email role roles")
           .populate(
             "approvers",
             "firstName lastName email avatar role roles department designation",

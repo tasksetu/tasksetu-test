@@ -53,10 +53,10 @@ export const useLicense = () => {
                 features: featuresData,
             };
         },
-        staleTime: 2 * 60 * 1000,
-        gcTime: 10 * 60 * 1000,
-        refetchOnMount: false,
-        refetchOnWindowFocus: false,
+        staleTime: 0,
+        gcTime: 5 * 60 * 1000,
+        refetchOnMount: "always",
+        refetchOnWindowFocus: true,
         placeholderData: (previousData) => previousData,
         retry: 1,
     });
@@ -75,6 +75,9 @@ export const useLicense = () => {
      */
     const refreshLicense = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: ['current-license-info'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/license/current'] });
+        queryClient.refetchQueries({ queryKey: ['current-license-info'] });
+        queryClient.refetchQueries({ queryKey: ['/api/license/current'] });
     }, [queryClient]);
 
     /**

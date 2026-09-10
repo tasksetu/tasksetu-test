@@ -1560,48 +1560,24 @@ const IndividualDashboard = ({
                       </div>
                       <div className="mt-auto pt-1 w-full opacity-95">
                         {label === "This Week Progress" || isProgressCard ? (
-                          <svg
-                            viewBox="0 0 110 38"
-                            width="100%"
-                            height="38"
-                            preserveAspectRatio="none"
-                          >
-                            <rect
-                              x="0"
-                              y="13"
-                              width="110"
-                              height="7"
-                              rx="3.5"
-                              fill="#e0e7ff"
-                            />
-                            <rect
-                              x="0"
-                              y="13"
-                              width={`${(percentage || 0) * 1.1}`}
-                              height="7"
-                              rx="3.5"
-                              fill="#4f46e5"
-                            />
-                            <text
-                              x="0"
-                              y="33"
-                              fontSize="8"
-                              fill="#6b7280"
-                              fontFamily="sans-serif"
-                            >
-                              {weeklyCompleted}/{weeklyTotal} done
-                            </text>
-                            <text
-                              x="82"
-                              y="33"
-                              fontSize="8"
-                              fill="#4f46e5"
-                              fontFamily="sans-serif"
-                              fontWeight="700"
-                            >
-                              {Math.round(percentage || 0)}%
-                            </text>
-                          </svg>
+                          <div className="h-[38px] flex flex-col justify-center gap-1.5 w-full">
+                            <div className="w-full bg-[#e0e7ff] h-[7px] rounded-full overflow-hidden">
+                              <div
+                                className="bg-[#4f46e5] h-full rounded-full transition-all duration-500"
+                                style={{
+                                  width: `${Math.min(Math.max(percentage || 0, 0), 100)}%`,
+                                }}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] leading-none">
+                              <span className="text-gray-500 font-medium">
+                                {weeklyCompleted}/{weeklyTotal} done
+                              </span>
+                              <span className="text-[#4f46e5] font-bold">
+                                {Math.round(percentage || 0)}%
+                              </span>
+                            </div>
+                          </div>
                         ) : label === "Overdue" ? (
                           <svg
                             viewBox="0 0 110 38"

@@ -3,6 +3,8 @@ import ProcessTemplate from "./processTemplateModal.js";
 import Task from "../modals/taskModal.js";
 import { User } from "../modals/userModal.js";
 import { FormTemplate } from "../modals/formTemplateModal.js";
+import { checkFeatureCodeLimit } from "../utils/licenseEnforcement.js";
+import * as licenseService from "../services/licenseService.js";
 
 /**
  * Get organization users for Process Builder select dropdowns
@@ -184,6 +186,28 @@ export const createProcessTemplate = async (req, res) => {
       return res.status(400).json({ success: false, message: "Process description is required" });
     }
 
+    // 🛡️ License Limit Check for PROC_CREATE (Process Builder Creation)
+    // Per confirmed business rules: Enforce per-user license limit; count historical process templates created by this specific user
+    const validUserId = (userId && mongoose.Types.ObjectId.isValid(userId)) ? new mongoose.Types.ObjectId(userId) : userId;
+    const creationQuery = {
+      $or: [{ createdBy: validUserId }, { createdBy: userId }]
+    };
+
+    const currentCreationCount = await ProcessTemplate.countDocuments(creationQuery);
+    const creationCheck = await checkFeatureCodeLimit(userId, "PROC_CREATE", currentCreationCount);
+
+    if (!creationCheck.allowed) {
+      return res.status(403).json({
+        success: false,
+        message: creationCheck.message,
+        error: "LICENSE_LIMIT_EXCEEDED",
+        code: "LICENSE_LIMIT_EXCEEDED",
+        feature: "PROC_CREATE",
+        limit: creationCheck.limit,
+        usage: currentCreationCount,
+      });
+    }
+
     const formattedSteps = (steps || []).map((step, idx) => {
       const uRaw = typeof step.assignedUserId === "object"
         ? step.assignedUserId?.value || step.assignedUserId?.id || step.assignedUserId?._id
@@ -266,6 +290,13 @@ export const createProcessTemplate = async (req, res) => {
     });
 
     await newProcess.save();
+
+    // 📊 Track PROC_CREATE feature usage
+    try {
+      await licenseService.consumeFeature(userId, "PROC_CREATE", 1);
+    } catch (consumeErr) {
+      console.warn("⚠️ Failed to consume PROC_CREATE usage:", consumeErr.message);
+    }
 
     return res.status(201).json({
       success: true,
@@ -425,9 +456,10 @@ export const startProcessInstance = async (req, res) => {
   try {
     const userId = req.user?.id || req.user?._id;
     const userRole = Array.isArray(req.user?.role) ? req.user.role : [req.user?.role || "employee"];
-    const orgId = typeof req.user?.organization === "object"
+    const rawOrgId = typeof req.user?.organization === "object"
       ? (req.user?.organization?._id || req.user?.organization?.id)
       : (req.user?.organizationId || req.user?.organization_id || req.user?.organization);
+    const orgId = (typeof rawOrgId === "object" && rawOrgId !== null) ? (rawOrgId._id || rawOrgId.id) : rawOrgId;
     const { processId, customName, notes, steps } = req.body;
 
     if (!processId) {
@@ -437,6 +469,41 @@ export const startProcessInstance = async (req, res) => {
     const template = await ProcessTemplate.findOne({ _id: processId, isDeleted: false }).lean();
     if (!template) {
       return res.status(404).json({ success: false, message: "Process template not found" });
+    }
+
+    // 🛡️ License Limit Check for PROC_LAUNCH (Process Builder Launch)
+    // Per confirmed business rules: Enforce per-user license limit; count process builder instances launched by this specific user
+    const validLaunchUserId = (userId && mongoose.Types.ObjectId.isValid(userId)) ? new mongoose.Types.ObjectId(userId) : userId;
+    let launchQuery = {
+      is_deleted: { $ne: true },
+      isSubtask: { $ne: true },
+      $and: [
+        {
+          $or: [
+            { isProcessBuilderTask: true },
+            { source: "process-builder" },
+            { processTemplateId: { $exists: true, $ne: null } },
+          ],
+        },
+        {
+          $or: [{ createdBy: validLaunchUserId }, { createdBy: userId }],
+        },
+      ],
+    };
+
+    const currentLaunchCount = await Task.countDocuments(launchQuery);
+    const launchCheck = await checkFeatureCodeLimit(userId, "PROC_LAUNCH", currentLaunchCount);
+
+    if (!launchCheck.allowed) {
+      return res.status(403).json({
+        success: false,
+        message: launchCheck.message,
+        error: "LICENSE_LIMIT_EXCEEDED",
+        code: "LICENSE_LIMIT_EXCEEDED",
+        feature: "PROC_LAUNCH",
+        limit: launchCheck.limit,
+        usage: currentLaunchCount,
+      });
     }
 
     const stepsToExecute = (Array.isArray(steps) && steps.length > 0) ? steps : (template.steps || []);
@@ -716,6 +783,13 @@ export const startProcessInstance = async (req, res) => {
         taskId: st._id.toString(),
       })),
     };
+
+    // 📊 Track PROC_LAUNCH feature usage
+    try {
+      await licenseService.consumeFeature(userId, "PROC_LAUNCH", 1);
+    } catch (consumeErr) {
+      console.warn("⚠️ Failed to consume PROC_LAUNCH usage:", consumeErr.message);
+    }
 
     return res.status(201).json({
       success: true,

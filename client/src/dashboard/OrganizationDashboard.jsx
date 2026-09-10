@@ -508,8 +508,9 @@ const OrganizationDashboard = () => {
     }
   };
 
-  // KPI Cards - First Row (6 cards as before)
+  // KPI Cards - 10 cards displayed in rows of 5
   const kpiCards = [
+    // Row 1
     {
       label: "Completed Today",
       value: currentStats.completedTasks,
@@ -560,20 +561,7 @@ const OrganizationDashboard = () => {
       testId: "card-past-due",
       onClick: () => setLocation("/tasks?dueDateFilter=overdue"),
     },
-    {
-      label: "Approvals",
-      value: currentStats.approvalCount || 0,
-      linkLabel: "Show all approvals",
-      icon: Bell,
-      iconColor: "text-yellow-600",
-      iconBg: "bg-yellow-50",
-      testId: "card-approvals",
-      onClick: () => setLocation("/tasks?taskTypeFilter=Approval"),
-    },
-  ];
-
-  // New KPI Cards - Second Row (4 cards as before)
-  const newKpiCards = [
+    // Row 2
     {
       label: "Open Tasks",
       value: openTasks,
@@ -615,6 +603,16 @@ const OrganizationDashboard = () => {
       linkLabel: "Show high priority",
       testId: "card-high-priority",
       onClick: () => setLocation("/tasks?priorityFilter=high"),
+    },
+    {
+      label: "Approvals",
+      value: currentStats.approvalCount || 0,
+      linkLabel: "Show all approvals",
+      icon: Bell,
+      iconColor: "text-yellow-600",
+      iconBg: "bg-yellow-50",
+      testId: "card-approvals",
+      onClick: () => setLocation("/tasks?taskTypeFilter=Approval"),
     },
   ];
 
@@ -754,8 +752,8 @@ const OrganizationDashboard = () => {
           })()}
         </div>
 
-        {/* ROW 1: 6 KPI cards - Modern styling */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5 mb-3">
+        {/* KPI CARDS: 10 cards displayed 5 per row */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 gap-2.5 mb-3">
           {kpiCards.map(
             ({
               label,
@@ -765,6 +763,8 @@ const OrganizationDashboard = () => {
               iconBg,
               testId,
               onClick,
+              isProgressCard,
+              percentage,
             }) => (
               <div
                 key={testId}
@@ -788,7 +788,26 @@ const OrganizationDashboard = () => {
                   </div>
                 </div>
                 <div className="mt-auto pt-1 w-full opacity-95">
-                  {label === "Past Due" ? (
+                  {isProgressCard ? (
+                    <div className="h-[38px] flex flex-col justify-center gap-1.5 w-full">
+                      <div className="w-full bg-[#e0e7ff] h-[7px] rounded-full overflow-hidden">
+                        <div
+                          className="bg-[#4f46e5] h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${Math.min(Math.max(percentage || 0, 0), 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] leading-none">
+                        <span className="text-gray-500 font-medium">
+                          Org completion
+                        </span>
+                        <span className="text-[#4f46e5] font-bold">
+                          {percentage || 0}%
+                        </span>
+                      </div>
+                    </div>
+                  ) : label === "Past Due" ? (
                     <svg
                       viewBox="0 0 110 38"
                       width="100%"
@@ -936,163 +955,6 @@ const OrganizationDashboard = () => {
                         fill="url(#grad-progress-org)"
                       />
                     </svg>
-                  ) : (
-                    <svg
-                      viewBox="0 0 110 38"
-                      width="100%"
-                      height="38"
-                      preserveAspectRatio="none"
-                    >
-                      <rect
-                        x="2"
-                        y="20"
-                        width="11"
-                        height="14"
-                        rx="2"
-                        fill="#fbbf24"
-                        opacity="0.65"
-                      />
-                      <rect
-                        x="17"
-                        y="14"
-                        width="11"
-                        height="20"
-                        rx="2"
-                        fill="#f59e0b"
-                        opacity="0.75"
-                      />
-                      <rect
-                        x="32"
-                        y="18"
-                        width="11"
-                        height="16"
-                        rx="2"
-                        fill="#fbbf24"
-                        opacity="0.7"
-                      />
-                      <rect
-                        x="47"
-                        y="8"
-                        width="11"
-                        height="26"
-                        rx="2"
-                        fill="#d97706"
-                        opacity="0.95"
-                      />
-                      <rect
-                        x="62"
-                        y="12"
-                        width="11"
-                        height="22"
-                        rx="2"
-                        fill="#f59e0b"
-                        opacity="0.78"
-                      />
-                      <rect
-                        x="77"
-                        y="4"
-                        width="11"
-                        height="30"
-                        rx="2"
-                        fill="#b45309"
-                      />
-                      <rect
-                        x="92"
-                        y="10"
-                        width="11"
-                        height="24"
-                        rx="2"
-                        fill="#f59e0b"
-                        opacity="0.88"
-                      />
-                    </svg>
-                  )}
-                </div>
-                <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-gray-200 to-transparent opacity-60" />
-              </div>
-            ),
-          )}
-        </div>
-
-        {/* ROW 2: 4 New KPI cards - Modern styling */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2.5 mb-3">
-          {newKpiCards.map(
-            ({
-              label,
-              value,
-              icon: Icon,
-              iconColor,
-              iconBg,
-              testId,
-              onClick,
-              isProgressCard,
-              percentage,
-            }) => (
-              <div
-                key={testId}
-                onClick={onClick}
-                data-testid={testId}
-                className="group bg-white border border-[#e7e7e9] rounded-sm px-4 pt-2 pb-2 cursor-pointer transition-all duration-300 hover:shadow-[0_3px_14px_rgba(0,0,0,0.05)] hover:-translate-y-[1px] min-h-[126px] flex flex-col justify-between overflow-hidden relative"
-              >
-                <div className="flex items-start justify-between mb-1">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold text-[#8e8e93] uppercase tracking-[0.08em] leading-none">
-                      {label}
-                    </p>
-                    <h2 className="text-[30px] font-bold text-[#1f2937] tracking-tight leading-none mt-2">
-                      {value}
-                    </h2>
-                  </div>
-                  <div
-                    className={`w-10 h-10 flex items-center justify-center flex-shrink-0 shadow-sm border border-white/50 ${iconBg}`}
-                  >
-                    <Icon className={iconColor} size={15} />
-                  </div>
-                </div>
-                <div className="mt-auto pt-1 w-full opacity-95">
-                  {isProgressCard ? (
-                    <svg
-                      viewBox="0 0 110 38"
-                      width="100%"
-                      height="38"
-                      preserveAspectRatio="none"
-                    >
-                      <rect
-                        x="0"
-                        y="13"
-                        width="110"
-                        height="7"
-                        rx="3.5"
-                        fill="#e0e7ff"
-                      />
-                      <rect
-                        x="0"
-                        y="13"
-                        width={`${(percentage || 0) * 1.1}`}
-                        height="7"
-                        rx="3.5"
-                        fill="#4f46e5"
-                      />
-                      <text
-                        x="0"
-                        y="33"
-                        fontSize="8"
-                        fill="#6b7280"
-                        fontFamily="sans-serif"
-                      >
-                        Org completion
-                      </text>
-                      <text
-                        x="82"
-                        y="33"
-                        fontSize="8"
-                        fill="#4f46e5"
-                        fontFamily="sans-serif"
-                        fontWeight="700"
-                      >
-                        {percentage || 0}%
-                      </text>
-                    </svg>
                   ) : label === "Due Today" ? (
                     <svg
                       viewBox="0 0 110 38"
@@ -1193,11 +1055,15 @@ const OrganizationDashboard = () => {
 
         {/* Filters Bar - Modern style */}
         <div className="bg-white border border-gray-200 rounded-sm p-3 mb-3">
-          <div className="flex items-center justify-between mb-3">
+          <div
+            className={`flex items-center justify-between ${
+              showFilters ? "mb-3" : ""
+            }`}
+          >
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`p-1.5 transition-colors border rounded-sm ${
+                className={`h-8 w-8 flex items-center justify-center transition-colors border rounded-sm ${
                   showFilters
                     ? "bg-blue-50 text-blue-600 border-blue-300"
                     : "border-gray-300 hover:bg-gray-100"

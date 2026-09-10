@@ -351,6 +351,49 @@ userFeatureUsageSchema.statics.getCurrentUsage = async function (
         }
     }
 
+    // 📊 Dynamic DB Count Fallback for PROC_CREATE & PROC_LAUNCH (User-Specific Quota)
+    if (featureCodeUpper === 'PROC_CREATE') {
+        try {
+            const { default: ProcessTemplate } = await import('../process-builder/processTemplateModal.js');
+            const validUserId = (userId && mongoose.Types.ObjectId.isValid(userId)) ? new mongoose.Types.ObjectId(userId) : userId;
+
+            const creationQuery = { $or: [{ createdBy: validUserId }, { createdBy: userId }] };
+            const dbCreationCount = await ProcessTemplate.countDocuments(creationQuery);
+            used = Math.max(used, dbCreationCount);
+        } catch (err) {
+            // Ignore error
+        }
+    } else if (featureCodeUpper === 'PROC_LAUNCH') {
+        try {
+            const { default: Task } = await import('./taskModal.js');
+            const validUserId = (userId && mongoose.Types.ObjectId.isValid(userId)) ? new mongoose.Types.ObjectId(userId) : userId;
+
+            const launchQuery = {
+                is_deleted: { $ne: true },
+                isSubtask: { $ne: true },
+                $and: [
+                    {
+                        $or: [
+                            { isProcessBuilderTask: true },
+                            { source: "process-builder" },
+                            { processTemplateId: { $exists: true, $ne: null } },
+                        ]
+                    },
+                    {
+                        $or: [
+                            { createdBy: validUserId },
+                            { createdBy: userId }
+                        ]
+                    }
+                ]
+            };
+            const dbLaunchCount = await Task.countDocuments(launchQuery);
+            used = Math.max(used, dbLaunchCount);
+        } catch (err) {
+            // Ignore error
+        }
+    }
+
     return used;
 };
 
@@ -426,6 +469,12 @@ userFeatureUsageSchema.statics.getUserCurrentUsage = async function (
             used = currentPeriodRecord.used_count || 0;
         }
 
+        for (const rec of featureRecords) {
+            if ((rec.used_count || 0) > used) {
+                used = rec.used_count;
+            }
+        }
+
         // ✅ Check TOTAL period_key (for usage tracked with unlimited licenses)
         if (periodKey !== 'TOTAL') {
             const totalRecord = featureRecords.find(r => r.period_key === 'TOTAL');
@@ -471,6 +520,49 @@ userFeatureUsageSchema.statics.getUserCurrentUsage = async function (
                 } catch (err) {
                     // Ignore errors
                 }
+            }
+        }
+
+        // 📊 Dynamic DB Count Fallback for PROC_CREATE & PROC_LAUNCH (User-Specific Quota)
+        if (mapping.feature_code === 'PROC_CREATE') {
+            try {
+                const { default: ProcessTemplate } = await import('../process-builder/processTemplateModal.js');
+                const validUserId = (userId && mongoose.Types.ObjectId.isValid(userId)) ? new mongoose.Types.ObjectId(userId) : userId;
+
+                const creationQuery = { $or: [{ createdBy: validUserId }, { createdBy: userId }] };
+                const dbCreationCount = await ProcessTemplate.countDocuments(creationQuery);
+                used = Math.max(used, dbCreationCount);
+            } catch (err) {
+                // Ignore error
+            }
+        } else if (mapping.feature_code === 'PROC_LAUNCH') {
+            try {
+                const { default: Task } = await import('./taskModal.js');
+                const validUserId = (userId && mongoose.Types.ObjectId.isValid(userId)) ? new mongoose.Types.ObjectId(userId) : userId;
+
+                const launchQuery = {
+                    is_deleted: { $ne: true },
+                    isSubtask: { $ne: true },
+                    $and: [
+                        {
+                            $or: [
+                                { isProcessBuilderTask: true },
+                                { source: "process-builder" },
+                                { processTemplateId: { $exists: true, $ne: null } },
+                            ]
+                        },
+                        {
+                            $or: [
+                                { createdBy: validUserId },
+                                { createdBy: userId }
+                            ]
+                        }
+                    ]
+                };
+                const dbLaunchCount = await Task.countDocuments(launchQuery);
+                used = Math.max(used, dbLaunchCount);
+            } catch (err) {
+                // Ignore error
             }
         }
 

@@ -198,11 +198,19 @@ const features = [
   },
   {
     feature_code: 'PROC_CREATE',
-    name: 'Process Builder',
-    description: 'Build custom workflows and automations',
+    name: 'Process Builder Creation',
+    description: 'Build and design custom workflow templates',
     category: 'PREMIUM',
     icon: 'GitBranch',
     display_order: 13,
+  },
+  {
+    feature_code: 'PROC_LAUNCH',
+    name: 'Process Builder Launch',
+    description: 'Launch and execute process builder workflow instances',
+    category: 'PREMIUM',
+    icon: 'PlayCircle',
+    display_order: 14,
   },
   {
     feature_code: 'API_ACCESS',
@@ -317,7 +325,8 @@ const mappings = [
   { license_code: 'EXPLORE', feature_code: 'TASK_EMAIL', usage_limit: 10, is_enabled: true, limit_type: 'MONTHLY' },      // Max 10 emails
   { license_code: 'EXPLORE', feature_code: 'FORM_CREATE', usage_limit: 2, is_enabled: true, limit_type: 'TOTAL' },        // 2 forms
   { license_code: 'EXPLORE', feature_code: 'NOTIF_ADV', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },          // ❌ Not available
-  { license_code: 'EXPLORE', feature_code: 'PROC_CREATE', usage_limit: 1, is_enabled: true, limit_type: 'TOTAL' },        // 1 process
+  { license_code: 'EXPLORE', feature_code: 'PROC_CREATE', usage_limit: 1, is_enabled: true, limit_type: 'TOTAL' },        // 1 process creation
+  { license_code: 'EXPLORE', feature_code: 'PROC_LAUNCH', usage_limit: 1, is_enabled: true, limit_type: 'TOTAL' },        // 1 process launch
   { license_code: 'EXPLORE', feature_code: 'API_ACCESS', usage_limit: 5, is_enabled: true, limit_type: 'DAILY' },         // 5 API calls/day
   { license_code: 'EXPLORE', feature_code: 'REPORT_ADV', usage_limit: 3, is_enabled: true, limit_type: 'MONTHLY' },       // 3 reports
   { license_code: 'EXPLORE', feature_code: 'SSO_LOGIN', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },          // ❌ Not available
@@ -348,7 +357,8 @@ const mappings = [
   { license_code: 'PLAN', feature_code: 'TASK_EMAIL', usage_limit: 100, is_enabled: true, limit_type: 'MONTHLY' },        // 100/month
   { license_code: 'PLAN', feature_code: 'FORM_CREATE', usage_limit: 10, is_enabled: true, limit_type: 'TOTAL' },          // 10 forms
   { license_code: 'PLAN', feature_code: 'NOTIF_ADV', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },             // Included
-  { license_code: 'PLAN', feature_code: 'PROC_CREATE', usage_limit: 5, is_enabled: true, limit_type: 'TOTAL' },           // 5 processes
+  { license_code: 'PLAN', feature_code: 'PROC_CREATE', usage_limit: 2, is_enabled: true, limit_type: 'TOTAL' },           // 2 process creations
+  { license_code: 'PLAN', feature_code: 'PROC_LAUNCH', usage_limit: 2, is_enabled: true, limit_type: 'TOTAL' },           // 2 process launches
   { license_code: 'PLAN', feature_code: 'API_ACCESS', usage_limit: 500, is_enabled: true, limit_type: 'DAILY' },          // 500/day
   { license_code: 'PLAN', feature_code: 'REPORT_ADV', usage_limit: 10, is_enabled: true, limit_type: 'MONTHLY' },         // 10 reports
   { license_code: 'PLAN', feature_code: 'SSO_LOGIN', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },             // ❌ Not available
@@ -379,7 +389,8 @@ const mappings = [
   { license_code: 'EXECUTE', feature_code: 'TASK_EMAIL', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },         // Unlimited
   { license_code: 'EXECUTE', feature_code: 'FORM_CREATE', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },        // Unlimited
   { license_code: 'EXECUTE', feature_code: 'NOTIF_ADV', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },          // Included
-  { license_code: 'EXECUTE', feature_code: 'PROC_CREATE', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },        // Unlimited
+  { license_code: 'EXECUTE', feature_code: 'PROC_CREATE', usage_limit: 20, is_enabled: true, limit_type: 'TOTAL' },        // 20 process creations
+  { license_code: 'EXECUTE', feature_code: 'PROC_LAUNCH', usage_limit: 20, is_enabled: true, limit_type: 'TOTAL' },        // 20 process launches
   { license_code: 'EXECUTE', feature_code: 'API_ACCESS', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },         // Unlimited
   { license_code: 'EXECUTE', feature_code: 'REPORT_ADV', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },         // Unlimited
   { license_code: 'EXECUTE', feature_code: 'SSO_LOGIN', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },          // ❌ Not available
@@ -411,6 +422,7 @@ const mappings = [
   { license_code: 'OPTIMIZE', feature_code: 'FORM_CREATE', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },       // Unlimited
   { license_code: 'OPTIMIZE', feature_code: 'NOTIF_ADV', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },         // Included with SLA alerts
   { license_code: 'OPTIMIZE', feature_code: 'PROC_CREATE', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },       // Unlimited
+  { license_code: 'OPTIMIZE', feature_code: 'PROC_LAUNCH', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },       // Unlimited
   { license_code: 'OPTIMIZE', feature_code: 'API_ACCESS', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },        // Unlimited + priority
   { license_code: 'OPTIMIZE', feature_code: 'REPORT_ADV', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },        // Unlimited + export to PDF/Excel
   { license_code: 'OPTIMIZE', feature_code: 'SSO_LOGIN', usage_limit: -1, is_enabled: true, limit_type: 'NONE' },         // ✅ Available (OPTIMIZE only)
@@ -442,6 +454,7 @@ const mappings = [
   { license_code: 'EXPIRED', feature_code: 'FORM_CREATE', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
   { license_code: 'EXPIRED', feature_code: 'NOTIF_ADV', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
   { license_code: 'EXPIRED', feature_code: 'PROC_CREATE', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
+  { license_code: 'EXPIRED', feature_code: 'PROC_LAUNCH', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
   { license_code: 'EXPIRED', feature_code: 'API_ACCESS', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
   { license_code: 'EXPIRED', feature_code: 'REPORT_ADV', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
   { license_code: 'EXPIRED', feature_code: 'SSO_LOGIN', usage_limit: 0, is_enabled: false, limit_type: 'NONE' },
@@ -517,10 +530,10 @@ async function seedLicenseData() {
     for (const map of mappings) {
       const res = await LicenseFeatureMapping.updateOne(
         { license_code: map.license_code, feature_code: map.feature_code },
-        { $setOnInsert: map },
+        { $set: map },
         { upsert: true }
       );
-      if (res.upsertedCount > 0) newMappingsCount++;
+      if (res.upsertedCount > 0 || res.modifiedCount > 0) newMappingsCount++;
     }
     const allMappings = await LicenseFeatureMapping.find({});
     console.log(`✅ Feature mappings verified: Total ${allMappings.length} (${newMappingsCount} new feature limits mapped, existing custom limits untouched)\n`);

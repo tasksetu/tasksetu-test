@@ -1357,6 +1357,7 @@ export const validateDowngrade = async (req, res) => {
       "TASK_SUB",
       "FORM_CREATE",
       "PROC_CREATE",
+      "PROC_LAUNCH",
       "TASK_RECUR",
       "TASK_MSTONE",
     ];

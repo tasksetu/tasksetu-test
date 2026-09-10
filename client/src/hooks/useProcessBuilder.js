@@ -45,9 +45,66 @@ export function useCreateProcess() {
       return json.data || json;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/process-builder/processes"],
+      // ⚡ Optimistically increment PROC_CREATE in TanStack Query caches immediately (0ms latency)
+      queryClient.setQueryData(["/api/license/current"], (old) => {
+        if (!old) return old;
+        const usageObj = old.usage || old.data?.usage || {};
+        const currentUsage = usageObj.PROC_CREATE;
+        if (!currentUsage) return old;
+        const newUsed = (currentUsage.used || 0) + 1;
+        const updatedFeature = {
+          ...currentUsage,
+          used: newUsed,
+          remaining: currentUsage.isUnlimited ? -1 : Math.max(0, currentUsage.limit - newUsed),
+          percentage: currentUsage.isUnlimited || currentUsage.limit === 0 ? 0 : Math.round((newUsed / currentUsage.limit) * 100),
+        };
+        return {
+          ...old,
+          usage: {
+            ...usageObj,
+            PROC_CREATE: updatedFeature,
+          },
+        };
       });
+
+      queryClient.setQueryData(["current-license-info"], (old) => {
+        if (!old || !old.license) return old;
+        const usageObj = old.license.usage || {};
+        const currentUsage = usageObj.PROC_CREATE;
+        if (!currentUsage) return old;
+        const newUsed = (currentUsage.used || 0) + 1;
+        return {
+          ...old,
+          license: {
+            ...old.license,
+            usage: {
+              ...usageObj,
+              PROC_CREATE: {
+                ...currentUsage,
+                used: newUsed,
+                remaining: currentUsage.isUnlimited ? -1 : Math.max(0, currentUsage.limit - newUsed),
+                percentage: currentUsage.isUnlimited || currentUsage.limit === 0 ? 0 : Math.round((newUsed / currentUsage.limit) * 100),
+              },
+            },
+          },
+        };
+      });
+
+      // 🔄 Force instant invalidation and background refetch across all license, process and feature queries
+      queryClient.invalidateQueries({ queryKey: ["/api/process-builder/processes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/license"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/license/current"] });
+      queryClient.invalidateQueries({ queryKey: ["current-license-info"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/license/organization/features"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/license/organization/subscription"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/license/features"] });
+      queryClient.invalidateQueries({ queryKey: ["features"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription"] });
+      queryClient.invalidateQueries({ queryKey: ["licenses"] });
+
+      queryClient.refetchQueries({ queryKey: ["/api/license/current"], cancelRefetch: false });
+      queryClient.refetchQueries({ queryKey: ["current-license-info"], cancelRefetch: false });
+      queryClient.refetchQueries({ queryKey: ["/api/process-builder/processes"], cancelRefetch: false });
     },
   });
 }
@@ -114,12 +171,68 @@ export function useStartProcess() {
       return json.data || json;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/process-builder/instances"],
+      // ⚡ Optimistically increment PROC_LAUNCH in TanStack Query caches immediately (0ms latency)
+      queryClient.setQueryData(["/api/license/current"], (old) => {
+        if (!old) return old;
+        const usageObj = old.usage || old.data?.usage || {};
+        const currentUsage = usageObj.PROC_LAUNCH;
+        if (!currentUsage) return old;
+        const newUsed = (currentUsage.used || 0) + 1;
+        const updatedFeature = {
+          ...currentUsage,
+          used: newUsed,
+          remaining: currentUsage.isUnlimited ? -1 : Math.max(0, currentUsage.limit - newUsed),
+          percentage: currentUsage.isUnlimited || currentUsage.limit === 0 ? 0 : Math.round((newUsed / currentUsage.limit) * 100),
+        };
+        return {
+          ...old,
+          usage: {
+            ...usageObj,
+            PROC_LAUNCH: updatedFeature,
+          },
+        };
       });
-      queryClient.invalidateQueries({
-        queryKey: ["/api/tasks"],
+
+      queryClient.setQueryData(["current-license-info"], (old) => {
+        if (!old || !old.license) return old;
+        const usageObj = old.license.usage || {};
+        const currentUsage = usageObj.PROC_LAUNCH;
+        if (!currentUsage) return old;
+        const newUsed = (currentUsage.used || 0) + 1;
+        return {
+          ...old,
+          license: {
+            ...old.license,
+            usage: {
+              ...usageObj,
+              PROC_LAUNCH: {
+                ...currentUsage,
+                used: newUsed,
+                remaining: currentUsage.isUnlimited ? -1 : Math.max(0, currentUsage.limit - newUsed),
+                percentage: currentUsage.isUnlimited || currentUsage.limit === 0 ? 0 : Math.round((newUsed / currentUsage.limit) * 100),
+              },
+            },
+          },
+        };
       });
+
+      // 🔄 Force instant invalidation and background refetch across all license, process and instance queries
+      queryClient.invalidateQueries({ queryKey: ["/api/process-builder/instances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/license"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/license/current"] });
+      queryClient.invalidateQueries({ queryKey: ["current-license-info"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/license/organization/features"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/license/organization/subscription"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/license/features"] });
+      queryClient.invalidateQueries({ queryKey: ["features"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription"] });
+      queryClient.invalidateQueries({ queryKey: ["licenses"] });
+
+      queryClient.refetchQueries({ queryKey: ["/api/license/current"], cancelRefetch: false });
+      queryClient.refetchQueries({ queryKey: ["current-license-info"], cancelRefetch: false });
+      queryClient.refetchQueries({ queryKey: ["/api/process-builder/instances"], cancelRefetch: false });
+      queryClient.refetchQueries({ queryKey: ["/api/tasks"], cancelRefetch: false });
     },
   });
 }
