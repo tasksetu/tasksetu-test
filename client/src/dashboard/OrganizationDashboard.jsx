@@ -1182,12 +1182,13 @@ const OrganizationDashboard = () => {
         </div>
 
         {/* MAIN GRID: Task Grid + Calendar */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3 items-stretch">
           {/* Task Grid - left 2/3 - Modern table style */}
-          <div className="lg:col-span-2">
-            <div className="bg-white border border-gray-200 shadow-sm rounded-sm">
+          <div className="lg:col-span-2 flex flex-col h-[480px]">
+            <div className="bg-white border border-gray-200 shadow-sm rounded-sm flex flex-col h-full overflow-hidden">
+              {/* Header */}
               <div
-                className="py-2.5 px-4 border-b border-gray-200 rounded-sm"
+                className="py-2.5 px-4 border-b border-gray-200 flex-shrink-0 rounded-t-sm flex items-center justify-between"
                 style={{ backgroundColor: "#f9f9f9" }}
               >
                 <h5
@@ -1197,18 +1198,55 @@ const OrganizationDashboard = () => {
                   <ListChecks size={12} className="text-blue-600" />
                   Organization Task Grid
                   <span className="ml-1 text-[10px] font-normal normal-case text-gray-400">
-                    (showing {visibleTasks.length} of {filteredTasks.length})
+                    (showing {filteredTasks.length} of {allTasks.length})
                   </span>
                 </h5>
+                {(taskFilters.status !== "all" ||
+                  taskFilters.priority !== "all" ||
+                  taskFilters.dueDate !== "all" ||
+                  Boolean(taskFilters.search)) && (
+                  <button
+                    onClick={() => {
+                      setShowAllTasks(false);
+                      setTaskFilters({
+                        search: "",
+                        status: "all",
+                        priority: "all",
+                        dueDate: "all",
+                      });
+                    }}
+                    className="text-[10px] text-blue-600 hover:underline font-medium"
+                  >
+                    Clear filters
+                  </button>
+                )}
               </div>
 
+              {/* Scrollable Table Area */}
               <TooltipProvider>
-                <div className="overflow-x-auto">
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto custom-scrollbar">
                   <table className="w-full">
-                    <thead style={{ backgroundColor: "#f9f9f9" }}>
+                    <thead
+                      className="sticky top-0 z-10 border-b border-gray-200 shadow-sm"
+                      style={{ backgroundColor: "#f9f9f9" }}
+                    >
                       <tr>
-                        <th className="py-2 px-3 w-8">
-                          <input type="checkbox" className="rounded" />
+                        <th className="py-2.5 px-3 w-8">
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            checked={
+                              filteredTasks.length > 0 &&
+                              selectedTasks.length === filteredTasks.length
+                            }
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedTasks(filteredTasks.map((t) => t.id));
+                              } else {
+                                setSelectedTasks([]);
+                              }
+                            }}
+                          />
                         </th>
                         {[
                           "Task",
@@ -1220,7 +1258,7 @@ const OrganizationDashboard = () => {
                         ].map((h) => (
                           <th
                             key={h}
-                            className="text-left py-2 px-3 text-xs font-semibold uppercase tracking-wide"
+                            className="text-left py-2.5 px-3 text-xs font-semibold uppercase tracking-wide"
                             style={{ color: "#676a6c" }}
                           >
                             {h}
@@ -1228,51 +1266,69 @@ const OrganizationDashboard = () => {
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-100 bg-white">
                       {filteredTasks.length === 0 ? (
                         <tr>
                           <td
                             colSpan="7"
-                            className="px-4 py-8 text-center text-sm"
+                            className="px-4 py-16 text-center text-sm"
                             style={{ color: "#9a9a9a" }}
                           >
-                            No tasks found.{" "}
-                            <button
-                              className="text-blue-600 hover:underline"
-                              onClick={() => {
-                                setShowAllTasks(false);
-                                setTaskFilters({
-                                  search: "",
-                                  status: "all",
-                                  priority: "all",
-                                  dueDate: "all",
-                                });
-                              }}
-                            >
-                              Reset filters
-                            </button>
+                            <div className="flex flex-col items-center justify-center gap-2">
+                              <ListChecks size={28} className="text-gray-300" />
+                              <p className="text-sm">No tasks found matching filters.</p>
+                              <button
+                                className="text-xs text-blue-600 hover:underline font-medium"
+                                onClick={() => {
+                                  setShowAllTasks(false);
+                                  setTaskFilters({
+                                    search: "",
+                                    status: "all",
+                                    priority: "all",
+                                    dueDate: "all",
+                                  });
+                                }}
+                              >
+                                Reset filters
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ) : (
-                        visibleTasks.map((task) => (
+                        filteredTasks.map((task) => (
                           <tr
                             key={task.id}
-                            className="hover:bg-gray-50 transition-colors cursor-pointer"
+                            className={`hover:bg-gray-50 transition-colors cursor-pointer ${
+                              selectedTasks.includes(task.id) ? "bg-blue-50/30" : ""
+                            }`}
                             onClick={() => handleTaskClick(task.id)}
                           >
                             <td
-                              className="py-2 px-3"
+                              className="py-2.5 px-3"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <input type="checkbox" className="rounded" />
+                              <input
+                                type="checkbox"
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                checked={selectedTasks.includes(task.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedTasks((prev) => [...prev, task.id]);
+                                  } else {
+                                    setSelectedTasks((prev) =>
+                                      prev.filter((id) => id !== task.id),
+                                    );
+                                  }
+                                }}
+                              />
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="py-2.5 px-3">
                               <div className="flex items-center gap-1.5">
                                 {getTaskTypeIcon(task, 13)}
                                 {task.isPastDue && (
                                   <span
                                     title="Past Due"
-                                    className="text-red-500 text-xs"
+                                    className="text-red-500 text-xs flex-shrink-0"
                                   >
                                     ⚠️
                                   </span>
@@ -1280,7 +1336,7 @@ const OrganizationDashboard = () => {
                                 {task.isDueToday && (
                                   <span
                                     title="Due Today"
-                                    className="text-orange-500 text-xs"
+                                    className="text-orange-500 text-xs flex-shrink-0"
                                   >
                                     📅
                                   </span>
@@ -1313,24 +1369,24 @@ const OrganizationDashboard = () => {
                               )}
                             </td>
                             <td
-                              className="py-2 px-3 text-xs whitespace-nowrap"
+                              className="py-2.5 px-3 text-xs whitespace-nowrap"
                               style={{ color: "#9a9a9a" }}
                             >
                               {task.assignee}
                             </td>
                             <td
-                              className="py-2 px-3 text-xs whitespace-nowrap"
+                              className="py-2.5 px-3 text-xs whitespace-nowrap"
                               style={{ color: "#9a9a9a" }}
                             >
                               {task.dueDate}
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="py-2.5 px-3">
                               {getPriorityBadge(task.priority)}
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="py-2.5 px-3">
                               {getStatusBadge(task.status)}
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="py-2.5 px-3">
                               <div className="flex items-center gap-2">
                                 <div className="w-[45px] bg-gray-200 rounded-sm h-1.5 overflow-hidden">
                                   <div
@@ -1361,36 +1417,36 @@ const OrganizationDashboard = () => {
                 </div>
               </TooltipProvider>
 
-              {/* Show more/show less footer */}
-              {filteredTasks.length > TASK_DISPLAY_LIMIT && (
-                <div
-                  className="px-4 py-2.5 border-t border-gray-100 flex items-center justify-between rounded-b-md"
-                  style={{ backgroundColor: "#f9f9f9" }}
-                >
-                  <span className="text-[11px]" style={{ color: "#9a9a9a" }}>
-                    {showAllTasks
-                      ? `Showing all ${filteredTasks.length} tasks`
-                      : `Showing ${TASK_DISPLAY_LIMIT} of ${filteredTasks.length} tasks`}
+              {/* Task Grid Footer */}
+              <div
+                className="px-4 py-2.5 border-t border-gray-100 flex items-center justify-between flex-shrink-0 rounded-b-sm"
+                style={{ backgroundColor: "#f9f9f9" }}
+              >
+                <span className="text-[11px]" style={{ color: "#9a9a9a" }}>
+                  Showing {filteredTasks.length} task{filteredTasks.length === 1 ? "" : "s"}
+                </span>
+                {filteredTasks.length > 5 ? (
+                  <span className="text-[11px] font-medium text-blue-600 flex items-center gap-1">
+                    <span>Scroll to view all</span>
+                    <span className="text-xs">↕</span>
                   </span>
-                  <button
-                    className="text-[11px] font-medium text-blue-600 hover:underline"
-                    onClick={() => setShowAllTasks((prev) => !prev)}
-                  >
-                    {showAllTasks ? "Show less" : `Show ${hiddenCount} more`}
-                  </button>
-                </div>
-              )}
+                ) : (
+                  <span className="text-[11px]" style={{ color: "#9a9a9a" }}>
+                    {filteredTasks.length > 0 ? "All tasks shown" : ""}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Calendar - right 1/3 - Modern style */}
-          <div className="lg:col-span-1">
-            <div className="bg-white border border-gray-200 shadow-sm rounded-sm sticky top-4">
+          <div className="lg:col-span-1 flex flex-col h-[480px]">
+            <div className="bg-white border border-gray-200 shadow-sm rounded-sm flex flex-col h-full overflow-hidden">
               <div
-                className="py-2.5 px-4 border-b border-gray-200 rounded-sm"
+                className="py-2.5 px-4 border-b border-gray-200 rounded-t-sm flex-shrink-0"
                 style={{ backgroundColor: "#f9f9f9" }}
               >
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-2.5">
                   <h5
                     className="text-xs font-semibold uppercase tracking-wider m-0 flex items-center gap-1.5"
                     style={{ color: "#676a6c" }}
@@ -1430,9 +1486,9 @@ const OrganizationDashboard = () => {
                 </div>
               </div>
 
-              <div className="p-3">
+              <div className="p-3 flex-1 min-h-0 overflow-y-auto flex flex-col custom-scrollbar">
                 <p
-                  className="text-xs font-medium mb-3"
+                  className="text-xs font-medium mb-2 flex-shrink-0"
                   style={{ color: "#676a6c" }}
                 >
                   {calendarView === "month" &&
@@ -1520,7 +1576,7 @@ const OrganizationDashboard = () => {
                             onClick={() =>
                               isCurrentMonth && handleCalendarDateClick()
                             }
-                            className={`aspect-square flex flex-col items-center justify-center text-[10px] rounded cursor-pointer relative ${
+                            className={`h-7 sm:h-7.5 flex flex-col items-center justify-center text-[10px] rounded cursor-pointer relative ${
                               !isCurrentMonth
                                 ? "text-gray-300"
                                 : "hover:bg-blue-50"
@@ -1538,7 +1594,7 @@ const OrganizationDashboard = () => {
                             {isCurrentMonth ? dayNum : ""}
                             {dayTasks.length > 0 && (
                               <span
-                                className={`absolute bottom-0.5 w-1 h-1 rounded-sm ${
+                                className={`absolute bottom-0.5 w-1 h-1 rounded-full ${
                                   isToday ? "bg-white" : "bg-blue-500"
                                 }`}
                               />
@@ -1573,7 +1629,7 @@ const OrganizationDashboard = () => {
                           return (
                             <div
                               key={i}
-                              className={`p-2 rounded border cursor-pointer ${
+                              className={`p-1.5 px-2 rounded border cursor-pointer ${
                                 isToday
                                   ? "bg-blue-50 border-blue-300"
                                   : "bg-white border-gray-200 hover:bg-gray-50"
@@ -1594,7 +1650,7 @@ const OrganizationDashboard = () => {
                                   })}
                                 </span>
                                 {dayTasks.length > 0 && (
-                                  <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-sm">
+                                  <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.2 rounded-sm font-medium">
                                     {dayTasks.length}
                                   </span>
                                 )}
@@ -1602,7 +1658,7 @@ const OrganizationDashboard = () => {
                               {dayTasks.slice(0, 2).map((task) => (
                                 <p
                                   key={task.id}
-                                  className="text-[10px] truncate mt-0.5 pl-2 border-l-2 border-blue-400"
+                                  className="text-[10px] truncate mt-0.5 pl-1.5 border-l-2 border-blue-400"
                                   style={{ color: "#9a9a9a" }}
                                   title={task.title}
                                 >
@@ -1611,7 +1667,7 @@ const OrganizationDashboard = () => {
                               ))}
                               {dayTasks.length > 2 && (
                                 <p
-                                  className="text-[9px] pl-2"
+                                  className="text-[9px] pl-1.5"
                                   style={{ color: "#9a9a9a" }}
                                 >
                                   +{dayTasks.length - 2} more
@@ -1634,13 +1690,12 @@ const OrganizationDashboard = () => {
                     return (
                       <div className="space-y-1.5">
                         {dayTasks.length === 0 ? (
-                          <div className="text-center py-5">
+                          <div className="text-center py-6">
                             <Calendar
-                              className="mx-auto mb-3"
+                              className="mx-auto mb-2 text-gray-300"
                               size={28}
-                              style={{ color: "#9a9a9a" }}
                             />
-                            <p className="text-xs" style={{ color: "#9a9a9a" }}>
+                            <p className="text-xs text-gray-400">
                               No tasks on this day
                             </p>
                           </div>
@@ -1648,16 +1703,16 @@ const OrganizationDashboard = () => {
                           dayTasks.map((task) => (
                             <div
                               key={task.id}
-                              className="p-2 bg-white border border-gray-200 rounded hover:border-blue-300 cursor-pointer"
+                              className="p-2 bg-white border border-gray-200 rounded hover:border-blue-300 cursor-pointer transition-colors"
+                              onClick={() => handleTaskClick(task.id)}
                             >
                               <p
-                                className="text-xs font-medium truncate"
-                                style={{ color: "#676a6c" }}
+                                className="text-xs font-medium truncate text-gray-700"
                                 title={task.title}
                               >
                                 {task.title}
                               </p>
-                              <div className="flex items-center gap-3 mt-1">
+                              <div className="flex items-center gap-2 mt-1">
                                 <span
                                   className={`text-[9px] px-1.5 py-0.5 rounded border ${
                                     task.status === "DONE"
@@ -1669,10 +1724,7 @@ const OrganizationDashboard = () => {
                                 >
                                   {task.status || "OPEN"}
                                 </span>
-                                <span
-                                  className="text-[9px]"
-                                  style={{ color: "#9a9a9a" }}
-                                >
+                                <span className="text-[9px] text-gray-400">
                                   {task.date}
                                 </span>
                               </div>
@@ -1684,51 +1736,51 @@ const OrganizationDashboard = () => {
                   })()}
 
                 {/* Tasks this period */}
-                <div className="mt-2 space-y-1.5">
+                <div className="mt-3 pt-2.5 border-t border-gray-100 space-y-1.5">
                   <p
-                    className="text-[10px] font-semibold uppercase tracking-wide"
-                    style={{ color: "#9a9a9a" }}
+                    className="text-[10px] font-semibold uppercase tracking-wide text-gray-400"
                   >
                     Tasks This {calendarView} ({calendarTasks.length})
                   </p>
-                  {calendarTasks.length === 0 && (
-                    <p
-                      className="text-[10px] text-center py-2"
-                      style={{ color: "#9a9a9a" }}
-                    >
+                  {calendarTasks.length === 0 ? (
+                    <p className="text-[10px] text-center py-2 text-gray-400">
                       No tasks found
                     </p>
-                  )}
-                  {calendarTasks.slice(0, 8).map((task) => (
-                    <div
-                      key={task.id}
-                      className="p-2 bg-blue-50 border border-blue-200 rounded text-[10px] cursor-pointer hover:bg-blue-100"
-                    >
-                      <p
-                        className="font-medium truncate"
-                        style={{ color: "#676a6c" }}
-                        title={task.title}
-                      >
-                        {task.title}
-                      </p>
-                      <p style={{ color: "#9a9a9a" }}>{task.date}</p>
+                  ) : (
+                    <div className="space-y-1 max-h-[110px] overflow-y-auto pr-0.5 custom-scrollbar">
+                      {calendarTasks.map((task) => (
+                        <div
+                          key={task.id}
+                          className="p-1.5 px-2 bg-blue-50/60 hover:bg-blue-100/70 border border-blue-100 rounded text-[10px] cursor-pointer transition-colors"
+                          onClick={() => handleTaskClick(task.id)}
+                        >
+                          <p
+                            className="font-medium truncate text-gray-700"
+                            title={task.title}
+                          >
+                            {task.title}
+                          </p>
+                          <div className="flex items-center justify-between text-[9px] text-gray-400 mt-0.5">
+                            <span>{task.date}</span>
+                            <span className="uppercase text-[8px] font-semibold text-blue-600">
+                              {task.status || "OPEN"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                  {calendarTasks.length > 8 && (
-                    <p
-                      className="text-[9px] text-center"
-                      style={{ color: "#9a9a9a" }}
-                    >
-                      +{calendarTasks.length - 8} more
-                    </p>
                   )}
-                  <button
-                    className="w-full mt-2 h-7 flex items-center justify-center gap-1.5 text-xs font-medium text-blue-600 border border-blue-600 rounded hover:bg-blue-50 transition-colors"
-                    onClick={() => handleCalendarDateClick()}
-                  >
-                    <Plus size={12} /> Create Task
-                  </button>
                 </div>
+              </div>
+
+              {/* Create Task Button Footer */}
+              <div className="p-3 pt-2 border-t border-gray-100 flex-shrink-0 bg-white rounded-b-sm">
+                <button
+                  className="w-full h-8 flex items-center justify-center gap-1.5 text-xs font-medium text-blue-600 border border-blue-600 rounded hover:bg-blue-50 transition-colors"
+                  onClick={() => handleCalendarDateClick()}
+                >
+                  <Plus size={12} /> Create Task
+                </button>
               </div>
             </div>
           </div>

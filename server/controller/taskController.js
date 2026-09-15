@@ -213,7 +213,7 @@ const STATUS_COLOR_MAP = {
 export const getManagerSubordinateIds = async (userId, organizationId) => {
   try {
     if (!userId) return [];
-    const managerUser = await User.findById(userId).select("subordinates").lean();
+    const managerUser = await User.findById(userId).select("subordinates organization_id").lean();
     let subordinateIds = (managerUser?.subordinates || []).map((id) => id.toString());
 
     const directReports = await User.find({
@@ -225,6 +225,29 @@ export const getManagerSubordinateIds = async (userId, organizationId) => {
 
     const directReportIds = directReports.map((u) => u._id.toString());
     const combinedSet = new Set([...subordinateIds, ...directReportIds]);
+
+    // Also include active reports from OrganizationHierarchy
+    try {
+      const { OrganizationHierarchy } = await import("../models.js");
+      if (OrganizationHierarchy) {
+        const hierarchyQuery = {
+          manager: userId,
+          status: "active",
+        };
+        const orgId = organizationId || managerUser?.organization_id;
+        if (orgId) {
+          hierarchyQuery.organization_id = orgId;
+        }
+        const hierarchyReports = await OrganizationHierarchy.find(hierarchyQuery)
+          .select("reporty")
+          .lean();
+        hierarchyReports.forEach((h) => {
+          if (h.reporty) combinedSet.add(h.reporty.toString());
+        });
+      }
+    } catch (hErr) {
+      console.warn("⚠️ Failed to query OrganizationHierarchy in getManagerSubordinateIds:", hErr.message);
+    }
 
     return Array.from(combinedSet);
   } catch (error) {
@@ -2175,14 +2198,8 @@ export const getTeamTasks = async (req, res) => {
       });
     }
 
-    // Get user with subordinates populated
-    const User = (await import("../modals/userModal.js")).User;
-    const userWithSubordinates = await User.findById(user.id)
-      .select("subordinates")
-      .lean();
-
-    const subordinates = userWithSubordinates?.subordinates || [];
-
+    // Get subordinates for team tasks
+    const subordinateIdStrs = await getManagerSubordinateIds(user.id, user.organizationId);
 
     // Build filter for team tasks
     const filter = {
@@ -2191,23 +2208,14 @@ export const getTeamTasks = async (req, res) => {
       organization: user.organizationId, // Same organization
     };
 
-    // If a manager or admin, we now show all organization tasks by default
-    // "data orgnization ke jitne emplyee h unke basis pr hoga"
-    if (isManager || isOrgAdmin || isTasksetuAdmin) {
-    } else {
-      // Fallback or additional check for other roles if needed
-    }
-
     // Apply additional filters
     if (status) filter.status = status;
     if (priority) filter.priority = priority;
     if (subordinateId) {
       filter.assignedTo = subordinateId;
     } else if (isManager && !isOrgAdmin && !isTasksetuAdmin) {
-      // Optional: If we ONLY want subordinates for non-admin managers
-      // by default, we could uncomment this:
-      // filter.assignedTo = { $in: [...subordinates, user.id] };
-      // But user asked for organization-wide.
+      // Non-admin manager only sees own tasks and direct subordinates' tasks
+      filter.assignedTo = { $in: [...subordinateIdStrs, user.id] };
     }
     if (search) {
       filter.$or = [
@@ -2224,7 +2232,6 @@ export const getTeamTasks = async (req, res) => {
       sort: { createdAt: -1 },
     });
 
-    const subordinateIdStrs = (subordinates || []).map((id) => id.toString());
     if (Array.isArray(tasks)) {
       tasks.forEach((t) => {
         if (Array.isArray(t.subtasks)) {
@@ -3303,15 +3310,6 @@ export const getSubtasks = async (req, res) => {
     let subordinateIds = [];
     if (userRoles.includes("manager")) {
       subordinateIds = await getManagerSubordinateIds(user.id, user.organizationId);
-      if (subordinateIds.length === 0 && user.organizationId) {
-        const orgEmployees = await User.find({
-          organization_id: user.organizationId,
-          role: { $in: ["employee", "manager"] },
-          _id: { $ne: user.id },
-          status: "active",
-        }).select("_id");
-        subordinateIds = orgEmployees.map((u) => u._id.toString());
-      }
     }
 
     // Build filter for subtasks
@@ -6736,14 +6734,46 @@ export const getTasks = async (req, res) => {
       parentTaskId: { $exists: false }, // Only parent tasks, exclude subtasks
     };
 
+    const userRoles = Array.isArray(user.role) ? user.role : [user.role || "employee"];
+    let subordinateIds = [];
+    if (userRoles.includes("manager")) {
+      subordinateIds = await getManagerSubordinateIds(user.id, user.organizationId);
+    }
+
     // Filter by organization for org users, or by creator for individual users
-    if (user.organizationId) {
-      filter.organization = user.organizationId;
+    const isOrgAdminUser =
+      userRoles.includes("org_admin") ||
+      userRoles.includes("super_admin") ||
+      userRoles.includes("super-admin") ||
+      userRoles.includes("company-admin");
+
+    if (isOrgAdminUser) {
+      if (user.organizationId) {
+        filter.organization = user.organizationId;
+      }
+    } else if (userRoles.includes("manager")) {
+      if (user.organizationId) {
+        filter.organization = user.organizationId;
+      }
+      filter.$or = [
+        { createdBy: user.id },
+        { assignedTo: user.id },
+        { approvers: user.id },
+        { collaborators: user.id },
+        ...(subordinateIds.length > 0
+          ? [
+              { assignedTo: { $in: subordinateIds } },
+              { createdBy: { $in: subordinateIds } },
+              { collaborators: { $in: subordinateIds } },
+            ]
+          : []),
+      ];
     } else {
       filter.$or = [
         { createdBy: user.id },
         { assignedTo: user.id },
         { approvers: user.id },
+        { collaborators: user.id },
       ];
     }
 
@@ -6766,21 +6796,6 @@ export const getTasks = async (req, res) => {
       limit: parseInt(limit),
       sort: { createdAt: -1 },
     });
-
-    const userRoles = Array.isArray(user.role) ? user.role : [user.role || "employee"];
-    let subordinateIds = [];
-    if (userRoles.includes("manager")) {
-      subordinateIds = await getManagerSubordinateIds(user.id, user.organizationId);
-      if (subordinateIds.length === 0 && user.organizationId) {
-        const orgEmployees = await User.find({
-          organization_id: user.organizationId,
-          role: { $in: ["employee", "manager"] },
-          _id: { $ne: user.id },
-          status: "active",
-        }).select("_id");
-        subordinateIds = orgEmployees.map((u) => u._id.toString());
-      }
-    }
 
     if (Array.isArray(tasks)) {
       tasks.forEach((t) => {
@@ -6844,15 +6859,6 @@ export const getTaskById = async (req, res) => {
     let subordinateIds = [];
     if (userRoles.includes("manager")) {
       subordinateIds = await getManagerSubordinateIds(user.id, user.organizationId);
-      if (subordinateIds.length === 0 && user.organizationId) {
-        const orgEmployees = await User.find({
-          organization_id: user.organizationId,
-          role: { $in: ["employee", "manager"] },
-          _id: { $ne: user.id },
-          status: "active",
-        }).select("_id");
-        subordinateIds = orgEmployees.map((u) => u._id.toString());
-      }
     }
 
     // Check if user has access to this task
@@ -10429,12 +10435,7 @@ export const getTasksByType = async (req, res) => {
         conditions.push({ organization: user.organizationId });
       }
     } else if (userRoles.includes("manager")) {
-      const { User } = await import("../modals/userModal.js");
-      const teamMembers = await User.find({
-        managerId: user.id,
-        status: "active",
-      }).select("_id");
-      const teamMemberIds = teamMembers.map((u) => u._id);
+      const teamMemberIds = await getManagerSubordinateIds(user.id, user.organizationId);
 
       conditions.push({
         $or: [
@@ -10446,6 +10447,7 @@ export const getTasksByType = async (req, res) => {
             ? [
                 { assignedTo: { $in: teamMemberIds } },
                 { createdBy: { $in: teamMemberIds } },
+                { collaborators: { $in: teamMemberIds } },
               ]
             : []),
         ],
@@ -10652,15 +10654,6 @@ export const getTasksByType = async (req, res) => {
     let subordinateIds = [];
     if (userRoles.includes("manager")) {
       subordinateIds = await getManagerSubordinateIds(user.id, user.organizationId);
-      if (subordinateIds.length === 0 && user.organizationId) {
-        const orgEmployees = await User.find({
-          organization_id: user.organizationId,
-          role: { $in: ["employee", "manager"] },
-          _id: { $ne: user.id },
-          status: "active",
-        }).select("_id");
-        subordinateIds = orgEmployees.map((u) => u._id.toString());
-      }
     }
 
     if (tasks && tasks.length > 0) {
@@ -10840,25 +10833,12 @@ export const getMyTasks = async (req, res) => {
     const user = req.user;
     const userRoles = Array.isArray(user.role) ? user.role : [user.role];
 
-    // ✅ subordinates fetch karo (teamMembers + managerId reverse ref)
+    // ✅ subordinates fetch karo (subordinates + managerId + OrganizationHierarchy)
     let teamMemberIds = [];
     if (userRoles.includes("manager")) {
       const subordinateIds = await getManagerSubordinateIds(user.id, user.organizationId);
-
       if (subordinateIds.length > 0) {
         teamMemberIds = subordinateIds;
-      } else {
-        // ✅ FALLBACK: agar subordinates empty hai, same org ke saare employees fetch karo
-        if (user.organizationId) {
-          const orgEmployees = await User.find({
-            organization_id: user.organizationId,
-            role: { $in: ["employee", "manager"] },
-            _id: { $ne: user.id },
-            status: "active",
-          }).select("_id");
-
-          teamMemberIds = orgEmployees.map((u) => u._id.toString());
-        }
       }
     }
 
@@ -10922,20 +10902,18 @@ export const getMyTasks = async (req, res) => {
         filter.organization = user.organizationId;
       }
     } else if (userRoles.includes("manager")) {
-      // ✅ FIX: Manager sees own tasks + team members tasks + parent tasks of assigned subtasks + approval tasks where user is approver + collaborator tasks
+      // Manager sees own tasks + direct subordinates' tasks only
       filter.$or = [
         { assignedTo: user.id },
         { createdBy: user.id },
         { approvers: user.id },
         { collaborators: user.id },
-        ...(parentTaskIdsFromSubtasks.length > 0
-          ? [{ _id: { $in: parentTaskIdsFromSubtasks } }]
-          : []),
         ...(teamMemberIds.length > 0
           ? [
               { assignedTo: { $in: teamMemberIds } },
               { createdBy: { $in: teamMemberIds } },
               { collaborators: { $in: teamMemberIds } },
+              { approvers: { $in: teamMemberIds } },
             ]
           : []),
       ];

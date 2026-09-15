@@ -1,6 +1,7 @@
 import Task from "../modals/taskModal.js";
 import { User } from "../modals/userModal.js";
 import TimezoneHelper from "../utils/timezoneHelper.js";
+import { getManagerSubordinateIds } from "./taskController.js";
 
 export const getTaskCounts = async (req, res) => {
     try {
@@ -29,18 +30,18 @@ export const getTaskCounts = async (req, res) => {
                 // Org admin can see all tasks in their organization
                 // No additional filter needed
                 break;
-            case "manager":
+            case "manager": {
                 // Get subordinates to include their tasks in count
-                const managerUser = await User.findById(user_id).select('subordinates').lean();
-                const subordinates = managerUser?.subordinates || [];
+                const subordinates = await getManagerSubordinateIds(user_id);
 
                 baseQuery.$or = [
                     { assignedTo: user_id },
                     { createdBy: user_id },
                     { 'collaborators': user_id },
-                    { assignedTo: { $in: subordinates } }
+                    ...(subordinates.length > 0 ? [{ assignedTo: { $in: subordinates } }] : [])
                 ];
                 break;
+            }
             case "individual":
             case "employee":
                 // Both individual and employee can only see tasks assigned to them or where they are collaborators
@@ -172,18 +173,18 @@ export const getOverdueTasks = async (req, res) => {
             case "org_admin":
                 // Org admin can see all tasks in their organization
                 break;
-            case "manager":
+            case "manager": {
                 // Get subordinates to include their tasks
-                const overdueManagerUser = await User.findById(user_id).select('subordinates').lean();
-                const overdueSubordinates = overdueManagerUser?.subordinates || [];
+                const overdueSubordinates = await getManagerSubordinateIds(user_id);
 
                 baseQuery.$or = [
                     { assignedTo: user_id },
                     { createdBy: user_id },
                     { collaborators: user_id },
-                    { assignedTo: { $in: overdueSubordinates } }
+                    ...(overdueSubordinates.length > 0 ? [{ assignedTo: { $in: overdueSubordinates } }] : [])
                 ];
                 break;
+            }
             case "individual":
             case "employee":
                 baseQuery.$or = [

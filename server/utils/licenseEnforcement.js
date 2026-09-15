@@ -85,6 +85,59 @@ export async function getUserLicense(userId) {
         };
     }
 
+    // Check authoritative licenseService (which handles assigned_license, grace periods, auto-downgrades, and defaults to EXPLORE)
+    try {
+        const { getUserLicenseInfo } = await import('../services/licenseService.js');
+        const svcLicense = await getUserLicenseInfo(userId);
+        if (svcLicense && svcLicense.license_code && !svcLicense.is_expired) {
+            const licenseDef = await License.findOne({ license_code: svcLicense.license_code });
+            return {
+                hasLicense: true,
+                isExpired: false,
+                license_code: svcLicense.license_code,
+                license_name: licenseDef?.name || svcLicense.license_code,
+                renewal_date: svcLicense.expiry_date,
+                isLegacy: true,
+                features: licenseDef?.features || [],
+                limits: {
+                    max_users: licenseDef?.max_users,
+                    max_tasks: licenseDef?.max_tasks,
+                    max_projects: licenseDef?.max_projects,
+                    max_storage_gb: licenseDef?.max_storage_gb
+                }
+            };
+        } else if (svcLicense && svcLicense.is_expired) {
+            return {
+                hasLicense: false,
+                isExpired: true,
+                license_code: svcLicense.license_code,
+                expiry_date: svcLicense.expiry_date,
+                message: `Your ${svcLicense.license_code} license has expired.`
+            };
+        }
+    } catch (err) {
+        // Fallback to default EXPLORE below
+    }
+
+    // Default to EXPLORE if present in database
+    const defaultLicenseDef = await License.findOne({ license_code: 'EXPLORE' });
+    if (defaultLicenseDef) {
+        return {
+            hasLicense: true,
+            isExpired: false,
+            license_code: 'EXPLORE',
+            license_name: defaultLicenseDef.name || 'Explore',
+            isLegacy: true,
+            features: defaultLicenseDef.features || [],
+            limits: {
+                max_users: defaultLicenseDef.max_users,
+                max_tasks: defaultLicenseDef.max_tasks,
+                max_projects: defaultLicenseDef.max_projects,
+                max_storage_gb: defaultLicenseDef.max_storage_gb
+            }
+        };
+    }
+
     // No license assigned
     return {
         hasLicense: false,

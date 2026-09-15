@@ -7,16 +7,54 @@ import { checkFeatureCodeLimit } from "../utils/licenseEnforcement.js";
 import * as licenseService from "../services/licenseService.js";
 
 /**
+ * Helper to construct workspace-scoped query for process templates
+ * For Organization Users: templates belonging to their organization
+ * For Individual Users: templates created by the individual user with no organization
+ */
+const getWorkspaceTemplateQuery = (user, extraQuery = {}) => {
+  const orgId = user?.organizationId || user?.organization_id;
+  const userId = user?.id || user?._id;
+
+  const baseQuery = { isDeleted: false, ...extraQuery };
+
+  if (orgId) {
+    baseQuery.organizationId = orgId;
+  } else if (userId) {
+    const validUserId = (userId && mongoose.Types.ObjectId.isValid(userId))
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+    baseQuery.$and = [
+      { $or: [{ createdBy: validUserId }, { createdBy: userId }] },
+      {
+        $or: [
+          { organizationId: null },
+          { organizationId: { $exists: false } },
+        ],
+      },
+    ];
+  } else {
+    baseQuery._id = null;
+  }
+
+  return baseQuery;
+};
+
+/**
  * Get organization users for Process Builder select dropdowns
  */
 export const getOrgUsers = async (req, res) => {
   try {
     const user = req.user;
+    const userId = user?.id || user?._id;
     const orgId = user?.organizationId || user?.organization_id;
 
     let query = {};
     if (orgId) {
       query = { organization_id: orgId };
+    } else if (userId) {
+      query = { _id: userId };
+    } else {
+      return res.json({ success: true, data: [] });
     }
 
     const users = await User.find(query)
@@ -56,18 +94,24 @@ export const getOrgForms = async (req, res) => {
     };
 
     const conditions = [];
-    if (userId) {
-      conditions.push({ owner_user_id: userId });
-      conditions.push({ createdBy: userId });
-    }
     if (orgId) {
       conditions.push({ organization_id: orgId });
       conditions.push({ organization: orgId });
       conditions.push({ company_id: orgId });
+    } else if (userId) {
+      const validUserId = (userId && mongoose.Types.ObjectId.isValid(userId))
+        ? new mongoose.Types.ObjectId(userId)
+        : userId;
+      conditions.push({ owner_user_id: validUserId });
+      conditions.push({ owner_user_id: userId });
+      conditions.push({ createdBy: validUserId });
+      conditions.push({ createdBy: userId });
     }
 
     if (conditions.length > 0) {
       query.$or = conditions;
+    } else {
+      return res.json({ success: true, data: [] });
     }
 
     const forms = await FormTemplate.find(query)
@@ -96,12 +140,7 @@ export const getOrgForms = async (req, res) => {
  */
 export const getProcessTemplates = async (req, res) => {
   try {
-    const orgId = req.user?.organizationId || req.user?.organization_id;
-
-    let query = { isDeleted: false };
-    if (orgId) {
-      query.organizationId = orgId;
-    }
+    const query = getWorkspaceTemplateQuery(req.user);
 
     const processes = await ProcessTemplate.find(query)
       .sort({ createdAt: -1 })
@@ -130,7 +169,8 @@ export const getProcessTemplates = async (req, res) => {
 export const getProcessTemplateById = async (req, res) => {
   try {
     const { id } = req.params;
-    const process = await ProcessTemplate.findOne({ _id: id, isDeleted: false }).lean();
+    const query = getWorkspaceTemplateQuery(req.user, { _id: id });
+    const process = await ProcessTemplate.findOne(query).lean();
 
     if (!process) {
       return res.status(404).json({ success: false, message: "Process template not found" });
@@ -324,7 +364,8 @@ export const updateProcessTemplate = async (req, res) => {
     const { id } = req.params;
     const { name, description, status, steps } = req.body;
 
-    const process = await ProcessTemplate.findOne({ _id: id, isDeleted: false });
+    const query = getWorkspaceTemplateQuery(req.user, { _id: id });
+    const process = await ProcessTemplate.findOne(query);
     if (!process) {
       return res.status(404).json({ success: false, message: "Process template not found" });
     }
@@ -432,7 +473,8 @@ export const updateProcessTemplate = async (req, res) => {
 export const deleteProcessTemplate = async (req, res) => {
   try {
     const { id } = req.params;
-    const process = await ProcessTemplate.findOne({ _id: id, isDeleted: false });
+    const query = getWorkspaceTemplateQuery(req.user, { _id: id });
+    const process = await ProcessTemplate.findOne(query);
 
     if (!process) {
       return res.status(404).json({ success: false, message: "Process template not found" });
@@ -466,7 +508,8 @@ export const startProcessInstance = async (req, res) => {
       return res.status(400).json({ success: false, message: "Process template ID is required" });
     }
 
-    const template = await ProcessTemplate.findOne({ _id: processId, isDeleted: false }).lean();
+    const templateQuery = getWorkspaceTemplateQuery(req.user, { _id: processId });
+    const template = await ProcessTemplate.findOne(templateQuery).lean();
     if (!template) {
       return res.status(404).json({ success: false, message: "Process template not found" });
     }
@@ -807,8 +850,41 @@ export const startProcessInstance = async (req, res) => {
  */
 export const getProcessInstances = async (req, res) => {
   try {
-    // 1. Fetch all non-deleted tasks from DB
-    const allTasksInDb = await Task.find({ is_deleted: { $ne: true } })
+    const rawOrgId = typeof req.user?.organization === "object"
+      ? (req.user?.organization?._id || req.user?.organization?.id)
+      : (req.user?.organizationId || req.user?.organization_id || req.user?.organization);
+    const orgId = (typeof rawOrgId === "object" && rawOrgId !== null) ? (rawOrgId._id || rawOrgId.id) : rawOrgId;
+    const userId = req.user?.id || req.user?._id;
+
+    let taskQuery = { is_deleted: { $ne: true } };
+    if (orgId) {
+      taskQuery.organization = orgId;
+    } else if (userId) {
+      const validUserId = (mongoose.Types.ObjectId.isValid(userId))
+        ? new mongoose.Types.ObjectId(userId)
+        : userId;
+      taskQuery.$and = [
+        {
+          $or: [
+            { organization: null },
+            { organization: { $exists: false } },
+          ],
+        },
+        {
+          $or: [
+            { createdBy: validUserId },
+            { createdBy: userId },
+            { assignedTo: validUserId },
+            { assignedTo: userId },
+          ],
+        },
+      ];
+    } else {
+      return res.json({ success: true, data: [] });
+    }
+
+    // 1. Fetch non-deleted tasks scoped to current workspace from DB
+    const allTasksInDb = await Task.find(taskQuery)
       .sort({ createdAt: -1 })
       .lean();
 

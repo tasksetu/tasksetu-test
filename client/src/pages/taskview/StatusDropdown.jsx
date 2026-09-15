@@ -3,6 +3,12 @@ import getStatusLabel from "./statusUtils";
 import axios from "axios";
 import { useQuery } from "@tanstack/react-query";
 import { useShowToast } from "@/utils/ToastMessage";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 function StatusDropdown({ status, onChange, canEdit, task, currentUser }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -56,7 +62,7 @@ function StatusDropdown({ status, onChange, canEdit, task, currentUser }) {
         },
       );
 
-      console.log("StatusDropdown: Status update successful:", response.data);
+      console.log("Status update successful:", response.data);
 
       // Call the parent's status change handler for immediate UI update
       if (onChange) {
@@ -227,9 +233,9 @@ function StatusDropdown({ status, onChange, canEdit, task, currentUser }) {
     if (isUpdating) return;
 
     const success = await executeStatusChange(showConfirmation.newStatus);
-    setUpdatingStatus(null); // Reset updating status after API call
+    setUpdatingStatus(null);
     if (success) {
-      // Update current status for immediate color change
+      
       setCurrentStatusCode(showConfirmation.newStatus);
 
       // Log activity with confirmation
@@ -255,30 +261,36 @@ function StatusDropdown({ status, onChange, canEdit, task, currentUser }) {
   if (!canEdit) {
     return (
       <div className="status-display readonly">
-        <span
-          className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium text-white cursor-help"
-          style={{ backgroundColor: currentStatus.color }}
-          onMouseEnter={() => setShowTooltip(true)}
-          onMouseLeave={() => setShowTooltip(false)}
-        >
-          {getStatusLabel(status)}
-          <svg
-            className="ml-1 w-3 h-3 opacity-50"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <path
-              fillRule="evenodd"
-              d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </span>
-        {showTooltip && (
-          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded whitespace-nowrap z-10 max-w-xs">
-            {currentStatus.tooltip} (Read-only)
-          </div>
-        )}
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium text-white cursor-not-allowed select-none"
+                style={{ backgroundColor: currentStatus.color }}
+              >
+                {getStatusLabel(status)}
+                <svg
+                  className="ml-1 w-3 h-3 opacity-50"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent
+              side="bottom"
+              sideOffset={6}
+              className="bg-gray-800 text-white text-xs px-3 py-1.5 rounded-md shadow-xl border border-gray-700 z-[99999] max-w-xs select-none"
+            >
+              {currentStatus.tooltip || "No permission to edit"} (Read-only)
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     );
   }

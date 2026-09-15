@@ -15,6 +15,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Redirect, useLocation } from "wouter";
 import axios from "axios";
 import { useTaskStatuses } from "../../hooks/useTaskStatuses";
@@ -1989,7 +1995,7 @@ function TaskStatusDropdown({
             );
             return !hasIncompleteSubtasks;
           }
-
+          
           return true;
         },
       );
@@ -2000,32 +2006,36 @@ function TaskStatusDropdown({
 
   if (!canEdit) {
     return (
-      <div className="relative">
-        <span
-          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-help"
-          style={badgeStyle}
-          onMouseEnter={() => setShowTooltip(true)}
-          onMouseLeave={() => setShowTooltip(false)}
-        >
-          {displayLabel}
-          <svg
-            className="ml-1 w-3 h-3 opacity-50"
-            fill="currentColor"
-            viewBox="0 0 20 20"
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-not-allowed select-none"
+              style={badgeStyle}
+            >
+              {displayLabel}
+              <svg
+                className="ml-1 w-3 h-3 opacity-50"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent
+            side="bottom"
+            sideOffset={6}
+            className="bg-gray-800 text-white text-xs px-3 py-1.5 rounded-md shadow-xl border border-gray-700 z-[99999] max-w-xs select-none"
           >
-            <path
-              fillRule="evenodd"
-              d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </span>
-        {showTooltip && (
-          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded whitespace-nowrap z-10 max-w-xs">
             {currentStatusObj?.tooltip || "No permission to edit"}
-          </div>
-        )}
-      </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 
@@ -2050,7 +2060,7 @@ function TaskStatusDropdown({
 
       {/* Status tooltip */}
       {showTooltip && !isOpen && currentStatusObj?.tooltip && (
-        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded whitespace-nowrap z-10 max-w-xs">
+        <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-gray-800 text-white text-xs rounded whitespace-nowrap z-[9999] max-w-xs shadow-md">
           {currentStatusObj.tooltip}
         </div>
       )}
