@@ -147,6 +147,9 @@ const AssigneeSearchSelect = ({
       color: '#111827',
       fontSize: '0.75rem',
       lineHeight: '1',
+      display: 'flex',
+      alignItems: 'center',
+      maxWidth: 'calc(100% - 40px)',
     }),
     input: (provided) => ({
       ...provided,
@@ -182,6 +185,7 @@ const AssigneeSearchSelect = ({
       color: state.isSelected ? 'white' : '#111827',
       cursor: 'pointer',
       fontSize: '0.75rem',
+      padding: '6px 10px',
       '&:active': {
         backgroundColor: '#3B82F6'
       }
@@ -203,6 +207,78 @@ const AssigneeSearchSelect = ({
       className={className}
       classNamePrefix={classNamePrefix}
       styles={customStyles}
+      formatOptionLabel={(option, { context }) => {
+        const isSelf = option.isSelf || option.value === "self";
+        if (isSelf) {
+          if (context === "value") {
+            return <span className="font-semibold text-blue-700">Self (You)</span>;
+          }
+          return (
+            <div className="flex items-center justify-between w-full py-0.5">
+              <span className="font-semibold text-blue-700">Self (You)</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
+                Current User
+              </span>
+            </div>
+          );
+        }
+
+        const roles = Array.isArray(option.role)
+          ? option.role
+          : option.role
+          ? [option.role]
+          : [];
+        const isOrgAdmin =
+          roles.includes("org_admin") ||
+          roles.includes("admin") ||
+          roles.includes("company-admin") ||
+          roles.includes("super_admin");
+        const isManager = roles.includes("manager");
+
+        let roleBadge = null;
+        if (isOrgAdmin) {
+          roleBadge = (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium border border-purple-200">
+              Org Admin
+            </span>
+          );
+        } else if (isManager) {
+          roleBadge = (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium border border-blue-200">
+              Manager
+            </span>
+          );
+        } else if (roles.length > 0) {
+          roleBadge = (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium border border-green-200">
+              Employee
+            </span>
+          );
+        }
+
+        if (context === "value") {
+          return (
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="truncate font-medium">{option.label}</span>
+              {roleBadge}
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex items-center justify-between w-full py-0.5">
+            <div className="flex flex-col min-w-0 pr-2">
+              <span className="font-medium text-gray-900 truncate">{option.label}</span>
+              {option.email && (
+                <span className="text-[11px] text-gray-500 truncate">{option.email}</span>
+              )}
+            </div>
+            <div className="flex-shrink-0">
+              {roleBadge}
+            </div>
+          </div>
+        );
+      }}
       noOptionsMessage={({ inputValue }) =>
         inputValue ? `No users found matching "${inputValue}"` : "Start typing to search users"
       }

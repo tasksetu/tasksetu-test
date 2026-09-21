@@ -141,6 +141,18 @@ licenseInstanceSchema.methods.markExpired = async function () {
     return this.save();
 };
 
+// Get usage for a specific feature on this seat
+licenseInstanceSchema.methods.getFeatureUsage = async function (featureCode, limitType = 'MONTHLY') {
+    const { LicenseInstanceFeatureUsage } = await import('./licenseInstanceFeatureUsageModal.js');
+    return LicenseInstanceFeatureUsage.getCurrentUsage(this._id, featureCode, limitType, this.renewal_date);
+};
+
+// Get all feature usage for this seat
+licenseInstanceSchema.methods.getAllFeatureUsage = async function (featureMappings) {
+    const { LicenseInstanceFeatureUsage } = await import('./licenseInstanceFeatureUsageModal.js');
+    return LicenseInstanceFeatureUsage.getInstanceCurrentUsage(this._id, featureMappings, this.renewal_date);
+};
+
 /**
  * Static Methods
  */

@@ -616,6 +616,13 @@ const TaskSchema = mongoose.Schema(
       default: null,
       description: "Reference step identifier if task is a step subtask"
     },
+    licenseInstanceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "LicenseInstance",
+      default: null,
+      index: true,
+      description: "License instance under which this task/launch was created"
+    },
   },
   { timestamps: true }
 );

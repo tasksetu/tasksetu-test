@@ -827,7 +827,7 @@ export const sendInvite = async (req, res) => {
  */
 export const searchAssignableUsers = async (req, res) => {
   try {
-    const { search = "", limit = 10, activeRole } = req.query;
+    const { search = "", limit = 20, activeRole } = req.query;
     const currentUser = req.user;
 
     if (!currentUser) {
@@ -836,62 +836,9 @@ export const searchAssignableUsers = async (req, res) => {
         message: "Unauthorized - user not authenticated",
       });
     }
-    // Build base query
-    let query = {
-      status: "active",
-      _id: { $ne: currentUser.id }, // Exclude current user initially (we'll add them back as "Self")
-    };
-
-    // For org users, only search within their organization
-    if (currentUser.organizationId) {
-      query.organization_id = currentUser.organizationId;
-    }
-
-    // Add search filter if provided
-    if (search && search.trim()) {
-      query.$or = [
-        { firstName: { $regex: search, $options: "i" } },
-        { lastName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { department: { $regex: search, $options: "i" } },
-        { designation: { $regex: search, $options: "i" } },
-      ];
-    }
-
-    // Fetch users
-    const users = await User.find(query)
-      .select(
-        "firstName lastName email department designation role reportingManager",
-      )
-      .limit(parseInt(limit) * 2)
-      .lean();
-
-    // console.log("📋 users details fetched before filtering:", users);
-
-    // Get hierarchy relationships where current user is manager
-    const { OrganizationHierarchy } = await import("../models.js");
-    // console.log("📊 Current User OrganizationId:", currentUser.organizationId);
-    const hierarchyRelations = await OrganizationHierarchy.find({
-      organization_id: currentUser.organizationId,
-      status: "active",
-    })
-      .select("manager reporty organization_id")
-      .lean();
-
-    // console.log("📊 Hierarchy Relations:", hierarchyRelations);
-
-    // Build a map: managerId -> Set of employeeIds who report to them
-    const managerToEmployees = new Map();
-    hierarchyRelations.forEach((rel) => {
-      const managerId = String(rel.manager);
-      const reportyId = String(rel.reporty);
-      if (!managerToEmployees.has(managerId)) {
-        managerToEmployees.set(managerId, new Set());
-      }
-      managerToEmployees.get(managerId).add(reportyId);
-    });
 
     const currentUserId = String(currentUser.id);
+    const { OrganizationHierarchy } = await import("../models.js");
 
     // Get current user's roles (could be array)
     const userRoles = Array.isArray(currentUser.role)
@@ -913,104 +860,203 @@ export const searchAssignableUsers = async (req, res) => {
     const isEmployeeRole =
       effectiveRole === "employee" || effectiveRole === "individual";
 
-    // Filter users based on assignment rules
-    let filteredUsers = users;
+    // Build base MongoDB query
+    let query = {
+      status: { $ne: "inactive" },
+      _id: { $ne: currentUser.id }, // Exclude current user initially (we'll add them back as "Self")
+    };
 
+    // For org users, only search within their organization
+    if (currentUser.organizationId) {
+      query.organization_id = currentUser.organizationId;
+    }
+
+    // Role-based target scoping
     if (isOrgAdminRole) {
-      filteredUsers = users;
+      // Org Admins can assign to any user in the organization
     } else if (isManagerRole) {
-      const currentUserId = String(currentUser.id);
-      const employeesUnderManager =
-        managerToEmployees.get(currentUserId) || new Set();
+      // Managers can assign to:
+      // 1. Org Admins and Admins of the organization
+      // 2. Employees they manage (subordinates via Hierarchy, managerId, subordinates array)
+      // 3. Superiors (managers they report to)
+      const allowedUserIds = new Set();
 
-      // Get the manager(s) this current manager reports to
-      const myManagers = new Set();
-      hierarchyRelations.forEach((rel) => {
-        const reportyId = String(rel.reporty);
-        if (reportyId === currentUserId) {
-          myManagers.add(String(rel.manager));
+      // 1. Subordinates from OrganizationHierarchy
+      try {
+        const hierarchyQuery = {
+          manager: currentUser.id,
+          status: "active",
+        };
+        if (currentUser.organizationId) {
+          hierarchyQuery.organization_id = currentUser.organizationId;
         }
-      });
+        const subordinateHierarchies = await OrganizationHierarchy.find(hierarchyQuery)
+          .select("reporty")
+          .lean();
+        subordinateHierarchies.forEach((h) => {
+          if (h.reporty) allowedUserIds.add(String(h.reporty));
+        });
+      } catch (hErr) {
+        console.warn("⚠️ Failed to query OrganizationHierarchy subordinates:", hErr.message);
+      }
 
-      filteredUsers = users.filter((user) => {
-        const userId = String(user._id);
-        const targetRoles = Array.isArray(user.role) ? user.role : [user.role];
-        const targetHasOrgAdmin =
-          targetRoles.includes("org_admin") ||
-          targetRoles.includes("admin") ||
-          targetRoles.includes("super_admin");
-
-        // Block assignment to users with org_admin/admin role
-        if (targetHasOrgAdmin) {
-          return false;
+      // 2. Direct reports from User collection (managerId or reportingManager)
+      try {
+        const userQuery = {
+          $or: [
+            { managerId: currentUser.id },
+            { reportingManager: currentUser.id },
+          ],
+          status: { $ne: "inactive" },
+        };
+        if (currentUser.organizationId) {
+          userQuery.organization_id = currentUser.organizationId;
         }
+        const directReports = await User.find(userQuery).select("_id").lean();
+        directReports.forEach((u) => allowedUserIds.add(String(u._id)));
+      } catch (uErr) {
+        console.warn("⚠️ Failed to query User direct reports:", uErr.message);
+      }
 
-        // Allow employees who report to this manager
-        if (employeesUnderManager.has(userId)) {
-          return true;
-        }
+      // 3. Manager's subordinates array from manager's User document
+      try {
+        const managerDoc = await User.findById(currentUser.id)
+          .select("subordinates managerId")
+          .lean();
+        (managerDoc?.subordinates || []).forEach((id) => allowedUserIds.add(String(id)));
 
-        // Allow managers that this manager reports to
-        if (myManagers.has(userId)) {
-          return true;
+        // 4. Superiors (manager this manager reports to)
+        if (managerDoc?.managerId) {
+          allowedUserIds.add(String(managerDoc.managerId));
         }
-        return false;
-      });
+      } catch (mErr) {
+        console.warn("⚠️ Failed to query manager doc:", mErr.message);
+      }
+
+      // Superior managers from OrganizationHierarchy
+      try {
+        const superiorHierarchyQuery = {
+          reporty: currentUser.id,
+          status: "active",
+        };
+        if (currentUser.organizationId) {
+          superiorHierarchyQuery.organization_id = currentUser.organizationId;
+        }
+        const superiorHierarchies = await OrganizationHierarchy.find(superiorHierarchyQuery)
+          .select("manager")
+          .lean();
+        superiorHierarchies.forEach((h) => {
+          if (h.manager) allowedUserIds.add(String(h.manager));
+        });
+      } catch (sErr) {
+        console.warn("⚠️ Failed to query superior hierarchies:", sErr.message);
+      }
+
+      // 5. Org Admins and Admins in this organization
+      try {
+        const adminQuery = {
+          $or: [
+            { role: { $in: ["org_admin", "admin", "super_admin", "company-admin"] } },
+            { isPrimaryAdmin: true },
+          ],
+          status: { $ne: "inactive" },
+        };
+        if (currentUser.organizationId) {
+          adminQuery.organization_id = currentUser.organizationId;
+        }
+        const orgAdmins = await User.find(adminQuery).select("_id").lean();
+        orgAdmins.forEach((u) => allowedUserIds.add(String(u._id)));
+      } catch (aErr) {
+        console.warn("⚠️ Failed to query org admins:", aErr.message);
+      }
+
+      // Remove current user from allowed list (added as "Self")
+      allowedUserIds.delete(currentUserId);
+
+      // Restrict query to allowed user IDs
+      query._id = { $in: Array.from(allowedUserIds) };
     } else if (isEmployeeRole) {
-      // Check if current user's effective role is specifically 'individual'
       const isIndividualRole = effectiveRole === "individual";
 
       if (isIndividualRole) {
-        filteredUsers = [];
+        // Individual users can only assign to themselves
+        query._id = { $in: [] };
       } else {
-        const currentUserId = currentUser.id;
-        const employeesUnderSameManager = new Set();
-        hierarchyRelations.forEach((rel) => {
-          const reportyId = rel.reporty.toString();
-          const managerId = rel.manager.toString();
-          if (reportyId === currentUserId) {
-            // This user reports to a manager, find all employees under same manager
-            const managerEmployees = managerToEmployees.get(managerId);
-            if (managerEmployees) {
-              managerEmployees.forEach((empId) =>
-                employeesUnderSameManager.add(empId),
-              );
-            }
-          }
-        });
+        // Employees can assign to peers under the same manager
+        const peerIds = new Set();
+        try {
+          // Find managers of current employee
+          const myManagerIds = new Set();
+          const empHierarchies = await OrganizationHierarchy.find({
+            organization_id: currentUser.organizationId,
+            reporty: currentUser.id,
+            status: "active",
+          })
+            .select("manager")
+            .lean();
+          empHierarchies.forEach((h) => {
+            if (h.manager) myManagerIds.add(String(h.manager));
+          });
 
-        filteredUsers = users.filter((user) => {
-          const userId = user._id.toString();
-          const targetRoles = Array.isArray(user.role)
-            ? user.role
-            : [user.role];
-          const targetHasEmployee =
-            targetRoles.includes("employee") ||
-            targetRoles.includes("individual");
-          const targetHasManagerOrAbove =
-            targetRoles.includes("manager") ||
-            targetRoles.includes("org_admin") ||
-            targetRoles.includes("admin") ||
-            targetRoles.includes("super_admin");
-
-          // Only allow pure employees/individuals (no manager or admin roles)
-          if (targetHasEmployee && !targetHasManagerOrAbove) {
-            // Check if this employee shares the same manager
-            const sharesSameManager = employeesUnderSameManager.has(userId);
-            if (sharesSameManager) {
-              return true;
-            } else {
-              return false;
-            }
+          const empUser = await User.findById(currentUser.id).select("managerId").lean();
+          if (empUser?.managerId) {
+            myManagerIds.add(String(empUser.managerId));
           }
-          return false;
-        });
+
+          if (myManagerIds.size > 0) {
+            const peerHierarchies = await OrganizationHierarchy.find({
+              organization_id: currentUser.organizationId,
+              manager: { $in: Array.from(myManagerIds) },
+              status: "active",
+            })
+              .select("reporty")
+              .lean();
+            peerHierarchies.forEach((h) => {
+              if (h.reporty && String(h.reporty) !== currentUserId) {
+                peerIds.add(String(h.reporty));
+              }
+            });
+
+            const peerUsers = await User.find({
+              organization_id: currentUser.organizationId,
+              managerId: { $in: Array.from(myManagerIds) },
+              _id: { $ne: currentUser.id },
+              status: { $ne: "inactive" },
+            })
+              .select("_id")
+              .lean();
+            peerUsers.forEach((u) => peerIds.add(String(u._id)));
+          }
+        } catch (peerErr) {
+          console.warn("⚠️ Failed to query peer users:", peerErr.message);
+        }
+
+        query._id = { $in: Array.from(peerIds) };
       }
     }
 
-    filteredUsers = filteredUsers.slice(0, parseInt(limit));
+    // Add search filter if provided
+    if (search && search.trim()) {
+      const searchRegex = { $regex: search.trim(), $options: "i" };
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { firstName: searchRegex },
+          { lastName: searchRegex },
+          { email: searchRegex },
+          { department: searchRegex },
+          { designation: searchRegex },
+        ],
+      });
+    }
 
-    const formattedUsers = filteredUsers.map((user) => ({
+    // Fetch matched users
+    const matchedUsers = await User.find(query)
+      .select("firstName lastName email department designation role")
+      .limit(parseInt(limit))
+      .lean();
+
+    const formattedUsers = matchedUsers.map((user) => ({
       value: user._id.toString(),
       label:
         `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email,
@@ -1020,15 +1066,24 @@ export const searchAssignableUsers = async (req, res) => {
       role: user.role,
     }));
 
-    // Add "Self" option at the beginning
+    // Add "Self" option at the beginning (if no search or search matches self)
+    const selfMatchesSearch =
+      !search ||
+      "self".includes(search.toLowerCase()) ||
+      (currentUser.name && currentUser.name.toLowerCase().includes(search.toLowerCase())) ||
+      (currentUser.email && currentUser.email.toLowerCase().includes(search.toLowerCase()));
+
     const selfOption = {
       value: currentUser.id,
       label: "Self",
       email: currentUser.email,
       isSelf: true,
+      role: currentUser.role,
     };
 
-    const allOptions = [selfOption, ...formattedUsers];
+    const allOptions = selfMatchesSearch
+      ? [selfOption, ...formattedUsers]
+      : formattedUsers;
 
     return res.status(200).json({
       success: true,

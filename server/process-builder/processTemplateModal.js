@@ -184,6 +184,12 @@ const processTemplateSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    licenseInstanceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "LicenseInstance",
+      default: null,
+      index: true,
+    },
   },
   { timestamps: true }
 );

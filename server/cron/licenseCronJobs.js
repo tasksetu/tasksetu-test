@@ -225,7 +225,11 @@ export const startLicenseInstanceExpiryJob = () => {
             downgradedCount++;
           }
 
-          // Delete the expired license from pool
+          // Delete the expired license and its feature usage records from pool
+          try {
+            const { LicenseInstanceFeatureUsage } = await import('../modals/licenseInstanceFeatureUsageModal.js');
+            await LicenseInstanceFeatureUsage.deleteMany({ license_instance_id: instance._id });
+          } catch (cleanErr) {}
           await LicenseInstance.findByIdAndDelete(instance._id);
           processedCount++;
         }

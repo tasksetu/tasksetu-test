@@ -52,6 +52,7 @@ export async function getUserLicense(userId) {
             hasLicense: true,
             isExpired: false,
             license_code: instance.license_code,
+            license_instance_id: instance._id,
             license_name: licenseDef?.name,
             renewal_date: instance.renewal_date,
             assigned_at: instance.assigned_at,
@@ -403,26 +404,67 @@ export async function checkFeatureCodeLimit(userId, featureCode, currentUsage = 
         };
     }
 
-    // 📊 Fetch authoritative usage from UserFeatureUsage model as well as passed DB count
-    let effectiveUsage = typeof currentUsage === 'number' ? currentUsage : 0;
-    try {
-        const { UserFeatureUsage } = await import('../modals/userFeatureUsageModal.js');
-        const limitType = mapping.limit_type || 'MONTHLY';
-        const trackedUsage = await UserFeatureUsage.getCurrentUsage(userId, featureCode, limitType);
-        effectiveUsage = Math.max(effectiveUsage, trackedUsage || 0);
+    // 📊 Fetch authoritative usage
+    let effectiveUsage = 0;
+    const limitType = mapping.limit_type || 'MONTHLY';
 
-        // Also check any record in UserFeatureUsage for this user & feature across any period
-        const allRecords = await UserFeatureUsage.find({
-            user_id: userId,
-            feature_code: featureCode.toUpperCase()
-        }).lean();
-        for (const r of allRecords) {
-            if ((r.used_count || 0) > effectiveUsage) {
-                effectiveUsage = r.used_count;
+    if (license.license_instance_id) {
+        // ✅ APPROACH A: Seat-bound usage tracking
+        try {
+            const { LicenseInstanceFeatureUsage } = await import('../modals/licenseInstanceFeatureUsageModal.js');
+            const seatUsage = await LicenseInstanceFeatureUsage.getCurrentUsage(
+                license.license_instance_id,
+                featureCode,
+                limitType,
+                license.renewal_date
+            );
+            effectiveUsage = Math.max(effectiveUsage, seatUsage || 0);
+
+            // If feature is PROC_CREATE or PROC_LAUNCH, also check DB count tagged with licenseInstanceId
+            if (featureCode.toUpperCase() === 'PROC_CREATE') {
+                const { default: ProcessTemplate } = await import('../process-builder/processTemplateModal.js');
+                const instTemplateCount = await ProcessTemplate.countDocuments({
+                    licenseInstanceId: license.license_instance_id,
+                    isDeleted: { $ne: true }
+                });
+                effectiveUsage = Math.max(effectiveUsage, instTemplateCount || 0);
+            } else if (featureCode.toUpperCase() === 'PROC_LAUNCH') {
+                const { default: Task } = await import('../modals/taskModal.js');
+                const instLaunchCount = await Task.countDocuments({
+                    licenseInstanceId: license.license_instance_id,
+                    is_deleted: { $ne: true },
+                    isSubtask: { $ne: true }
+                });
+                effectiveUsage = Math.max(effectiveUsage, instLaunchCount || 0);
+            }
+        } catch (err) {
+            console.error('Error fetching seat-level feature usage:', err);
+        }
+    } else {
+        // Fallback to user-level tracking (EXPLORE / free users)
+        try {
+            const { UserFeatureUsage } = await import('../modals/userFeatureUsageModal.js');
+            const trackedUsage = await UserFeatureUsage.getCurrentUsage(userId, featureCode, limitType);
+            effectiveUsage = Math.max(effectiveUsage, trackedUsage || 0);
+
+            if (typeof currentUsage === 'number') {
+                effectiveUsage = Math.max(effectiveUsage, currentUsage);
+            }
+
+            const allRecords = await UserFeatureUsage.find({
+                user_id: userId,
+                feature_code: featureCode.toUpperCase()
+            }).lean();
+            for (const r of allRecords) {
+                if ((r.used_count || 0) > effectiveUsage) {
+                    effectiveUsage = r.used_count;
+                }
+            }
+        } catch (err) {
+            if (typeof currentUsage === 'number') {
+                effectiveUsage = currentUsage;
             }
         }
-    } catch (err) {
-        // Fallback to passed currentUsage
     }
 
     const allowed = effectiveUsage < limit;

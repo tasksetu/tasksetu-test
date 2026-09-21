@@ -68,36 +68,45 @@ export const createHierarchy = async (req, res) => {
       });
     }
 
-    // Check if this hierarchy already exists
-    const existingHierarchy = await OrganizationHierarchy.findOne({
+    // Check if hierarchy relationship exists (active or inactive)
+    let hierarchy = await OrganizationHierarchy.findOne({
       manager: managerId,
       reporty: reportyId,
       organization_id: req.user.organizationId,
-      status: "active",
     });
 
-    if (existingHierarchy) {
-      return res.status(400).json({
-        success: false,
-        message: "This hierarchy relationship already exists",
+    if (hierarchy) {
+      if (hierarchy.status === "active") {
+        return res.status(400).json({
+          success: false,
+          message: "This hierarchy relationship already exists",
+        });
+      }
+      // Reactivate previously inactive hierarchy
+      hierarchy.status = "active";
+      hierarchy.notes = notes !== undefined ? notes : hierarchy.notes;
+      hierarchy.createdBy = req.user._id;
+      await hierarchy.save();
+    } else {
+      // Create new hierarchy entry
+      hierarchy = new OrganizationHierarchy({
+        manager: managerId,
+        reporty: reportyId,
+        organization_id: req.user.organizationId,
+        createdBy: req.user._id,
+        notes: notes || "",
+        status: "active",
       });
+      await hierarchy.save();
     }
 
-    // Create new hierarchy entry
-    const newHierarchy = new OrganizationHierarchy({
-      manager: managerId,
-      reporty: reportyId,
-      organization_id: req.user.organizationId,
-      createdBy: req.user._id,
-      notes: notes || "",
-      status: "active",
-    });
-
-    await newHierarchy.save();
+    // Sync User model (manager subordinates array and reporty managerId)
+    await User.findByIdAndUpdate(managerId, { $addToSet: { subordinates: reportyId } });
+    await User.findByIdAndUpdate(reportyId, { managerId: managerId });
 
     // Populate response data
     const populatedHierarchy = await OrganizationHierarchy.findById(
-      newHierarchy._id,
+      hierarchy._id,
     )
       .populate("manager", "firstName lastName email")
       .populate("reporty", "firstName lastName email");
@@ -219,17 +228,34 @@ export const updateHierarchy = async (req, res) => {
       }
     }
 
+    const oldManager = hierarchy.manager?.toString();
+    const oldReporty = hierarchy.reporty?.toString();
+    const newManager = (managerId || hierarchy.manager)?.toString();
+    const newReporty = (reportyId || hierarchy.reporty)?.toString();
+
     // Update hierarchy
     const updatedHierarchy = await OrganizationHierarchy.findByIdAndUpdate(
       req.params.id,
       {
-        manager: managerId || hierarchy.manager,
-        reporty: reportyId || hierarchy.reporty,
+        manager: newManager,
+        reporty: newReporty,
         notes: notes !== undefined ? notes : hierarchy.notes,
         status: status !== undefined ? status : hierarchy.status,
       },
       { new: true },
     );
+
+    // Sync User models if manager or reporty changed
+    if (oldManager !== newManager || oldReporty !== newReporty) {
+      if (oldManager && oldReporty) {
+        await User.findByIdAndUpdate(oldManager, { $pull: { subordinates: oldReporty } });
+        await User.findByIdAndUpdate(oldReporty, { managerId: null });
+      }
+      if (newManager && newReporty) {
+        await User.findByIdAndUpdate(newManager, { $addToSet: { subordinates: newReporty } });
+        await User.findByIdAndUpdate(newReporty, { managerId: newManager });
+      }
+    }
 
     // Populate response data
     const populatedHierarchy = await OrganizationHierarchy.findById(
@@ -273,6 +299,12 @@ export const deleteHierarchy = async (req, res) => {
     await OrganizationHierarchy.findByIdAndUpdate(req.params.id, {
       status: "inactive",
     });
+
+    // Also remove from User model
+    if (hierarchy.manager && hierarchy.reporty) {
+      await User.findByIdAndUpdate(hierarchy.manager, { $pull: { subordinates: hierarchy.reporty } });
+      await User.findByIdAndUpdate(hierarchy.reporty, { managerId: null });
+    }
 
     res.json({
       success: true,

@@ -539,11 +539,22 @@ export const checkFeatureLimit = async (entityOrUserId, feature_code) => {
     // Step 1 & 2: Check if unlimited
     if (accessCheck.isUnlimited) {
       // ✅ Still track usage for unlimited features (for analytics/reporting)
-      const currentUsage = await UserFeatureUsage.getCurrentUsage(
-        userId,
-        feature_code,
-        "TOTAL",
-      );
+      let currentUsage = 0;
+      if (accessCheck.subscription?.license_instance_id) {
+        const { LicenseInstanceFeatureUsage } = await import("../modals/licenseInstanceFeatureUsageModal.js");
+        currentUsage = await LicenseInstanceFeatureUsage.getCurrentUsage(
+          accessCheck.subscription.license_instance_id,
+          feature_code,
+          "TOTAL",
+          accessCheck.subscription.expiry_date
+        );
+      } else {
+        currentUsage = await UserFeatureUsage.getCurrentUsage(
+          userId,
+          feature_code,
+          "TOTAL",
+        );
+      }
       return {
         canConsume: true,
         reason: "UNLIMITED",
@@ -553,15 +564,48 @@ export const checkFeatureLimit = async (entityOrUserId, feature_code) => {
       };
     }
 
-    // Step 3: Get usage for current period using UserFeatureUsage (USER-LEVEL)
+    // Step 3: Get usage for current period using LicenseInstanceFeatureUsage (Seat-bound) or UserFeatureUsage
     const limitType = accessCheck.limitType || "MONTHLY";
+    let currentUsage = 0;
 
-    // ✅ NEW: Use UserFeatureUsage model with period_key
-    const currentUsage = await UserFeatureUsage.getCurrentUsage(
-      userId,
-      feature_code,
-      limitType,
-    );
+    if (accessCheck.subscription?.license_instance_id) {
+      const { LicenseInstanceFeatureUsage } = await import("../modals/licenseInstanceFeatureUsageModal.js");
+      currentUsage = await LicenseInstanceFeatureUsage.getCurrentUsage(
+        accessCheck.subscription.license_instance_id,
+        feature_code,
+        limitType,
+        accessCheck.subscription.expiry_date
+      );
+
+      // Check DB counts for PROC_CREATE / PROC_LAUNCH for this seat
+      const featureCodeUpper = feature_code.toUpperCase();
+      if (featureCodeUpper === "PROC_CREATE") {
+        try {
+          const { default: ProcessTemplate } = await import("../process-builder/processTemplateModal.js");
+          const dbCount = await ProcessTemplate.countDocuments({
+            licenseInstanceId: accessCheck.subscription.license_instance_id,
+            isDeleted: { $ne: true }
+          });
+          currentUsage = Math.max(currentUsage, dbCount);
+        } catch (e) {}
+      } else if (featureCodeUpper === "PROC_LAUNCH") {
+        try {
+          const { default: Task } = await import("../modals/taskModal.js");
+          const dbCount = await Task.countDocuments({
+            licenseInstanceId: accessCheck.subscription.license_instance_id,
+            is_deleted: { $ne: true },
+            isSubtask: { $ne: true }
+          });
+          currentUsage = Math.max(currentUsage, dbCount);
+        } catch (e) {}
+      }
+    } else {
+      currentUsage = await UserFeatureUsage.getCurrentUsage(
+        userId,
+        feature_code,
+        limitType,
+      );
+    }
     const limit = accessCheck.usageLimit;
 
     // Step 4: Check if limit exceeded
@@ -698,15 +742,42 @@ export const consumeFeature = async (
 
     const limitType = featureMapping.limit_type || "MONTHLY";
 
-    // ✅ NEW: Use UserFeatureUsage model (independent of LicenseInstance)
-    // This tracks usage per user + feature + period_key
-    const usageRecord = await UserFeatureUsage.consumeUsage(
-      userId,
-      feature_code,
-      limitType,
-      amount,
-      session,
-    );
+    // ✅ APPROACH A: Track usage on LicenseInstance seat if assigned
+    let usageRecord;
+    if (userLicense.license_instance_id) {
+      const { LicenseInstanceFeatureUsage } = await import("../modals/licenseInstanceFeatureUsageModal.js");
+      usageRecord = await LicenseInstanceFeatureUsage.consumeUsage(
+        userLicense.license_instance_id,
+        feature_code,
+        limitType,
+        amount,
+        userId,
+        userLicense.expiry_date,
+        session
+      );
+
+      // Also maintain UserFeatureUsage for user-level history/audit
+      try {
+        await UserFeatureUsage.consumeUsage(
+          userId,
+          feature_code,
+          limitType,
+          amount,
+          session,
+        );
+      } catch (userUsageErr) {
+        // Ignore user tracking failure if duplicate
+      }
+    } else {
+      // Fallback for EXPLORE / users without purchased license instance
+      usageRecord = await UserFeatureUsage.consumeUsage(
+        userId,
+        feature_code,
+        limitType,
+        amount,
+        session,
+      );
+    }
 
     // ✅ BACKWARD COMPATIBILITY: Also update FeatureUsageTracking (legacy model)
     // ✅ IMPORTANT: Legacy model uses 'TOTAL' for both TOTAL and NONE limit types
@@ -932,11 +1003,55 @@ export const getLicenseSummary = async (entityOrUserId) => {
       is_enabled: true,
     }).lean();
 
-    // ✅ NEW: Get usage data using UserFeatureUsage model (USER-LEVEL)
-    const usageData = await UserFeatureUsage.getUserCurrentUsage(
-      userId,
-      featureMappings,
-    );
+    // ✅ APPROACH A: Check if user has an assigned license instance (Seat-based usage)
+    let usageData = {};
+    if (userLicense.license_instance_id) {
+      const { LicenseInstanceFeatureUsage } = await import("../modals/licenseInstanceFeatureUsageModal.js");
+      usageData = await LicenseInstanceFeatureUsage.getInstanceCurrentUsage(
+        userLicense.license_instance_id,
+        featureMappings,
+        userLicense.expiry_date
+      );
+
+      // Check DB counts for PROC_CREATE / PROC_LAUNCH
+      for (const mapping of featureMappings) {
+        if (mapping.feature_code === "PROC_CREATE") {
+          try {
+            const { default: ProcessTemplate } = await import("../process-builder/processTemplateModal.js");
+            const dbCount = await ProcessTemplate.countDocuments({
+              licenseInstanceId: userLicense.license_instance_id,
+              isDeleted: { $ne: true }
+            });
+            if (usageData["PROC_CREATE"]) {
+              usageData["PROC_CREATE"].used = Math.max(usageData["PROC_CREATE"].used, dbCount);
+              const lim = usageData["PROC_CREATE"].limit;
+              usageData["PROC_CREATE"].remaining = lim === -1 ? -1 : Math.max(0, lim - usageData["PROC_CREATE"].used);
+              usageData["PROC_CREATE"].percentage = lim === -1 || lim === 0 ? 0 : Math.min(100, Math.round((usageData["PROC_CREATE"].used / lim) * 100));
+            }
+          } catch (e) {}
+        } else if (mapping.feature_code === "PROC_LAUNCH") {
+          try {
+            const { default: Task } = await import("../modals/taskModal.js");
+            const dbCount = await Task.countDocuments({
+              licenseInstanceId: userLicense.license_instance_id,
+              is_deleted: { $ne: true },
+              isSubtask: { $ne: true }
+            });
+            if (usageData["PROC_LAUNCH"]) {
+              usageData["PROC_LAUNCH"].used = Math.max(usageData["PROC_LAUNCH"].used, dbCount);
+              const lim = usageData["PROC_LAUNCH"].limit;
+              usageData["PROC_LAUNCH"].remaining = lim === -1 ? -1 : Math.max(0, lim - usageData["PROC_LAUNCH"].used);
+              usageData["PROC_LAUNCH"].percentage = lim === -1 || lim === 0 ? 0 : Math.min(100, Math.round((usageData["PROC_LAUNCH"].used / lim) * 100));
+            }
+          } catch (e) {}
+        }
+      }
+    } else {
+      usageData = await UserFeatureUsage.getUserCurrentUsage(
+        userId,
+        featureMappings,
+      );
+    }
 
     // Fill in any missing features with 0 usage
     for (const mapping of featureMappings) {

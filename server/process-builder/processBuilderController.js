@@ -227,11 +227,12 @@ export const createProcessTemplate = async (req, res) => {
     }
 
     // 🛡️ License Limit Check for PROC_CREATE (Process Builder Creation)
-    // Per confirmed business rules: Enforce per-user license limit; count historical process templates created by this specific user
+    // Per business rules (Approach A): Evaluate seat-level license limit; fallback to user if unassigned
     const validUserId = (userId && mongoose.Types.ObjectId.isValid(userId)) ? new mongoose.Types.ObjectId(userId) : userId;
-    const creationQuery = {
-      $or: [{ createdBy: validUserId }, { createdBy: userId }]
-    };
+    const userDoc = await User.findById(validUserId).select("license_instance_id");
+    const creationQuery = userDoc?.license_instance_id
+      ? { licenseInstanceId: userDoc.license_instance_id, isDeleted: { $ne: true } }
+      : { $or: [{ createdBy: validUserId }, { createdBy: userId }], isDeleted: { $ne: true } };
 
     const currentCreationCount = await ProcessTemplate.countDocuments(creationQuery);
     const creationCheck = await checkFeatureCodeLimit(userId, "PROC_CREATE", currentCreationCount);
@@ -244,7 +245,7 @@ export const createProcessTemplate = async (req, res) => {
         code: "LICENSE_LIMIT_EXCEEDED",
         feature: "PROC_CREATE",
         limit: creationCheck.limit,
-        usage: currentCreationCount,
+        usage: creationCheck.usage ?? currentCreationCount,
       });
     }
 
@@ -326,6 +327,7 @@ export const createProcessTemplate = async (req, res) => {
       status: status || "Active",
       createdBy: userId,
       organizationId: orgId || null,
+      licenseInstanceId: userDoc?.license_instance_id || null,
       steps: formattedSteps,
     });
 
@@ -515,8 +517,10 @@ export const startProcessInstance = async (req, res) => {
     }
 
     // 🛡️ License Limit Check for PROC_LAUNCH (Process Builder Launch)
-    // Per confirmed business rules: Enforce per-user license limit; count process builder instances launched by this specific user
+    // Per business rules (Approach A): Evaluate seat-level license limit; fallback to user if unassigned
     const validLaunchUserId = (userId && mongoose.Types.ObjectId.isValid(userId)) ? new mongoose.Types.ObjectId(userId) : userId;
+    const launchUserDoc = await User.findById(validLaunchUserId).select("license_instance_id");
+
     let launchQuery = {
       is_deleted: { $ne: true },
       isSubtask: { $ne: true },
@@ -528,9 +532,9 @@ export const startProcessInstance = async (req, res) => {
             { processTemplateId: { $exists: true, $ne: null } },
           ],
         },
-        {
-          $or: [{ createdBy: validLaunchUserId }, { createdBy: userId }],
-        },
+        launchUserDoc?.license_instance_id
+          ? { licenseInstanceId: launchUserDoc.license_instance_id }
+          : { $or: [{ createdBy: validLaunchUserId }, { createdBy: userId }] },
       ],
     };
 
@@ -545,7 +549,7 @@ export const startProcessInstance = async (req, res) => {
         code: "LICENSE_LIMIT_EXCEEDED",
         feature: "PROC_LAUNCH",
         limit: launchCheck.limit,
-        usage: currentLaunchCount,
+        usage: launchCheck.usage ?? currentLaunchCount,
       });
     }
 
@@ -586,6 +590,7 @@ export const startProcessInstance = async (req, res) => {
       source: "process-builder",
       isProcessBuilderTask: true,
       processTemplateId: template._id,
+      licenseInstanceId: launchUserDoc?.license_instance_id || null,
     });
 
     const savedMainTask = await mainTask.save();
@@ -643,6 +648,7 @@ export const startProcessInstance = async (req, res) => {
         createdByRole: userRole,
         createdBy: userId,
         assignedTo: assignedToUser,
+        licenseInstanceId: launchUserDoc?.license_instance_id || null,
         organization: orgId || null,
         status: (step.status || "OPEN").toUpperCase(),
         priority: stepPriority,

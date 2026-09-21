@@ -278,6 +278,44 @@ userFeatureUsageSchema.statics.getCurrentUsage = async function (
     featureCode,
     limitType
 ) {
+    // 🛡️ APPROACH A: If user has an assigned LicenseInstance, delegate to LicenseInstanceFeatureUsage
+    try {
+        const { User } = await import('./userModal.js');
+        const user = await User.findById(userId).select('license_instance_id').populate('license_instance_id');
+        if (user?.license_instance_id) {
+            const { LicenseInstanceFeatureUsage } = await import('./licenseInstanceFeatureUsageModal.js');
+            const instance = user.license_instance_id;
+            let seatUsage = await LicenseInstanceFeatureUsage.getCurrentUsage(
+                instance._id,
+                featureCode,
+                limitType,
+                instance.renewal_date
+            );
+
+            // Also check DB objects tagged with this licenseInstanceId
+            const featureCodeUpper = featureCode.toUpperCase();
+            if (featureCodeUpper === 'PROC_CREATE') {
+                const { default: ProcessTemplate } = await import('../process-builder/processTemplateModal.js');
+                const instTemplateCount = await ProcessTemplate.countDocuments({
+                    licenseInstanceId: instance._id,
+                    isDeleted: { $ne: true }
+                });
+                seatUsage = Math.max(seatUsage, instTemplateCount);
+            } else if (featureCodeUpper === 'PROC_LAUNCH') {
+                const { default: Task } = await import('./taskModal.js');
+                const instLaunchCount = await Task.countDocuments({
+                    licenseInstanceId: instance._id,
+                    is_deleted: { $ne: true },
+                    isSubtask: { $ne: true }
+                });
+                seatUsage = Math.max(seatUsage, instLaunchCount);
+            }
+            return seatUsage;
+        }
+    } catch (e) {
+        // Fallback to user-level tracking
+    }
+
     const periodKey = this.getPeriodKey(limitType);
     const featureCodeUpper = featureCode.toUpperCase();
 
@@ -424,6 +462,54 @@ userFeatureUsageSchema.statics.getUserCurrentUsage = async function (
     userId,
     featureMappings
 ) {
+    // 🛡️ APPROACH A: If user has an assigned LicenseInstance, delegate to LicenseInstanceFeatureUsage
+    try {
+        const { User } = await import('./userModal.js');
+        const user = await User.findById(userId).select('license_instance_id').populate('license_instance_id');
+        if (user?.license_instance_id) {
+            const { LicenseInstanceFeatureUsage } = await import('./licenseInstanceFeatureUsageModal.js');
+            const instance = user.license_instance_id;
+            const seatUsageMap = await LicenseInstanceFeatureUsage.getInstanceCurrentUsage(
+                instance._id,
+                featureMappings,
+                instance.renewal_date
+            );
+
+            // Also check DB counts for PROC_CREATE and PROC_LAUNCH
+            for (const mapping of featureMappings) {
+                if (mapping.feature_code === 'PROC_CREATE') {
+                    const { default: ProcessTemplate } = await import('../process-builder/processTemplateModal.js');
+                    const instTemplateCount = await ProcessTemplate.countDocuments({
+                        licenseInstanceId: instance._id,
+                        isDeleted: { $ne: true }
+                    });
+                    if (seatUsageMap['PROC_CREATE']) {
+                        seatUsageMap['PROC_CREATE'].used = Math.max(seatUsageMap['PROC_CREATE'].used, instTemplateCount);
+                        const lim = seatUsageMap['PROC_CREATE'].limit;
+                        seatUsageMap['PROC_CREATE'].remaining = lim === -1 ? -1 : Math.max(0, lim - seatUsageMap['PROC_CREATE'].used);
+                        seatUsageMap['PROC_CREATE'].percentage = lim === -1 || lim === 0 ? 0 : Math.min(100, Math.round((seatUsageMap['PROC_CREATE'].used / lim) * 100));
+                    }
+                } else if (mapping.feature_code === 'PROC_LAUNCH') {
+                    const { default: Task } = await import('./taskModal.js');
+                    const instLaunchCount = await Task.countDocuments({
+                        licenseInstanceId: instance._id,
+                        is_deleted: { $ne: true },
+                        isSubtask: { $ne: true }
+                    });
+                    if (seatUsageMap['PROC_LAUNCH']) {
+                        seatUsageMap['PROC_LAUNCH'].used = Math.max(seatUsageMap['PROC_LAUNCH'].used, instLaunchCount);
+                        const lim = seatUsageMap['PROC_LAUNCH'].limit;
+                        seatUsageMap['PROC_LAUNCH'].remaining = lim === -1 ? -1 : Math.max(0, lim - seatUsageMap['PROC_LAUNCH'].used);
+                        seatUsageMap['PROC_LAUNCH'].percentage = lim === -1 || lim === 0 ? 0 : Math.min(100, Math.round((seatUsageMap['PROC_LAUNCH'].used / lim) * 100));
+                    }
+                }
+            }
+            return seatUsageMap;
+        }
+    } catch (e) {
+        // Fallback to user-level tracking
+    }
+
     const usageMap = {};
 
     // ✅ BATCH OPTIMIZATION: Fetch ALL UserFeatureUsage records for this user in 1 single query
