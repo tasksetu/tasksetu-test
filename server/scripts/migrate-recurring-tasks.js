@@ -12,7 +12,8 @@ const migrateRecurringTasks = async () => {
     console.log('🔄 Starting Recurring Task Migration...\n');
 
     // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI);
+    const mongoUri = process.env.DATABASE_URL || process.env.MONGODB_URI || process.env.MONGO_URI;
+    await mongoose.connect(mongoUri);
     console.log('✅ Connected to MongoDB\n');
 
     // Find all recurring tasks WITHOUT the new architecture fields

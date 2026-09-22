@@ -1069,27 +1069,67 @@ export class MongoStorage {
     const Activity = mongoose.model("Activity");
     const Task = mongoose.model("Task");
 
-    // Get all subtasks of this parent task
-    const subtasks = await Task.find({
-      parentTaskId: taskId,
-      isDeleted: false,
-    })
-      .select("_id")
+    // Check if the target task is a subtask (has parentTaskId) or a parent/main task
+    const currentTask = await Task.findById(taskId)
+      .select("parentTaskId isSubtask")
       .lean();
 
-    const subtaskIds = subtasks.map((st) => st._id);
+    const isSubtask = !!(
+      currentTask &&
+      (currentTask.parentTaskId || currentTask.isSubtask)
+    );
 
-    // Get activities for main task AND all its subtasks
-    return await Activity.find({
-      $or: [
-        { relatedId: taskId, relatedType: "task" },
-        { relatedId: { $in: subtaskIds }, relatedType: "task" },
-      ],
-    })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .populate("user", "firstName lastName email avatar")
-      .lean();
+    const taskIds = [taskId];
+    if (mongoose.Types.ObjectId.isValid(taskId)) {
+      taskIds.push(new mongoose.Types.ObjectId(taskId));
+      taskIds.push(taskId.toString());
+    }
+
+    if (isSubtask) {
+      // 🔒 Specific subtask: ONLY show its own activities
+      return await Activity.find({
+        $or: [
+          { relatedId: { $in: taskIds } },
+          { "metadata.data.subtaskId": { $in: taskIds } },
+          { "data.subtaskId": { $in: taskIds } },
+        ],
+      })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .populate("user", "firstName lastName email avatar name")
+        .lean();
+    } else {
+      // 🌟 Parent task: show parent task's activities AND each of its subtasks' activities
+      const subtasks = await Task.find({
+        parentTaskId: taskId,
+        isDeleted: { $ne: true },
+      })
+        .select("_id")
+        .lean();
+
+      const subtaskIds = [];
+      subtasks.forEach((st) => {
+        subtaskIds.push(st._id);
+        subtaskIds.push(st._id.toString());
+        if (mongoose.Types.ObjectId.isValid(st._id)) {
+          subtaskIds.push(new mongoose.Types.ObjectId(st._id));
+        }
+      });
+
+      return await Activity.find({
+        $or: [
+          { relatedId: { $in: [...taskIds, ...subtaskIds] } },
+          { "metadata.data.subtaskId": { $in: subtaskIds } },
+          { "data.subtaskId": { $in: subtaskIds } },
+          { "metadata.data.taskId": { $in: taskIds } },
+          { "data.taskId": { $in: taskIds } },
+        ],
+      })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .populate("user", "firstName lastName email avatar name")
+        .lean();
+    }
   }
 
   async getActivitiesForOrganization(organizationId, limit = 50) {

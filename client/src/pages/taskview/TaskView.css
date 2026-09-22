@@ -1,5 +1,20 @@
 /* TaskView.css - Comprehensive styling for the new modular task view system */
 
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
 /* Container and Layout */
 .task-view-container {
   background: #f8fafc;

@@ -81,7 +81,7 @@ const LockoutModal = ({ isOpen, timeLeft, onClose }) => {
             Please wait{" "}
             {minutes > 0 && `${minutes} minute${minutes !== 1 ? "s" : ""}`}
             {minutes > 0 && seconds > 0 && " and "}
-            {seconds > 0 && `${seconds} second${seconds !== 1 ? "s" : ""}`}
+            {seconds > 0 && `${seconds} second${seconds !== 1 ? "s" : ""}`}{" "}
             before trying to log in again. Make sure you're using the correct
             email and password.
           </p>

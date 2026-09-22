@@ -24,7 +24,7 @@ import SimpleFileUploader from "../../components/common/SimpleFileUploader";
 import { useShowToast } from "@/utils/ToastMessage";
 import "../../components/common/AttachmentUploader.css";
 
-export default function TaskAttachments({ taskId, task }) {
+export default function TaskAttachments({ taskId, task, onAttachmentsChange }) {
   const queryClient = useQueryClient();
   const { showSuccessToast, showErrorToast } = useShowToast();
   const [files, setFiles] = useState([]);
@@ -396,6 +396,9 @@ export default function TaskAttachments({ taskId, task }) {
 
         console.log("📁 Upload complete, reloading attachments...");
         await loadTaskFiles();
+        queryClient.invalidateQueries({ queryKey: [`/api/tasks/${taskId}`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/tasks/${taskId}/attachments`] });
+        onAttachmentsChange?.();
       } catch (error) {
         console.error("❌ Error uploading files:", error);
         showErrorToast(error.message || "Failed to upload file");
@@ -411,6 +414,7 @@ export default function TaskAttachments({ taskId, task }) {
       showSuccessToast,
       showErrorToast,
       queryClient,
+      onAttachmentsChange,
     ],
   );
 
@@ -434,6 +438,9 @@ export default function TaskAttachments({ taskId, task }) {
           const result = await response.json();
           console.log("✅ Attachment deleted successfully:", result);
           await loadTaskFiles(); // Reload attachments from server using NEW API
+          queryClient.invalidateQueries({ queryKey: [`/api/tasks/${taskId}`] });
+          queryClient.invalidateQueries({ queryKey: [`/api/tasks/${taskId}/attachments`] });
+          onAttachmentsChange?.();
         } else {
           const error = await response.json();
           console.error("❌ Failed to delete attachment:", error);
@@ -444,7 +451,7 @@ export default function TaskAttachments({ taskId, task }) {
         showErrorToast("Error deleting attachment");
       }
     },
-    [taskId, loadTaskFiles, showErrorToast],
+    [taskId, loadTaskFiles, showErrorToast, queryClient, onAttachmentsChange],
   );
 
   // Check if file type can be previewed inline in browser

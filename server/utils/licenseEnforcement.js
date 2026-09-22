@@ -30,30 +30,83 @@ export async function getUserLicense(userId) {
         return null;
     }
 
+    const now = new Date();
+
     // Check new atomic license system first
     if (user.license_instance_id) {
         const instance = user.license_instance_id;
+        const licenseDef = await License.findOne({ license_code: instance.license_code });
 
-        // Check if expired
-        if (instance.isExpired()) {
+        const graceDays = licenseDef?.grace_period_days !== undefined ? licenseDef.grace_period_days : 0;
+        const isPastRenewal = instance.renewal_date && instance.renewal_date < now;
+        const graceEnd = new Date(instance.renewal_date || now);
+        graceEnd.setDate(graceEnd.getDate() + graceDays);
+        const inGracePeriod = isPastRenewal && now <= graceEnd;
+        const isFullyExpired = isPastRenewal && now > graceEnd;
+
+        // 1. If in grace period, user still has access!
+        if (inGracePeriod) {
             return {
-                hasLicense: false,
-                isExpired: true,
+                hasLicense: true,
+                isExpired: false,
+                inGracePeriod: true,
+                grace_period_end: graceEnd,
+                days_remaining_in_grace: Math.max(0, Math.ceil((graceEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))),
                 license_code: instance.license_code,
-                expiry_date: instance.renewal_date,
-                message: `Your ${instance.license_code} license expired on ${TimezoneHelper.formatInTimezone(instance.renewal_date, await TimezoneHelper.getUserTimezone(userId))}`
+                license_instance_id: instance._id,
+                license_name: licenseDef?.name || instance.license_code,
+                renewal_date: instance.renewal_date,
+                assigned_at: instance.assigned_at,
+                features: licenseDef?.features || [],
+                limits: {
+                    max_users: licenseDef?.max_users,
+                    max_tasks: licenseDef?.max_tasks,
+                    max_projects: licenseDef?.max_projects,
+                    max_storage_gb: licenseDef?.max_storage_gb
+                }
             };
         }
 
-        // Get license definition
-        const licenseDef = await License.findOne({ license_code: instance.license_code });
+        // 2. If fully expired past grace period, auto-downgrade to EXPLORE
+        if (isFullyExpired) {
+            try {
+                instance.status = 'EXPIRED';
+                instance.assigned_to = null;
+                await instance.save();
 
+                user.license_instance_id = null;
+                user.license_code = 'EXPLORE';
+                user.license_expiry = instance.renewal_date;
+                await user.save({ validateBeforeSave: false });
+            } catch (downgradeErr) {
+                console.error('Error during auto-downgrade on expiry:', downgradeErr.message);
+            }
+
+            const defaultLicenseDef = await License.findOne({ license_code: 'EXPLORE' });
+            return {
+                hasLicense: true,
+                isExpired: false,
+                isDowngradedToExplore: true,
+                license_code: 'EXPLORE',
+                license_name: defaultLicenseDef?.name || 'Explore',
+                isLegacy: true,
+                features: defaultLicenseDef?.features || [],
+                limits: {
+                    max_users: defaultLicenseDef?.max_users,
+                    max_tasks: defaultLicenseDef?.max_tasks,
+                    max_projects: defaultLicenseDef?.max_projects,
+                    max_storage_gb: defaultLicenseDef?.max_storage_gb
+                }
+            };
+        }
+
+        // 3. Normal active instance
         return {
             hasLicense: true,
             isExpired: false,
             license_code: instance.license_code,
             license_instance_id: instance._id,
-            license_name: licenseDef?.name,
+            license_name: licenseDef?.name || instance.license_code,
             renewal_date: instance.renewal_date,
             assigned_at: instance.assigned_at,
             features: licenseDef?.features || [],
@@ -69,12 +122,43 @@ export async function getUserLicense(userId) {
     // Fallback to legacy license_code (for individual accounts or during migration)
     if (user.license_code) {
         const licenseDef = await License.findOne({ license_code: user.license_code });
+        const graceDays = licenseDef?.grace_period_days !== undefined ? licenseDef.grace_period_days : 0;
+        const isPastRenewal = user.license_expiry && user.license_expiry < now;
+        const graceEnd = new Date(user.license_expiry || now);
+        graceEnd.setDate(graceEnd.getDate() + graceDays);
+        const inGracePeriod = isPastRenewal && now <= graceEnd;
+        const isFullyExpired = isPastRenewal && now > graceEnd;
+
+        if (user.license_code !== 'EXPLORE' && isFullyExpired) {
+            user.license_code = 'EXPLORE';
+            user.license_expiry = null;
+            await user.save({ validateBeforeSave: false }).catch(() => {});
+            const defaultLicenseDef = await License.findOne({ license_code: 'EXPLORE' });
+            return {
+                hasLicense: true,
+                isExpired: false,
+                isDowngradedToExplore: true,
+                license_code: 'EXPLORE',
+                license_name: defaultLicenseDef?.name || 'Explore',
+                isLegacy: true,
+                features: defaultLicenseDef?.features || [],
+                limits: {
+                    max_users: defaultLicenseDef?.max_users,
+                    max_tasks: defaultLicenseDef?.max_tasks,
+                    max_projects: defaultLicenseDef?.max_projects,
+                    max_storage_gb: defaultLicenseDef?.max_storage_gb
+                }
+            };
+        }
 
         return {
             hasLicense: true,
             isExpired: false,
+            inGracePeriod: inGracePeriod,
+            grace_period_end: inGracePeriod ? graceEnd : undefined,
             license_code: user.license_code,
-            license_name: licenseDef?.name,
+            license_name: licenseDef?.name || user.license_code,
+            renewal_date: user.license_expiry,
             isLegacy: true,
             features: licenseDef?.features || [],
             limits: {
@@ -95,6 +179,8 @@ export async function getUserLicense(userId) {
             return {
                 hasLicense: true,
                 isExpired: false,
+                inGracePeriod: Boolean(svcLicense.in_grace_period),
+                grace_period_end: svcLicense.grace_period_end,
                 license_code: svcLicense.license_code,
                 license_name: licenseDef?.name || svcLicense.license_code,
                 renewal_date: svcLicense.expiry_date,
@@ -107,20 +193,12 @@ export async function getUserLicense(userId) {
                     max_storage_gb: licenseDef?.max_storage_gb
                 }
             };
-        } else if (svcLicense && svcLicense.is_expired) {
-            return {
-                hasLicense: false,
-                isExpired: true,
-                license_code: svcLicense.license_code,
-                expiry_date: svcLicense.expiry_date,
-                message: `Your ${svcLicense.license_code} license has expired.`
-            };
         }
     } catch (err) {
         // Fallback to default EXPLORE below
     }
 
-    // Default to EXPLORE if present in database
+    // Default to EXPLORE if present in database (all users have at least EXPLORE free tier)
     const defaultLicenseDef = await License.findOne({ license_code: 'EXPLORE' });
     if (defaultLicenseDef) {
         return {
@@ -374,8 +452,8 @@ export async function checkFeatureCodeLimit(userId, featureCode, currentUsage = 
             allowed: false,
             limit: 0,
             usage: currentUsage,
-            licenseCode: 'NONE',
-            message: 'No active license assigned'
+            licenseCode: license?.license_code || 'NONE',
+            message: license?.message || 'No active license assigned'
         };
     }
 

@@ -45,10 +45,11 @@ const stats = {
  */
 async function connect() {
     try {
-        await mongoose.connect(process.env.MONGO_URI || process.env.MONGODB_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true
-        });
+        const mongoUri = process.env.DATABASE_URL || process.env.MONGO_URI || process.env.MONGODB_URI;
+        if (!mongoUri) {
+            throw new Error('DATABASE_URL, MONGO_URI, or MONGODB_URI environment variable is not set');
+        }
+        await mongoose.connect(mongoUri);
         console.log('✅ Connected to MongoDB');
     } catch (error) {
         console.error('❌ MongoDB connection failed:', error.message);

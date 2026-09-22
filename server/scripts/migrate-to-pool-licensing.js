@@ -14,7 +14,10 @@ import { User } from '../modals/userModal.js';
 import { Organization } from '../modals/organizationModal.js';
 import { CompanyLicense } from '../modals/companyLicenseModal.js';
 
-const MONGO_URI = process.env.MONGODB_URI || 'mongodb+srv://jeeturadicalloop:Mjvesqnj8gY3t0zP@cluster0.by2xy6x.mongodb.net/TaskSetu';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const MONGO_URI = process.env.DATABASE_URL || process.env.MONGODB_URI || process.env.MONGO_URI;
 
 async function migrateToPoolLicensing() {
   try {

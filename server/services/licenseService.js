@@ -116,15 +116,35 @@ const getUserLicense = async (userId) => {
 
           return {
             license_code: "EXPLORE",
-            status: "EXPIRED",
+            status: "ACTIVE",
             entity_type: "USER",
             entity_id: userId,
             user_id: userId,
             expiry_date: originalExpiry, // Preserve original expiry so UI can show overdue days
             source: "auto_downgrade",
-            is_expired: true,
+            is_expired: false,
+            is_downgraded: true,
             account_type: user.account_type,
             billing_cycle: instance.billing_cycle || "MONTHLY",
+          };
+        } else {
+          // STILL IN GRACE PERIOD — user maintains active feature access!
+          return {
+            license_code: instance.license_code,
+            status: "GRACE_PERIOD",
+            entity_type: "USER",
+            entity_id: userId,
+            user_id: userId,
+            billing_cycle: instance.billing_cycle,
+            assigned_date: instance.assigned_at,
+            expiry_date: instance.renewal_date,
+            grace_period_end: graceEnd,
+            in_grace_period: true,
+            purchase_id: instance.purchase_id,
+            license_instance_id: instance._id,
+            source: "license_instance",
+            is_expired: false,
+            account_type: user.account_type,
           };
         }
       }
@@ -261,8 +281,9 @@ const getUserLicense = async (userId) => {
               billing_cycle: "FREE",
             };
           } else {
-            isExpired = true;
-            status = "EXPIRED";
+            // Still in grace period
+            isExpired = false;
+            status = "GRACE_PERIOD";
           }
         }
       }
@@ -274,6 +295,8 @@ const getUserLicense = async (userId) => {
         entity_id: userId,
         user_id: userId,
         expiry_date: expiryDate,
+        grace_period_end: status === "GRACE_PERIOD" ? graceEnd : undefined,
+        in_grace_period: status === "GRACE_PERIOD",
         source: "license_code",
         is_expired: isExpired,
         account_type: user.account_type,
