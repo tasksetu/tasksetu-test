@@ -50,6 +50,9 @@ import {
   MilestoneTaskIcon,
   ApprovalTaskIcon,
 } from "../components/common/TaskIcons";
+import TaskOverviewChart from "./components/TaskOverviewChart";
+import TaskStatusDonut from "./components/TaskStatusDonut";
+import KpiSparkline from "./components/KpiSparkline";
 
 const TASK_DISPLAY_LIMIT = 15;
 
@@ -301,6 +304,49 @@ const OrganizationDashboard = () => {
     [allTasks],
   );
 
+  const taskStatusBreakdown = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let completed = 0;
+    let inProgress = 0;
+    let open = 0;
+    let overdue = 0;
+
+    allTasks.forEach((t) => {
+      const s = (t.status || "").toLowerCase();
+      const isDone =
+        ["completed", "done", "DONE"].includes(t.status) ||
+        s === "completed" ||
+        s === "done";
+
+      if (isDone) {
+        completed++;
+      } else if (
+        ["in_progress", "in-progress", "inprogress", "doing"].includes(s)
+      ) {
+        inProgress++;
+      } else {
+        open++;
+      }
+
+      if (t.dueDate) {
+        const d = new Date(t.dueDate);
+        if (d < today && !isDone) {
+          overdue++;
+        }
+      }
+    });
+
+    return {
+      open,
+      inProgress,
+      completed,
+      overdue,
+      total: allTasks.length,
+    };
+  }, [allTasks]);
+
   const moduleUsage = useMemo(() => {
     const quick = dashboardStats?.quickTasksCount || 0;
     const full = (dashboardStats?.regularTasksCount || 0) - quick;
@@ -508,6 +554,140 @@ const OrganizationDashboard = () => {
     }
   };
 
+  // Helper to compute 7-day trend arrays for dynamic KPI sparklines
+  const kpiTrends = useMemo(() => {
+    const today = new Date();
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - (6 - i));
+      d.setHours(0, 0, 0, 0);
+      return d;
+    });
+
+    const isSameDate = (d1, d2) =>
+      d1.getFullYear() === d2.getFullYear() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate();
+
+    // 1. Completed Today / completed over last 7 days
+    const completedTrend = days.map(
+      (day) =>
+        allTasks.filter((t) => {
+          const cd = t.completedDate || t.completedAt;
+          return cd && isSameDate(new Date(cd), day);
+        }).length,
+    );
+
+    // 2. Before Due Date (completed on or before due date)
+    const beforeDueTrend = days.map(
+      (day) =>
+        allTasks.filter((t) => {
+          const cd = t.completedDate || t.completedAt;
+          if (!cd || !isSameDate(new Date(cd), day)) return false;
+          if (!t.dueDate) return true;
+          return new Date(cd) <= new Date(t.dueDate);
+        }).length,
+    );
+
+    // 3. Milestones
+    const milestonesTrend = days.map(
+      (day) =>
+        allTasks.filter((t) => {
+          const isMs = (t.taskType || "").toLowerCase() === "milestone";
+          if (!isMs) return false;
+          const cr = t.createdAt ? new Date(t.createdAt) : null;
+          return cr ? cr <= day : true;
+        }).length,
+    );
+
+    // 4. Collaborator
+    const collaboratorTrend = days.map(
+      (day) =>
+        allTasks.filter((t) => {
+          const hasCollab =
+            (t.collaborators && t.collaborators.length > 0) ||
+            (t.collaboratorIds && t.collaboratorIds.length > 0);
+          if (!hasCollab) return false;
+          const cr = t.createdAt ? new Date(t.createdAt) : null;
+          return cr ? cr <= day : true;
+        }).length,
+    );
+
+    // 5. Past Due
+    const pastDueTrend = days.map(
+      (day) =>
+        allTasks.filter((t) => {
+          if (!t.dueDate) return false;
+          const dd = new Date(t.dueDate);
+          const isDone =
+            ["completed", "done", "DONE"].includes(t.status) ||
+            (t.status || "").toLowerCase() === "completed";
+          return dd <= day && !isDone;
+        }).length,
+    );
+
+    // 6. Open Tasks
+    const openTasksTrend = days.map(
+      (day) =>
+        allTasks.filter((t) => {
+          const s = (t.status || "").toLowerCase();
+          const isDone =
+            ["completed", "done", "DONE"].includes(t.status) ||
+            s === "completed";
+          if (isDone) return false;
+          const cr = t.createdAt ? new Date(t.createdAt) : null;
+          return cr ? cr <= day : true;
+        }).length,
+    );
+
+    // 7. Due Today / due dates across 7 days
+    const dueTodayTrend = days.map(
+      (day) =>
+        allTasks.filter((t) => {
+          if (!t.dueDate) return false;
+          return isSameDate(new Date(t.dueDate), day);
+        }).length,
+    );
+
+    // 8. High Priority
+    const highPriorityTrend = days.map(
+      (day) =>
+        allTasks.filter((t) => {
+          const p = (t.priority || "").toLowerCase();
+          const isHigh = p === "high" || p === "urgent" || p === "critical";
+          if (!isHigh) return false;
+          const s = (t.status || "").toLowerCase();
+          return (
+            !["completed", "done", "DONE"].includes(t.status) &&
+            s !== "completed"
+          );
+        }).length,
+    );
+
+    // 9. Approvals
+    const approvalsTrend = days.map(
+      (day) =>
+        allTasks.filter((t) => {
+          const isApp = (t.taskType || "").toLowerCase() === "approval";
+          if (!isApp) return false;
+          const cr = t.createdAt ? new Date(t.createdAt) : null;
+          return cr ? cr <= day : true;
+        }).length,
+    );
+
+    return {
+      completed: completedTrend,
+      beforeDue: beforeDueTrend,
+      milestones: milestonesTrend,
+      collaborator: collaboratorTrend,
+      pastDue: pastDueTrend,
+      open: openTasksTrend,
+      due: dueTodayTrend,
+      highPriority: highPriorityTrend,
+      approvals: approvalsTrend,
+    };
+  }, [allTasks]);
+
   // KPI Cards - 10 cards displayed in rows of 5
   const kpiCards = [
     // Row 1
@@ -520,6 +700,9 @@ const OrganizationDashboard = () => {
       iconBg: "bg-green-50",
       testId: "card-completed-today",
       onClick: () => setLocation("/tasks?statusFilter=DONE"),
+      sparklineType: "line",
+      sparklineColor: "#10b981",
+      sparklineData: kpiTrends.completed,
     },
     {
       label: "Before Due Date",
@@ -530,6 +713,9 @@ const OrganizationDashboard = () => {
       iconBg: "bg-blue-50",
       testId: "card-completed-before-due",
       onClick: () => setLocation("/tasks?dueDateFilter=upcoming"),
+      sparklineType: "line",
+      sparklineColor: "#3b82f6",
+      sparklineData: kpiTrends.beforeDue,
     },
     {
       label: "Milestones",
@@ -540,6 +726,9 @@ const OrganizationDashboard = () => {
       iconBg: "bg-purple-50",
       testId: "card-milestones",
       onClick: () => setLocation("/tasks?taskTypeFilter=Milestone"),
+      sparklineType: "bars",
+      sparklineColor: "#a855f7",
+      sparklineData: kpiTrends.milestones,
     },
     {
       label: "Collaborator",
@@ -550,6 +739,9 @@ const OrganizationDashboard = () => {
       iconBg: "bg-indigo-50",
       testId: "card-collaborator-tasks",
       onClick: () => setLocation("/tasks"),
+      sparklineType: "bars",
+      sparklineColor: "#6366f1",
+      sparklineData: kpiTrends.collaborator,
     },
     {
       label: "Past Due",
@@ -560,6 +752,9 @@ const OrganizationDashboard = () => {
       iconBg: "bg-red-50",
       testId: "card-past-due",
       onClick: () => setLocation("/tasks?dueDateFilter=overdue"),
+      sparklineType: "bars",
+      sparklineColor: "#ef4444",
+      sparklineData: kpiTrends.pastDue,
     },
     // Row 2
     {
@@ -571,6 +766,9 @@ const OrganizationDashboard = () => {
       linkLabel: "View open tasks",
       testId: "card-open-tasks",
       onClick: () => setLocation("/tasks?statusFilter=OPEN"),
+      sparklineType: "bars",
+      sparklineColor: "#06b6d4",
+      sparklineData: kpiTrends.open,
     },
     {
       label: "Due Today",
@@ -581,6 +779,9 @@ const OrganizationDashboard = () => {
       linkLabel: "Show due today",
       testId: "card-due-today",
       onClick: () => setLocation("/tasks?dueDateFilter=today"),
+      sparklineType: "bars",
+      sparklineColor: "#f97316",
+      sparklineData: kpiTrends.due,
     },
     {
       label: "Completion Rate",
@@ -603,6 +804,9 @@ const OrganizationDashboard = () => {
       linkLabel: "Show high priority",
       testId: "card-high-priority",
       onClick: () => setLocation("/tasks?priorityFilter=high"),
+      sparklineType: "bars",
+      sparklineColor: "#f43f5e",
+      sparklineData: kpiTrends.highPriority,
     },
     {
       label: "Approvals",
@@ -613,6 +817,9 @@ const OrganizationDashboard = () => {
       iconBg: "bg-yellow-50",
       testId: "card-approvals",
       onClick: () => setLocation("/tasks?taskTypeFilter=Approval"),
+      sparklineType: "bars",
+      sparklineColor: "#eab308",
+      sparklineData: kpiTrends.approvals,
     },
   ];
 
@@ -765,6 +972,9 @@ const OrganizationDashboard = () => {
               onClick,
               isProgressCard,
               percentage,
+              sparklineType,
+              sparklineColor,
+              sparklineData,
             }) => (
               <div
                 key={testId}
@@ -807,250 +1017,35 @@ const OrganizationDashboard = () => {
                         </span>
                       </div>
                     </div>
-                  ) : label === "Past Due" ? (
-                    <svg
-                      viewBox="0 0 110 38"
-                      width="100%"
-                      height="38"
-                      preserveAspectRatio="none"
-                    >
-                      <rect
-                        x="2"
-                        y="18"
-                        width="10"
-                        height="16"
-                        rx="2"
-                        fill="#fda4af"
-                        opacity="0.7"
-                      />
-                      <rect
-                        x="17"
-                        y="10"
-                        width="10"
-                        height="24"
-                        rx="2"
-                        fill="#ef4444"
-                        opacity="0.9"
-                      />
-                      <rect
-                        x="32"
-                        y="21"
-                        width="10"
-                        height="13"
-                        rx="2"
-                        fill="#fda4af"
-                        opacity="0.65"
-                      />
-                      <rect
-                        x="47"
-                        y="6"
-                        width="10"
-                        height="28"
-                        rx="2"
-                        fill="#dc2626"
-                      />
-                      <rect
-                        x="62"
-                        y="14"
-                        width="10"
-                        height="20"
-                        rx="2"
-                        fill="#fb7185"
-                        opacity="0.75"
-                      />
-                      <rect
-                        x="77"
-                        y="22"
-                        width="10"
-                        height="12"
-                        rx="2"
-                        fill="#fda4af"
-                        opacity="0.6"
-                      />
-                      <rect
-                        x="92"
-                        y="9"
-                        width="10"
-                        height="25"
-                        rx="2"
-                        fill="#ef4444"
-                        opacity="0.9"
-                      />
-                    </svg>
-                  ) : label === "Completed Today" ? (
-                    <svg
-                      viewBox="0 0 110 38"
-                      width="100%"
-                      height="38"
-                      preserveAspectRatio="none"
-                    >
-                      <defs>
-                        <linearGradient
-                          id="grad-completed-org"
-                          x1="0"
-                          y1="0"
-                          x2="0"
-                          y2="1"
-                        >
-                          <stop
-                            offset="0%"
-                            stopColor="#3b82f6"
-                            stopOpacity="0.22"
-                          />
-                          <stop
-                            offset="100%"
-                            stopColor="#3b82f6"
-                            stopOpacity="0"
-                          />
-                        </linearGradient>
-                      </defs>
-                      <path
-                        d="M0,30 C10,26 20,24 30,19 C40,15 50,17 60,12 C70,8 80,10 90,5 C100,3 105,2 110,1"
-                        fill="none"
-                        stroke="#3b82f6"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M0,30 C10,26 20,24 30,19 C40,15 50,17 60,12 C70,8 80,10 90,5 C100,3 105,2 110,1 L110,38 L0,38 Z"
-                        fill="url(#grad-completed-org)"
-                      />
-                    </svg>
-                  ) : label === "Before Due Date" ? (
-                    <svg
-                      viewBox="0 0 110 38"
-                      width="100%"
-                      height="38"
-                      preserveAspectRatio="none"
-                    >
-                      <defs>
-                        <linearGradient
-                          id="grad-progress-org"
-                          x1="0"
-                          y1="0"
-                          x2="0"
-                          y2="1"
-                        >
-                          <stop
-                            offset="0%"
-                            stopColor="#10b981"
-                            stopOpacity="0.2"
-                          />
-                          <stop
-                            offset="100%"
-                            stopColor="#10b981"
-                            stopOpacity="0"
-                          />
-                        </linearGradient>
-                      </defs>
-                      <path
-                        d="M0,20 C8,11 16,28 24,18 C32,7 40,24 48,15 C56,8 64,21 72,12 C80,4 88,18 96,10 C102,5 106,8 110,6"
-                        fill="none"
-                        stroke="#10b981"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M0,20 C8,11 16,28 24,18 C32,7 40,24 48,15 C56,8 64,21 72,12 C80,4 88,18 96,10 C102,5 106,8 110,6 L110,38 L0,38 Z"
-                        fill="url(#grad-progress-org)"
-                      />
-                    </svg>
-                  ) : label === "Due Today" ? (
-                    <svg
-                      viewBox="0 0 110 38"
-                      width="100%"
-                      height="38"
-                      preserveAspectRatio="none"
-                    >
-                      {[12, 18, 26, 20, 32, 24, 30].map((h, i) => (
-                        <rect
-                          key={i}
-                          x={i * 15 + 2}
-                          y={38 - h}
-                          width="10"
-                          height={h}
-                          rx="3"
-                          fill="#fb923c"
-                          opacity={dueTodayTasks > i ? 1 : 0.25}
-                        />
-                      ))}
-                    </svg>
                   ) : (
-                    <svg
-                      viewBox="0 0 110 38"
-                      width="100%"
-                      height="38"
-                      preserveAspectRatio="none"
-                    >
-                      <rect
-                        x="2"
-                        y="20"
-                        width="11"
-                        height="14"
-                        rx="2"
-                        fill="#fbbf24"
-                        opacity="0.65"
-                      />
-                      <rect
-                        x="17"
-                        y="14"
-                        width="11"
-                        height="20"
-                        rx="2"
-                        fill="#f59e0b"
-                        opacity="0.75"
-                      />
-                      <rect
-                        x="32"
-                        y="18"
-                        width="11"
-                        height="16"
-                        rx="2"
-                        fill="#fbbf24"
-                        opacity="0.7"
-                      />
-                      <rect
-                        x="47"
-                        y="8"
-                        width="11"
-                        height="26"
-                        rx="2"
-                        fill="#d97706"
-                        opacity="0.95"
-                      />
-                      <rect
-                        x="62"
-                        y="12"
-                        width="11"
-                        height="22"
-                        rx="2"
-                        fill="#f59e0b"
-                        opacity="0.78"
-                      />
-                      <rect
-                        x="77"
-                        y="4"
-                        width="11"
-                        height="30"
-                        rx="2"
-                        fill="#b45309"
-                      />
-                      <rect
-                        x="92"
-                        y="10"
-                        width="11"
-                        height="24"
-                        rx="2"
-                        fill="#f59e0b"
-                        opacity="0.88"
-                      />
-                    </svg>
+                    <KpiSparkline
+                      type={sparklineType || "bars"}
+                      data={sparklineData || [0, 0, 0, 0, 0, 0, 0]}
+                      color={sparklineColor || "#3b82f6"}
+                      gradientId={`grad-org-${testId}`}
+                    />
                   )}
                 </div>
                 <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-gray-200 to-transparent opacity-60" />
               </div>
             ),
           )}
+        </div>
+
+        {/* Task Overview and Task Status Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3">
+          <div className="lg:col-span-7 h-[350px]">
+            <TaskOverviewChart tasks={allTasks} />
+          </div>
+          <div className="lg:col-span-5 h-[350px]">
+            <TaskStatusDonut
+              totalTasks={taskStatusBreakdown.total}
+              openCount={taskStatusBreakdown.open}
+              inProgressCount={taskStatusBreakdown.inProgress}
+              completedCount={taskStatusBreakdown.completed}
+              overdueCount={taskStatusBreakdown.overdue}
+            />
+          </div>
         </div>
 
         {/* Filters Bar - Modern style */}

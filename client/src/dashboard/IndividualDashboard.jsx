@@ -58,6 +58,9 @@ import {
 } from "../components/common/TaskIcons";
 import { useShowToast } from "../utils/ToastMessage";
 import { useCalendar } from "../contexts/CalendarContext";
+import TaskOverviewChart from "./components/TaskOverviewChart";
+import TaskStatusDonut from "./components/TaskStatusDonut";
+import KpiSparkline from "./components/KpiSparkline";
 
 function computeStatsFromTasks(tasks) {
   if (!tasks || !Array.isArray(tasks))
@@ -1022,6 +1025,66 @@ const IndividualDashboard = ({
     };
   }, [currentTasks]);
 
+  // Helper to compute 7-day trend arrays for dynamic KPI sparklines
+  const kpiTrends = useMemo(() => {
+    const today = new Date();
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - (6 - i));
+      d.setHours(0, 0, 0, 0);
+      return d;
+    });
+
+    const isSameDate = (d1, d2) =>
+      d1.getFullYear() === d2.getFullYear() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate();
+
+    const totalTrend = days.map(
+      (day) =>
+        currentTasks.filter(
+          (t) => t.createdAt && isSameDate(new Date(t.createdAt), day),
+        ).length,
+    );
+
+    const completedTrend = days.map(
+      (day) =>
+        currentTasks.filter((t) => {
+          const cd = t.completedDate || t.completedAt;
+          return cd && isSameDate(new Date(cd), day);
+        }).length,
+    );
+
+    const inProgressTrend = days.map((day) => {
+      return currentTasks.filter((t) => {
+        const s = (t.status || "").toLowerCase();
+        if (!["in_progress", "in-progress", "inprogress", "doing"].includes(s))
+          return false;
+        const cr = t.createdAt ? new Date(t.createdAt) : null;
+        return cr ? cr <= day : true;
+      }).length;
+    });
+
+    const overdueTrend = days.map(
+      (day) =>
+        currentTasks.filter((t) => {
+          if (!t.dueDate) return false;
+          const dd = new Date(t.dueDate);
+          const isDone =
+            ["completed", "done", "DONE"].includes(t.status) ||
+            (t.status || "").toLowerCase() === "completed";
+          return dd <= day && !isDone;
+        }).length,
+    );
+
+    return {
+      total: totalTrend,
+      completed: completedTrend,
+      inProgress: inProgressTrend,
+      overdue: overdueTrend,
+    };
+  }, [currentTasks]);
+
   // ─── KPI CARDS CONFIG ─────────────────────────────────────────────────────
   const kpiCards = useMemo(
     () => [
@@ -1034,6 +1097,9 @@ const IndividualDashboard = ({
         iconBg: "bg-blue-50",
         testId: "card-total-tasks",
         onClick: () => navigateToTasksWithFilter({}),
+        sparklineType: "bars",
+        sparklineColor: "#3b82f6",
+        sparklineData: kpiTrends.total,
       },
       {
         label: "Completed",
@@ -1044,6 +1110,9 @@ const IndividualDashboard = ({
         iconBg: "bg-green-50",
         testId: "card-completed",
         onClick: () => navigateToTasksWithFilter({ statusFilter: "DONE" }),
+        sparklineType: "line",
+        sparklineColor: "#10b981",
+        sparklineData: kpiTrends.completed,
       },
       {
         label: "In Progress",
@@ -1055,6 +1124,9 @@ const IndividualDashboard = ({
         testId: "card-pending",
         onClick: () =>
           navigateToTasksWithFilter({ statusFilter: "INPROGRESS" }),
+        sparklineType: "line",
+        sparklineColor: "#f59e0b",
+        sparklineData: kpiTrends.inProgress,
       },
       {
         label: "Overdue",
@@ -1068,6 +1140,9 @@ const IndividualDashboard = ({
         iconBg: "bg-red-50",
         testId: "card-overdue",
         onClick: () => navigateToTasksWithFilter({ dueDateFilter: "overdue" }),
+        sparklineType: "bars",
+        sparklineColor: "#ef4444",
+        sparklineData: kpiTrends.overdue,
       },
 
       {
@@ -1123,6 +1198,7 @@ const IndividualDashboard = ({
       completedCount,
       inProgressCount,
       overdueCount,
+      kpiTrends,
       currentStats.milestoneCount,
       navigateToTasksWithFilter,
       weeklyProgress,
@@ -1536,6 +1612,9 @@ const IndividualDashboard = ({
                     percentage,
                     weeklyCompleted,
                     weeklyTotal,
+                    sparklineType,
+                    sparklineColor,
+                    sparklineData,
                   }) => (
                     <div
                       key={testId}
@@ -1578,154 +1657,6 @@ const IndividualDashboard = ({
                               </span>
                             </div>
                           </div>
-                        ) : label === "Overdue" ? (
-                          <svg
-                            viewBox="0 0 110 38"
-                            width="100%"
-                            height="38"
-                            preserveAspectRatio="none"
-                          >
-                            <rect
-                              x="2"
-                              y="18"
-                              width="10"
-                              height="16"
-                              rx="2"
-                              fill="#fda4af"
-                              opacity="0.7"
-                            />
-                            <rect
-                              x="17"
-                              y="10"
-                              width="10"
-                              height="24"
-                              rx="2"
-                              fill="#ef4444"
-                              opacity="0.9"
-                            />
-                            <rect
-                              x="32"
-                              y="21"
-                              width="10"
-                              height="13"
-                              rx="2"
-                              fill="#fda4af"
-                              opacity="0.65"
-                            />
-                            <rect
-                              x="47"
-                              y="6"
-                              width="10"
-                              height="28"
-                              rx="2"
-                              fill="#dc2626"
-                            />
-                            <rect
-                              x="62"
-                              y="14"
-                              width="10"
-                              height="20"
-                              rx="2"
-                              fill="#fb7185"
-                              opacity="0.75"
-                            />
-                            <rect
-                              x="77"
-                              y="22"
-                              width="10"
-                              height="12"
-                              rx="2"
-                              fill="#fda4af"
-                              opacity="0.6"
-                            />
-                            <rect
-                              x="92"
-                              y="9"
-                              width="10"
-                              height="25"
-                              rx="2"
-                              fill="#ef4444"
-                              opacity="0.9"
-                            />
-                          </svg>
-                        ) : label === "Completed" ? (
-                          <svg
-                            viewBox="0 0 110 38"
-                            width="100%"
-                            height="38"
-                            preserveAspectRatio="none"
-                          >
-                            <defs>
-                              <linearGradient
-                                id="grad-completed"
-                                x1="0"
-                                y1="0"
-                                x2="0"
-                                y2="1"
-                              >
-                                <stop
-                                  offset="0%"
-                                  stopColor="#3b82f6"
-                                  stopOpacity="0.22"
-                                />
-                                <stop
-                                  offset="100%"
-                                  stopColor="#3b82f6"
-                                  stopOpacity="0"
-                                />
-                              </linearGradient>
-                            </defs>
-                            <path
-                              d="M0,30 C10,26 20,24 30,19 C40,15 50,17 60,12 C70,8 80,10 90,5 C100,3 105,2 110,1"
-                              fill="none"
-                              stroke="#3b82f6"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                            />
-                            <path
-                              d="M0,30 C10,26 20,24 30,19 C40,15 50,17 60,12 C70,8 80,10 90,5 C100,3 105,2 110,1 L110,38 L0,38 Z"
-                              fill="url(#grad-completed)"
-                            />
-                          </svg>
-                        ) : label === "In Progress" ? (
-                          <svg
-                            viewBox="0 0 110 38"
-                            width="100%"
-                            height="38"
-                            preserveAspectRatio="none"
-                          >
-                            <defs>
-                              <linearGradient
-                                id="grad-progress"
-                                x1="0"
-                                y1="0"
-                                x2="0"
-                                y2="1"
-                              >
-                                <stop
-                                  offset="0%"
-                                  stopColor="#10b981"
-                                  stopOpacity="0.2"
-                                />
-                                <stop
-                                  offset="100%"
-                                  stopColor="#10b981"
-                                  stopOpacity="0"
-                                />
-                              </linearGradient>
-                            </defs>
-                            <path
-                              d="M0,20 C8,11 16,28 24,18 C32,7 40,24 48,15 C56,8 64,21 72,12 C80,4 88,18 96,10 C102,5 106,8 110,6"
-                              fill="none"
-                              stroke="#10b981"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                            />
-                            <path
-                              d="M0,20 C8,11 16,28 24,18 C32,7 40,24 48,15 C56,8 64,21 72,12 C80,4 88,18 96,10 C102,5 106,8 110,6 L110,38 L0,38 Z"
-                              fill="url(#grad-progress)"
-                            />
-                          </svg>
                         ) : label === "Task Streak" ? (
                           <svg
                             viewBox="0 0 110 45"
@@ -1748,81 +1679,34 @@ const IndividualDashboard = ({
                             ))}
                           </svg>
                         ) : (
-                          <svg
-                            viewBox="0 0 110 38"
-                            width="100%"
-                            height="38"
-                            preserveAspectRatio="none"
-                          >
-                            <rect
-                              x="2"
-                              y="20"
-                              width="11"
-                              height="14"
-                              rx="2"
-                              fill="#fbbf24"
-                              opacity="0.65"
-                            />
-                            <rect
-                              x="17"
-                              y="14"
-                              width="11"
-                              height="20"
-                              rx="2"
-                              fill="#f59e0b"
-                              opacity="0.75"
-                            />
-                            <rect
-                              x="32"
-                              y="18"
-                              width="11"
-                              height="16"
-                              rx="2"
-                              fill="#fbbf24"
-                              opacity="0.7"
-                            />
-                            <rect
-                              x="47"
-                              y="8"
-                              width="11"
-                              height="26"
-                              rx="2"
-                              fill="#d97706"
-                              opacity="0.95"
-                            />
-                            <rect
-                              x="62"
-                              y="12"
-                              width="11"
-                              height="22"
-                              rx="2"
-                              fill="#f59e0b"
-                              opacity="0.78"
-                            />
-                            <rect
-                              x="77"
-                              y="4"
-                              width="11"
-                              height="30"
-                              rx="2"
-                              fill="#b45309"
-                            />
-                            <rect
-                              x="92"
-                              y="10"
-                              width="11"
-                              height="24"
-                              rx="2"
-                              fill="#f59e0b"
-                              opacity="0.88"
-                            />
-                          </svg>
+                          <KpiSparkline
+                            type={sparklineType || "bars"}
+                            color={sparklineColor || "#3b82f6"}
+                            data={sparklineData || [0, 0, 0, 0, 0, 0, 0]}
+                            height={38}
+                          />
                         )}
                       </div>
                       <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-gray-200 to-transparent opacity-60" />
                     </div>
                   ),
                 )}
+              </div>
+
+              {/* Task Overview and Task Status Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3">
+                <div className="lg:col-span-7 h-[350px]">
+                  <TaskOverviewChart tasks={currentTasks} />
+                </div>
+                <div className="lg:col-span-5 h-[350px]">
+                  <TaskStatusDonut
+                    totalTasks={currentTasks.length}
+                    openCount={openCount}
+                    inProgressCount={inProgressCount}
+                    completedCount={completedCount}
+                    overdueCount={overdueCount}
+                  />
+                </div>
               </div>
 
               {/* ══ 3-COLUMN GRID FOR ALL SECTIONS ══ */}

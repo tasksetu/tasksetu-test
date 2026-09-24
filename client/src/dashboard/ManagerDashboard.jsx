@@ -48,7 +48,9 @@ import {
   MilestoneTaskIcon,
   ApprovalTaskIcon,
 } from "../components/common/TaskIcons";
-import CustomConfirmationModal from "@/pages/newComponents/CustomConfirmationModal";
+import TaskOverviewChart from "./components/TaskOverviewChart";
+import TaskStatusDonut from "./components/TaskStatusDonut";
+import KpiSparkline from "./components/KpiSparkline";
 
 // Helper function for stats
 function computeStatsFromTasks(tasks) {
@@ -370,6 +372,12 @@ const ManagerDashboard = () => {
       completedTasks,
       inProgressTasks,
       overdueTasks,
+      openTasks: teamTasksData.filter(
+        (t) =>
+          !["completed", "done", "in_progress", "inprogress"].includes(
+            (t.status || "").toLowerCase(),
+          ),
+      ).length,
       completionPercentage:
         totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
     };
@@ -471,6 +479,75 @@ const ManagerDashboard = () => {
     approvalFocusTasksData,
   ]);
 
+  // Helper to compute 7-day trend array for dynamic KPI sparklines
+  const kpiTrends = useMemo(() => {
+    const today = new Date();
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - (6 - i));
+      d.setHours(0, 0, 0, 0);
+      return d;
+    });
+
+    const isSameDate = (d1, d2) =>
+      d1.getFullYear() === d2.getFullYear() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate();
+
+    // 1. Total Team Tasks created trend
+    const totalTrend = days.map(
+      (day) =>
+        teamTasksData.filter(
+          (t) => t.createdAt && isSameDate(new Date(t.createdAt), day),
+        ).length,
+    );
+
+    // 2. Completed tasks trend
+    const completedTrend = days.map(
+      (day) =>
+        teamTasksData.filter((t) => {
+          const cd = t.completedDate || t.completedAt;
+          return cd && isSameDate(new Date(cd), day);
+        }).length,
+    );
+
+    // 3. In Progress trend
+    const inProgressTrend = days.map((day) => {
+      return teamTasksData.filter((t) => {
+        const s = (t.status || "").toLowerCase();
+        if (!["in_progress", "in-progress", "inprogress", "doing"].includes(s))
+          return false;
+        const cr = t.createdAt ? new Date(t.createdAt) : null;
+        return cr ? cr <= day : true;
+      }).length;
+    });
+
+    // 4. Overdue trend
+    const overdueTrend = days.map(
+      (day) =>
+        teamTasksData.filter((t) => {
+          if (!t.dueDate) return false;
+          const dd = new Date(t.dueDate);
+          const isDone =
+            ["completed", "done", "DONE"].includes(t.status) ||
+            (t.status || "").toLowerCase() === "completed";
+          return dd <= day && !isDone;
+        }).length,
+    );
+
+    // 5. Active members workload distribution (up to 7)
+    const membersTrend = teamMembers.map((m) => m.activeTasks || 0).slice(0, 7);
+    while (membersTrend.length < 7) membersTrend.push(0);
+
+    return {
+      total: totalTrend,
+      completed: completedTrend,
+      inProgress: inProgressTrend,
+      overdue: overdueTrend,
+      members: membersTrend,
+    };
+  }, [teamTasksData, teamMembers]);
+
   // KPI Cards
   const kpiCards = useMemo(
     () => [
@@ -483,6 +560,9 @@ const ManagerDashboard = () => {
         iconBg: "bg-blue-50",
         testId: "card-total-tasks",
         onClick: () => setLocation(`/tasks?activeRole=${activeRole}`),
+        sparklineType: "bars",
+        sparklineColor: "#3b82f6",
+        sparklineData: kpiTrends.total,
       },
       {
         label: "Completed",
@@ -494,6 +574,9 @@ const ManagerDashboard = () => {
         testId: "card-completed",
         onClick: () =>
           setLocation(`/tasks?statusFilter=DONE&activeRole=${activeRole}`),
+        sparklineType: "line",
+        sparklineColor: "#10b981",
+        sparklineData: kpiTrends.completed,
       },
       {
         label: "In Progress",
@@ -507,6 +590,9 @@ const ManagerDashboard = () => {
           setLocation(
             `/tasks?statusFilter=INPROGRESS&activeRole=${activeRole}`,
           ),
+        sparklineType: "line",
+        sparklineColor: "#f59e0b",
+        sparklineData: kpiTrends.inProgress,
       },
       {
         label: "Overdue",
@@ -524,6 +610,9 @@ const ManagerDashboard = () => {
         testId: "card-overdue",
         onClick: () =>
           setLocation(`/tasks?dueDateFilter=overdue&activeRole=${activeRole}`),
+        sparklineType: "bars",
+        sparklineColor: "#ef4444",
+        sparklineData: kpiTrends.overdue,
       },
       {
         label: "Team Productivity",
@@ -547,12 +636,16 @@ const ManagerDashboard = () => {
         iconBg: "bg-purple-50",
         testId: "card-members",
         onClick: () => {},
+        sparklineType: "bars",
+        sparklineColor: "#8b5cf6",
+        sparklineData: kpiTrends.members,
       },
     ],
     [
       teamStatsForHeader,
       teamStats.teamProductivity,
       teamMembers,
+      kpiTrends,
       activeRole,
       setLocation,
     ],
@@ -1319,6 +1412,9 @@ const ManagerDashboard = () => {
               onClick,
               isProgressCard,
               percentage,
+              sparklineType,
+              sparklineColor,
+              sparklineData,
             }) => (
               <div
                 key={testId}
@@ -1361,224 +1457,13 @@ const ManagerDashboard = () => {
                         </span>
                       </div>
                     </div>
-                  ) : label === "Overdue" ? (
-                    <svg
-                      viewBox="0 0 110 38"
-                      width="100%"
-                      height="38"
-                      preserveAspectRatio="none"
-                    >
-                      <rect
-                        x="2"
-                        y="18"
-                        width="10"
-                        height="16"
-                        rx="2"
-                        fill="#fda4af"
-                        opacity="0.7"
-                      />
-                      <rect
-                        x="17"
-                        y="10"
-                        width="10"
-                        height="24"
-                        rx="2"
-                        fill="#ef4444"
-                        opacity="0.9"
-                      />
-                      <rect
-                        x="32"
-                        y="21"
-                        width="10"
-                        height="13"
-                        rx="2"
-                        fill="#fda4af"
-                        opacity="0.65"
-                      />
-                      <rect
-                        x="47"
-                        y="6"
-                        width="10"
-                        height="28"
-                        rx="2"
-                        fill="#dc2626"
-                      />
-                      <rect
-                        x="62"
-                        y="14"
-                        width="10"
-                        height="20"
-                        rx="2"
-                        fill="#fb7185"
-                        opacity="0.75"
-                      />
-                      <rect
-                        x="77"
-                        y="22"
-                        width="10"
-                        height="12"
-                        rx="2"
-                        fill="#fda4af"
-                        opacity="0.6"
-                      />
-                      <rect
-                        x="92"
-                        y="9"
-                        width="10"
-                        height="25"
-                        rx="2"
-                        fill="#ef4444"
-                        opacity="0.9"
-                      />
-                    </svg>
-                  ) : label === "Completed" ? (
-                    <svg
-                      viewBox="0 0 110 38"
-                      width="100%"
-                      height="38"
-                      preserveAspectRatio="none"
-                    >
-                      <defs>
-                        <linearGradient
-                          id="grad-completed"
-                          x1="0"
-                          y1="0"
-                          x2="0"
-                          y2="1"
-                        >
-                          <stop
-                            offset="0%"
-                            stopColor="#3b82f6"
-                            stopOpacity="0.22"
-                          />
-                          <stop
-                            offset="100%"
-                            stopColor="#3b82f6"
-                            stopOpacity="0"
-                          />
-                        </linearGradient>
-                      </defs>
-                      <path
-                        d="M0,30 C10,26 20,24 30,19 C40,15 50,17 60,12 C70,8 80,10 90,5 C100,3 105,2 110,1"
-                        fill="none"
-                        stroke="#3b82f6"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M0,30 C10,26 20,24 30,19 C40,15 50,17 60,12 C70,8 80,10 90,5 C100,3 105,2 110,1 L110,38 L0,38 Z"
-                        fill="url(#grad-completed)"
-                      />
-                    </svg>
-                  ) : label === "In Progress" ? (
-                    <svg
-                      viewBox="0 0 110 38"
-                      width="100%"
-                      height="38"
-                      preserveAspectRatio="none"
-                    >
-                      <defs>
-                        <linearGradient
-                          id="grad-progress"
-                          x1="0"
-                          y1="0"
-                          x2="0"
-                          y2="1"
-                        >
-                          <stop
-                            offset="0%"
-                            stopColor="#10b981"
-                            stopOpacity="0.2"
-                          />
-                          <stop
-                            offset="100%"
-                            stopColor="#10b981"
-                            stopOpacity="0"
-                          />
-                        </linearGradient>
-                      </defs>
-                      <path
-                        d="M0,20 C8,11 16,28 24,18 C32,7 40,24 48,15 C56,8 64,21 72,12 C80,4 88,18 96,10 C102,5 106,8 110,6"
-                        fill="none"
-                        stroke="#10b981"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M0,20 C8,11 16,28 24,18 C32,7 40,24 48,15 C56,8 64,21 72,12 C80,4 88,18 96,10 C102,5 106,8 110,6 L110,38 L0,38 Z"
-                        fill="url(#grad-progress)"
-                      />
-                    </svg>
                   ) : (
-                    <svg
-                      viewBox="0 0 110 38"
-                      width="100%"
-                      height="38"
-                      preserveAspectRatio="none"
-                    >
-                      <rect
-                        x="2"
-                        y="20"
-                        width="11"
-                        height="14"
-                        rx="2"
-                        fill="#fbbf24"
-                        opacity="0.65"
-                      />
-                      <rect
-                        x="17"
-                        y="14"
-                        width="11"
-                        height="20"
-                        rx="2"
-                        fill="#f59e0b"
-                        opacity="0.75"
-                      />
-                      <rect
-                        x="32"
-                        y="18"
-                        width="11"
-                        height="16"
-                        rx="2"
-                        fill="#fbbf24"
-                        opacity="0.7"
-                      />
-                      <rect
-                        x="47"
-                        y="8"
-                        width="11"
-                        height="26"
-                        rx="2"
-                        fill="#d97706"
-                        opacity="0.95"
-                      />
-                      <rect
-                        x="62"
-                        y="12"
-                        width="11"
-                        height="22"
-                        rx="2"
-                        fill="#f59e0b"
-                        opacity="0.78"
-                      />
-                      <rect
-                        x="77"
-                        y="4"
-                        width="11"
-                        height="30"
-                        rx="2"
-                        fill="#b45309"
-                      />
-                      <rect
-                        x="92"
-                        y="10"
-                        width="11"
-                        height="24"
-                        rx="2"
-                        fill="#f59e0b"
-                        opacity="0.88"
-                      />
-                    </svg>
+                    <KpiSparkline
+                      type={sparklineType || "bars"}
+                      data={sparklineData || [0, 0, 0, 0, 0, 0, 0]}
+                      color={sparklineColor || "#3b82f6"}
+                      gradientId={`grad-${testId}`}
+                    />
                   )}
                 </div>
                 <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-gray-200 to-transparent opacity-60" />
@@ -1587,10 +1472,26 @@ const ManagerDashboard = () => {
           )}
         </div>
 
+        {/* Task Overview and Task Status Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3">
+          <div className="lg:col-span-7 h-[350px]">
+            <TaskOverviewChart tasks={teamTasksData} />
+          </div>
+          <div className="lg:col-span-5 h-[350px]">
+            <TaskStatusDonut
+              totalTasks={teamStatsForHeader.totalTasks}
+              openCount={teamStatsForHeader.openTasks}
+              inProgressCount={teamStatsForHeader.inProgressTasks}
+              completedCount={teamStatsForHeader.completedTasks}
+              overdueCount={teamStatsForHeader.overdueTasks}
+            />
+          </div>
+        </div>
+
         {/* MODERN GRAPHS SECTION */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-          <div className="bg-white rounded-sm shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-white rounded-sm shadow-sm border border-gray-100 flex flex-col h-[360px] overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
               <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
                 <div className="w-6 h-6 rounded-sm bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
                   <TrendingUp className="w-3.5 h-3.5 text-white" />
@@ -1606,13 +1507,13 @@ const ManagerDashboard = () => {
                 completed
               </span>
             </div>
-            <div className="p-5">
-              <ReactECharts option={efficiencyPie} style={{ height: 280 }} />
+            <div className="p-4 flex-1 min-h-0 flex items-center justify-center">
+              <ReactECharts option={efficiencyPie} style={{ height: "100%", width: "100%" }} />
             </div>
           </div>
 
-          <div className="bg-white rounded-sm shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-white rounded-sm shadow-sm border border-gray-100 flex flex-col h-[360px] overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
               <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
                 <div className="w-6 h-6 rounded-sm bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
                   <Users className="w-3.5 h-3.5 text-white" />
@@ -1623,23 +1524,26 @@ const ManagerDashboard = () => {
                 {filteredTasks.length} total tasks
               </span>
             </div>
-            <div className="p-5">
-              <ReactECharts option={workloadStacked} style={{ height: 300 }} />
+            <div className="p-4 flex-1 min-h-0 flex items-center justify-center">
+              <ReactECharts option={workloadStacked} style={{ height: "100%", width: "100%" }} />
             </div>
           </div>
         </div>
 
         {/* MAIN CONTENT GRID */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
           {/* Team Members List */}
-          <div className="lg:col-span-2 bg-white rounded-sm shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100">
+          <div className="lg:col-span-2 bg-white rounded-sm shadow-sm border border-gray-100 flex flex-col h-[480px] overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
               <h2 className="text-sm font-semibold text-gray-800 flex items-center">
                 <Users className="w-4 h-4 mr-2 text-blue-500" />
                 Team Members
               </h2>
+              <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-sm">
+                {teamMembers.length} {teamMembers.length === 1 ? "member" : "members"}
+              </span>
             </div>
-            <div className="p-4">
+            <div className="p-4 flex-1 overflow-y-auto min-h-0 pr-2 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
               <div className="space-y-2">
                 {teamMembers.map((member) => (
                   <button
@@ -1695,20 +1599,31 @@ const ManagerDashboard = () => {
                     </div>
                   </button>
                 ))}
+                {teamMembers.length === 0 && (
+                  <div className="text-center py-12 flex flex-col items-center justify-center h-full">
+                    <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-400">No team members found</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* Quick Stats Sidebar */}
-          <div className="space-y-3">
-            <div className="bg-white rounded-sm shadow-sm border border-gray-100 flex flex-col">
-              <div className="px-4 py-3 border-b border-gray-100">
+          <div className="h-[480px] flex flex-col gap-3">
+            <div className="flex-1 min-h-0 bg-white rounded-sm shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                 <h2 className="text-sm font-semibold text-gray-800 flex items-center">
                   <CheckSquare className="w-4 h-4 mr-2 text-emerald-500" />
                   Milestones Progress
                 </h2>
+                {projectStats.length > 0 && (
+                  <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-sm">
+                    {projectStats.length}
+                  </span>
+                )}
               </div>
-              <div className="p-4 space-y-3">
+              <div className="p-4 flex-1 overflow-y-auto min-h-0 space-y-3 pr-2 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
                 {projectStats.map((ms) => (
                   <div
                     key={ms.name}
@@ -1745,7 +1660,7 @@ const ManagerDashboard = () => {
                   </div>
                 ))}
                 {projectStats.length === 0 && (
-                  <div className="text-center py-6">
+                  <div className="text-center py-6 flex flex-col items-center justify-center h-full">
                     <Target className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                     <p className="text-sm text-gray-400">No milestones yet</p>
                   </div>
@@ -1753,14 +1668,14 @@ const ManagerDashboard = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-sm shadow-sm border border-gray-100 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-100">
+            <div className="flex-1 min-h-0 bg-white rounded-sm shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
                 <h3 className="text-sm font-semibold text-gray-800 flex items-center">
                   <BarChart3 className="w-4 h-4 mr-2 text-emerald-500" />
                   Weekly Performance
                 </h3>
               </div>
-              <div className="p-4">
+              <div className="p-4 flex-1 overflow-y-auto min-h-0 pr-2 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
                 <div className="space-y-2">
                   {weeklyPerformance.map((day, index) => (
                     <div key={index} className="flex items-center space-x-2">
