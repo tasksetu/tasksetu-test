@@ -602,22 +602,6 @@ export default function TaskEditModal({ task, onSave, onClose, permissions }) {
                   </p>
                 </div>
               </div>
-
-              {/* Visibility */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Visibility
-                </label>
-                <select
-                  value={formData.visibility}
-                  onChange={(e) => handleChange("visibility", e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="private">Private</option>
-                  {canAssignToOthers && <option value="team">Team</option>}
-                  <option value="company">Company</option>
-                </select>
-              </div>
             </div>
 
             {/* Risk Status */}

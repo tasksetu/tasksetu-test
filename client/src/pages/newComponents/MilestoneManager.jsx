@@ -1670,43 +1670,6 @@ export default function MilestoneManager() {
                   </div>
                 </div>
 
-                {/* Visibility */}
-                <div>
-                  <label className="form-label mb-1">
-                    Visibility <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <Select
-                    value={{
-                      value: editForm.visibility,
-                      label:
-                        (editForm.visibility || "private")
-                          .charAt(0)
-                          .toUpperCase() +
-                        (editForm.visibility || "private").slice(1),
-                    }}
-                    menuPlacement="auto"
-                    onChange={(selected) =>
-                      handleEditFormChange("visibility", selected.value)
-                    }
-                    options={
-                      canAssignToOthers
-                        ? [
-                            { value: "private", label: "Private" },
-                            { value: "team", label: "Team" },
-                          ]
-                        : [{ value: "private", label: "Private" }]
-                    }
-                    className="react-select-container"
-                    classNamePrefix="react-select"
-                    placeholder="Select visibility..."
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    {canAssignToOthers
-                      ? "Private: Only you and assignee can view. Team: All team members can view."
-                      : "Private: Only you and assignee can view."}
-                  </p>
-                </div>
-
                 {/* Labels/Tags */}
                 <div>
                   <label className="form-label mb-1">Labels</label>

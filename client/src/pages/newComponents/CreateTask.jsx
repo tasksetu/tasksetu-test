@@ -688,14 +688,8 @@ export default function CreateTask({
       submitData.append("taskType", selectedTaskType);
       submitData.append("priority", priority || "medium");
 
-      // Fix visibility: backend only accepts "private", "team" (not "public")
-      let visibility = data.visibility || "private";
-      if (visibility === "public") {
-        visibility = "team"; // Map public to team for backend compatibility
-      }
-      if (!["private", "team"].includes(visibility)) {
-        visibility = "private"; // Default to private if invalid
-      }
+      // Enforce default private visibility
+      let visibility = "private";
       submitData.append("visibility", visibility);
 
       if (data.category) submitData.append("category", data.category);
@@ -902,7 +896,8 @@ export default function CreateTask({
         // Normal task creation without conversion
         showSuccessToast("Task created");
       }
-      // 🔔 Invalidate all task, report and analytics queries to fetch new task & report data immediately
+      // 🔔 Invalidate all task, report, licensing and analytics queries to fetch new task & report data immediately
+      queryClient.invalidateQueries({ queryKey: ["/api/license/current"] });
       queryClient.invalidateQueries({ queryKey: ["/api/mytasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/quick-tasks"] });
@@ -1190,6 +1185,8 @@ export default function CreateTask({
             assignmentOptions={assignmentOptions}
             userRole={role}
             canAssignToOthers={canAssignToOthers}
+            collaboratorOptions={collaboratorsList}
+            isLoadingCollaborators={isLoadingCollaborators}
             drawer={drawer}
             defaultValues={formDefaultValues}
             isSubmitting={isSubmitting}
@@ -1808,6 +1805,9 @@ function LegacyCreateTask({
               onSubmit(formData);
             }}
             onClose={onClose}
+            isOrgUser={isOrgUser}
+            collaboratorOptions={collaboratorsList}
+            isLoadingCollaborators={isLoadingCollaborators}
             initialData={{
               dueDate: preFilledDate || "",
             }}
@@ -2119,78 +2119,39 @@ function LegacyCreateTask({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="">
-                    <div className="flex gap-3">
-                      <svg
-                        className="w-4 h-4 text-yellow-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                        />
-                      </svg>
-                      <label
-                        htmlFor="visibility"
-                        className="form-label flex items-center gap-2 text-gray-700 font-medium text-sm"
-                      >
-                        Visibility
-                      </label>
-                    </div>
-                    <select
-                      id="visibility"
-                      className="form-select w-full h-9 px-3 border border-gray-300 rounded-none focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent text-gray-700"
+                <div className="">
+                  <div className="flex gap-3">
+                    <svg
+                      className="w-4 h-4 text-orange-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
                     >
-                      <option value="private">🔒 Private</option>
-                      <option value="public">👥 Public</option>
-                    </select>
-                  </div>
-
-                  <div className="">
-                    <div className="flex gap-3">
-                      <svg
-                        className="w-4 h-4 text-orange-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                      <label
-                        htmlFor="priority"
-                        className="form-label flex items-center gap-2 text-gray-700 font-medium text-sm"
-                      >
-                        Priority
-                      </label>
-                    </div>
-                    <select
-                      id="priority"
-                      className="form-select w-full h-9 px-3 border border-gray-300 rounded-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-700"
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <label
+                      htmlFor="priority"
+                      className="form-label flex items-center gap-2 text-gray-700 font-medium text-sm"
                     >
-                      <option value="low">🟢 Low</option>
-                      <option value="medium" selected>
-                        🟡 Medium
-                      </option>
-                      <option value="high">🟠 High</option>
-                      <option value="critical">🔴 Critical</option>
-                    </select>
+                      Priority
+                    </label>
                   </div>
+                  <select
+                    id="priority"
+                    className="form-select w-full h-9 px-3 border border-gray-300 rounded-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-700"
+                  >
+                    <option value="low">🟢 Low</option>
+                    <option value="medium" selected>
+                      🟡 Medium
+                    </option>
+                    <option value="high">🟠 High</option>
+                    <option value="critical">🔴 Critical</option>
+                  </select>
                 </div>
 
                 <div className="">

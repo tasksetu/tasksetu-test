@@ -931,7 +931,7 @@ export default function LicenseManagementPage() {
     ];
 
     // 2. Add any other codes present in the actual usage data from API
-    // This dynamically handles new features like REPORT_TASK_AUDIT etc.
+    // This dynamically handles all configured features like API_ACCESS, SSO_LOGIN, DED_SUPPORT, etc.
     const apiUsageCodes = Object.keys(currentLicenseData?.usage || {});
     const allCodes = Array.from(new Set([...coreCodes, ...apiUsageCodes]));
 
@@ -940,6 +940,9 @@ export default function LicenseManagementPage() {
       .map((code) => {
         const status = getUsageStatus(code);
         const feature = featuresData.find((f) => f.feature_code === code);
+
+        // If the feature is globally disabled/hidden from Admin Panel (view === false or is_active === false), do not show
+        if (feature && (feature.view === false || feature.is_active === false)) return null;
 
         // Skip features with no limits and no usage (not relevant for this view)
         if (status.limit === 0 && status.current === 0 && !feature) return null;
@@ -1017,11 +1020,37 @@ export default function LicenseManagementPage() {
             icon: Users,
             desc: "Distribution",
           },
+          API_ACCESS: {
+            label: "API Access",
+            icon: Zap,
+            desc: "Full REST API access for integrations",
+          },
+          SSO_LOGIN: {
+            label: "SSO Login",
+            icon: Shield,
+            desc: "Single Sign-On authentication",
+          },
+          DED_SUPPORT: {
+            label: "Dedicated Support",
+            icon: Users,
+            desc: "24/7 priority support with dedicated account manager",
+          },
+          REPORT_QUICK_CONVERSION: {
+            label: "Quick Task Conversion",
+            icon: BarChart3,
+            desc: "Insights into quick task adoption and workflow discipline",
+          },
+          TASK_QUICK: {
+            label: "Quick Tasks",
+            icon: Zap,
+            desc: "Tasks created quickly",
+          },
         };
 
         return {
           key: code,
           label:
+            feature?.name ||
             feature?.feature_name ||
             defaults[code]?.label ||
             code.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),

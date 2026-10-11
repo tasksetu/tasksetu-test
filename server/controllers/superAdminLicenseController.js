@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { License } from '../modals/licenseModal.js';
 import { OrganizationSubscription } from '../modals/organizationSubscriptionModal.js';
 import { Organization } from '../modals/organizationModal.js';
@@ -387,20 +388,46 @@ export const updateLicensePlan = async (req, res) => {
     const updateData = req.body;
 
     // Don't allow changing license_code
+    const planFeatures = updateData.features;
     delete updateData.license_code;
     delete updateData._id;
+    delete updateData.features;
 
-    const updatedPlan = await License.findByIdAndUpdate(
-      planId,
-      { $set: updateData },
-      { new: true, runValidators: true }
-    );
+    const isObjectId = mongoose.Types.ObjectId.isValid(planId);
+    const updatedPlan = isObjectId
+      ? await License.findByIdAndUpdate(
+          planId,
+          { $set: updateData },
+          { new: true, runValidators: true }
+        )
+      : await License.findOneAndUpdate(
+          { license_code: String(planId).toUpperCase() },
+          { $set: updateData },
+          { new: true, runValidators: true }
+        );
 
     if (!updatedPlan) {
       return res.status(404).json({
         success: false,
         message: 'License plan not found'
       });
+    }
+
+    // Sync features to LicenseFeatureMapping if provided
+    if (Array.isArray(planFeatures)) {
+      await LicenseFeatureMapping.deleteMany({
+        license_code: updatedPlan.license_code
+      });
+      const newMappings = planFeatures.map(feature => ({
+        license_code: updatedPlan.license_code,
+        feature_code: feature.feature_code,
+        usage_limit: feature.usage_limit ?? -1,
+        limit_type: feature.limit_type || 'MONTHLY',
+        is_enabled: feature.is_enabled !== false
+      }));
+      if (newMappings.length > 0) {
+        await LicenseFeatureMapping.insertMany(newMappings);
+      }
     }
 
     // Log Audit Trail
@@ -642,8 +669,11 @@ export const updatePlanFeatures = async (req, res) => {
     const { planId } = req.params;
     const { features } = req.body;
 
-    // Get the plan
-    const plan = await License.findById(planId);
+    // Get the plan (support both ObjectId and license_code)
+    const isObjectId = mongoose.Types.ObjectId.isValid(planId);
+    const plan = isObjectId
+      ? await License.findById(planId)
+      : await License.findOne({ license_code: String(planId).toUpperCase() });
     if (!plan) {
       return res.status(404).json({
         success: false,

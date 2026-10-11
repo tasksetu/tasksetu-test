@@ -29,6 +29,7 @@ import licenseApiRoutes from "./routes/licenseApiRoutes.js"; // 🆕 New license
 import { emailService } from "./services/emailService.js";
 import { registerLoginCustomizationRoutes } from "./routes/loginCustomization.js";
 import taskRoutes from "./routes/taskRoutes.js";
+import taskChangeRequestRoutes from "./routes/taskChangeRequestRoutes.js";
 import taskfeedRoutes from "./routes/taskfeedRoutes.js";
 import taskStatusRoutes from "./routes/taskStatusRoutes.js";
 import taskPriorityRoutes from "./routes/taskPriorityRoutes.js";
@@ -1672,6 +1673,9 @@ export async function registerRoutes(app) {
 
   // Task routes
   app.use("/api", taskRoutes);
+
+  // Task Change Request routes (Approval Workflow)
+  app.use("/api/task-change-requests", taskChangeRequestRoutes);
 
   // Task feed and dashboard routes
   app.use("/api", taskfeedRoutes);

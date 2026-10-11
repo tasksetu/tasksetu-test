@@ -181,6 +181,7 @@ import viteConfig from "../../vite.config.js";
 import NotificationLogger from "../services/notificationLogger.js";
 import EnhancedNotificationHelper from "../services/enhancedNotificationHelper.js";
 import { TimezoneHelper } from "../utils/timezoneHelper.js";
+import { TaskChangeRequestService } from "../services/taskChangeRequestService.js";
 
 // Utility function to strip HTML tags from text
 const stripHtml = (html) => {
@@ -2003,10 +2004,33 @@ export const createTask = async (req, res) => {
               taskId: createdTask._id,
               convertedAt: new Date(),
             };
+            quickTask.conversionFlag = {
+              isConverted: true,
+              convertedToTaskId: createdTask._id,
+              convertedToTaskType: createdTask.taskType || "regular",
+              convertedAt: quickTask.convertedToTask.convertedAt,
+            };
             quickTask.status = "done";
             quickTask.completedAt = new Date();
 
             const savedQuickTask = await quickTask.save();
+
+            // 📊 Track REPORT_QUICK_CONVERSION usage
+            try {
+              const trackingUserId = userId || req.user?.id || req.user?._id;
+              if (trackingUserId) {
+                await licenseService.consumeFeature(
+                  trackingUserId,
+                  "REPORT_QUICK_CONVERSION",
+                  1
+                );
+              }
+            } catch (consumeErr) {
+              console.warn(
+                "⚠️ [QUICK TASK CONVERSION] Failed to track REPORT_QUICK_CONVERSION usage:",
+                consumeErr.message
+              );
+            }
 
           }
         } else {
@@ -3561,10 +3585,10 @@ export const updateSubtask = async (req, res) => {
     // Track previous assignee for counter adjustments
     const prevAssignee = subtask.assignedTo?.toString();
 
-    // ❌ LINKED TASK DEPENDENCY VALIDATION: Prevent status change if prerequisite linked task is not completed
+    // ❌ LINKED TASK DEPENDENCY VALIDATION: Prevent status change if prerequisite linked task is not completed or cancelled
     if (subtask.linkedTaskId && updates.status && String(updates.status).trim().toUpperCase() !== String(subtask.status || "").trim().toUpperCase()) {
       try {
-        await LinkedTaskService.validateLinkedTaskCompletion(subtask);
+        await LinkedTaskService.validateLinkedTaskCompletion(subtask, updates.status);
       } catch (depErr) {
         return res.status(400).json({
           success: false,
@@ -7275,6 +7299,45 @@ export const updateTask = async (req, res) => {
 
     }
 
+    // 🛡️ TASK EDIT APPROVAL WORKFLOW: Check protected fields against 4 independent approval toggles
+    const taskOrgId = task.organization?._id || task.organization || user.organizationId;
+    const orgApprovalSettings =
+      await TaskChangeRequestService.getOrganizationApprovalSettings(taskOrgId);
+
+    const { requiresApproval, requestedChanges } =
+      TaskChangeRequestService.evaluateApprovalRequirement(task, updates, orgApprovalSettings);
+
+    if (requiresApproval) {
+      const hasDirectPermission =
+        TaskChangeRequestService.userHasDirectModificationPermission(user, task);
+
+      if (!hasDirectPermission) {
+        console.log("🛡️ [APPROVAL WORKFLOW] Protected field change detected requiring approval without direct authority. Creating TaskChangeRequest:", {
+          taskId: id,
+          userId: user.id,
+          requestedChanges,
+        });
+
+        const changeRequestResult =
+          await TaskChangeRequestService.createChangeRequest({
+            taskId: id,
+            requestedChanges,
+            reason: updates.reason || updates.changeReason || updates.notes || "",
+            userId: user.id,
+            userRole,
+            orgId: taskOrgId,
+          });
+
+        return res.status(200).json({
+          success: true,
+          requiresApproval: true,
+          message: "Your task changes have been submitted for approval.",
+          data: {
+            changeRequestId: changeRequestResult.changeRequest._id,
+          },
+        });
+      }
+    }
 
     // ✅ Validate title if present in updates (enforce same max length as creation)
     if (updates.title !== undefined) {
@@ -7493,10 +7556,10 @@ export const updateTask = async (req, res) => {
     if (updates.status !== undefined && updates.status !== null) {
       const normalized = String(updates.status).trim().toUpperCase();
 
-      // ❌ LINKED TASK DEPENDENCY VALIDATION: Prevent status change if prerequisite linked task is not completed
+      // ❌ LINKED TASK DEPENDENCY VALIDATION: Prevent status change if prerequisite linked task is not completed or cancelled
       if (task.linkedTaskId && normalized !== String(task.status || "").trim().toUpperCase()) {
         try {
-          await LinkedTaskService.validateLinkedTaskCompletion(task);
+          await LinkedTaskService.validateLinkedTaskCompletion(task, normalized);
         } catch (depErr) {
           return res.status(400).json({
             success: false,
@@ -8033,10 +8096,10 @@ export const updateTaskStatus = async (req, res) => {
       });
     }
 
-    // ❌ LINKED TASK DEPENDENCY VALIDATION: Prevent status change if prerequisite linked task is not completed
+    // ❌ LINKED TASK DEPENDENCY VALIDATION: Prevent status change if prerequisite linked task is not completed or cancelled
     if (task.linkedTaskId && normalizedStatus !== String(task.status || "").trim().toUpperCase()) {
       try {
-        await LinkedTaskService.validateLinkedTaskCompletion(task);
+        await LinkedTaskService.validateLinkedTaskCompletion(task, normalizedStatus);
       } catch (depErr) {
         return res.status(400).json({
           success: false,
@@ -8088,6 +8151,51 @@ export const updateTaskStatus = async (req, res) => {
           success: false,
           message: "Access denied",
         });
+      }
+    }
+
+    // 🛡️ TASK EDIT APPROVAL WORKFLOW: Check if status change requires approval
+    if (normalizedStatus !== String(task.status || "").trim().toUpperCase()) {
+      const taskOrgId = task.organization?._id || task.organization || user.organizationId;
+      const orgApprovalSettings =
+        await TaskChangeRequestService.getOrganizationApprovalSettings(taskOrgId);
+
+      if (orgApprovalSettings.statusApprovalEnabled) {
+        const hasDirectPermission =
+          TaskChangeRequestService.userHasDirectModificationPermission(user, task);
+
+        if (!hasDirectPermission) {
+          console.log("🛡️ [APPROVAL WORKFLOW] Status change detected without direct authority. Creating TaskChangeRequest:", {
+            taskId: id,
+            userId: user.id || user._id,
+            fromStatus: task.status,
+            toStatus: normalizedStatus,
+          });
+
+          const changeRequestResult =
+            await TaskChangeRequestService.createChangeRequest({
+              taskId: id,
+              requestedChanges: {
+                status: {
+                  old: task.status,
+                  new: normalizedStatus,
+                },
+              },
+              reason: req.body?.reason || req.body?.changeReason || notes || "",
+              userId: user.id || user._id,
+              userRole: getHighestPriorityRole(user.role),
+              orgId: taskOrgId, 
+            });
+
+          return res.status(200).json({
+            success: true,
+            requiresApproval: true,
+            message: "Your status change has been submitted for approval.",
+            data: {
+              changeRequestId: changeRequestResult.changeRequest._id,
+            },
+          });
+        }
       }
     }
 

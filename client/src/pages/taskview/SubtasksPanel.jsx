@@ -30,6 +30,7 @@ import { useTaskStatuses } from "../../hooks/useTaskStatuses";
 import { useShowToast } from "../../utils/ToastMessage";
 import useLicense from "../../hooks/useLicense";
 import UpgradeRequiredModal from "../../components/modals/UpgradeRequiredModal";
+import { stripHtmlToText } from "../../components/common/SafeHtml";
 
 // Helper function to transform subtask data for edit mode
 const transformSubtaskForEdit = (subtask) => {
@@ -432,6 +433,95 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
     if (value._id) return value._id.toString();
     if (value.id) return value.id.toString();
     return value.toString();
+  };
+
+  // Helper to safely get the subtask creator's name
+  const getSubtaskCreatorName = (subtask) => {
+    if (!subtask) return "System User";
+
+    // 1. If createdBy is an object with name fields
+    if (subtask.createdBy && typeof subtask.createdBy === "object") {
+      const name =
+        `${subtask.createdBy.firstName || ""} ${subtask.createdBy.lastName || ""}`.trim() ||
+        subtask.createdBy.name ||
+        subtask.createdBy.email;
+      if (name) return name;
+    }
+
+    // 2. If creator is an object with name fields
+    if (subtask.creator && typeof subtask.creator === "object") {
+      const name =
+        `${subtask.creator.firstName || ""} ${subtask.creator.lastName || ""}`.trim() ||
+        subtask.creator.name ||
+        subtask.creator.email;
+      if (name) return name;
+    }
+
+    // 3. If createdByName is a valid name string (not an ObjectId and not "Unknown")
+    const createdByName = subtask.createdByName;
+    if (
+      typeof createdByName === "string" &&
+      createdByName.trim() &&
+      createdByName !== "Unknown" &&
+      !/^[0-9a-fA-F]{24}$/.test(createdByName.trim())
+    ) {
+      return createdByName.trim();
+    }
+
+    // 4. If createdBy is a valid name string (not an ObjectId and not "Unknown")
+    const createdByStr = subtask.createdBy;
+    if (
+      typeof createdByStr === "string" &&
+      createdByStr.trim() &&
+      createdByStr !== "Unknown" &&
+      !/^[0-9a-fA-F]{24}$/.test(createdByStr.trim())
+    ) {
+      return createdByStr.trim();
+    }
+
+    // 5. Match creator ID against currentUser
+    const creatorId =
+      subtask.creatorId ||
+      subtask.createdBy?._id ||
+      subtask.createdBy?.id ||
+      (typeof subtask.createdBy === "string" ? subtask.createdBy : null);
+    const currentUserId = currentUser?._id || currentUser?.id;
+    if (
+      creatorId &&
+      currentUserId &&
+      String(creatorId) === String(currentUserId)
+    ) {
+      const currentUserName =
+        currentUser.name ||
+        `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() ||
+        currentUser.email;
+      if (currentUserName) return currentUserName;
+    }
+
+    // 6. Match creator ID against parentTask creator
+    const parentCreatorId =
+      parentTask?.creatorId ||
+      parentTask?.createdBy?._id ||
+      parentTask?.createdBy?.id ||
+      (typeof parentTask?.createdBy === "string" &&
+      /^[0-9a-fA-F]{24}$/.test(parentTask.createdBy)
+        ? parentTask.createdBy
+        : null);
+    if (
+      creatorId &&
+      parentCreatorId &&
+      String(creatorId) === String(parentCreatorId)
+    ) {
+      if (
+        typeof parentTask?.createdBy === "string" &&
+        !/^[0-9a-fA-F]{24}$/.test(parentTask.createdBy) &&
+        parentTask.createdBy !== "Unknown"
+      ) {
+        return parentTask.createdBy;
+      }
+    }
+
+    return "System User";
   };
 
   const canEditSubtask = (subtask) => {
@@ -901,9 +991,9 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
                       </h4>
 
                       {/* Subtask Description */}
-                      {subtask.description ? (
+                      {stripHtmlToText(subtask.description) ? (
                         <div className="text-xs text-gray-600 line-clamp-2 my-2 bg-gray-50/70 p-2.5 rounded-lg border border-gray-100 leading-relaxed">
-                          {subtask.description.replace(/<[^>]*>?/gm, "")}
+                          {stripHtmlToText(subtask.description)}
                         </div>
                       ) : (
                         <p className="text-xs text-gray-400 italic my-1">
@@ -931,7 +1021,21 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
                               className={`flex items-center gap-1 px-2.5 py-1 rounded-md font-medium ${isOverdue ? "bg-red-50 text-red-700 border border-red-200" : "bg-gray-100/80 text-gray-700"}`}
                             >
                               <Calendar className="w-3.5 h-3.5 text-gray-500" />
-                              <span>{subtask.dueDate}</span>
+                              <span>
+                                {(() => {
+                                  try {
+                                    const d = new Date(subtask.dueDate);
+                                    if (isNaN(d.getTime())) return subtask.dueDate;
+                                    return d.toLocaleDateString("en-GB", {
+                                      day: "2-digit",
+                                      month: "short",
+                                      year: "numeric",
+                                    });
+                                  } catch {
+                                    return subtask.dueDate;
+                                  }
+                                })()}
+                              </span>
                             </div>
                           )}
 
@@ -1019,11 +1123,7 @@ function SubtasksPanel({ subtasks, parentTask, currentUser, refreshTask }) {
                             </span>
                             <span className="font-semibold text-gray-800 flex items-center gap-1 mt-0.5">
                               <UserCheck className="w-3 h-3 text-emerald-500" />
-                              {typeof subtask.createdBy === "object" &&
-                              subtask.createdBy
-                                ? `${subtask.createdBy.firstName || ""} ${subtask.createdBy.lastName || ""}`.trim() ||
-                                  subtask.createdBy.email
-                                : "System User"}
+                              {getSubtaskCreatorName(subtask)}
                             </span>
                           </div>
                           <div>

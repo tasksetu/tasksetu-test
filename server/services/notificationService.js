@@ -1363,6 +1363,9 @@ export class NotificationService {
       [TriggerEvent.APPROVAL_REQUESTED]: 'approval_requested',
       [TriggerEvent.APPROVAL_APPROVED]: 'approval_approved',
       [TriggerEvent.APPROVAL_DENIED]: 'approval_denied',
+      [TriggerEvent.TASK_CHANGE_REQUESTED]: 'approval_requested',
+      [TriggerEvent.TASK_CHANGE_APPROVED]: 'approval_approved',
+      [TriggerEvent.TASK_CHANGE_REJECTED]: 'approval_denied',
 
       // "New Comments" checkbox (key: comment_added)
       [TriggerEvent.COMMENT_ADDED]: 'comment_added',

@@ -9,6 +9,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import TaskChangeReasonModal from "@/components/modals/TaskChangeReasonModal";
+import { useTaskApprovalGating } from "@/hooks/useTaskApprovalGating";
 
 function StatusDropdown({ status, onChange, canEdit, task, currentUser }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -18,6 +20,12 @@ function StatusDropdown({ status, onChange, canEdit, task, currentUser }) {
   const [updatingStatus, setUpdatingStatus] = useState(null); // Track which specific status is updating
   const [currentStatusCode, setCurrentStatusCode] = useState(status); // Track current status for color updates
   const { showSuccessToast, showErrorToast } = useShowToast();
+  const { checkRequiresApproval, checkRequiresApprovalAsync } = useTaskApprovalGating();
+  const [changeReasonModal, setChangeReasonModal] = useState({
+    isOpen: false,
+    requestedStatus: "",
+    requestedLabel: "",
+  });
 
   const { data: taskStatuses = [] } = useQuery({
     queryKey: ["/api/task-statuses"],
@@ -25,7 +33,7 @@ function StatusDropdown({ status, onChange, canEdit, task, currentUser }) {
   });
 
   // API integration function
-  const executeStatusChange = async (newStatusCode) => {
+  const executeStatusChange = async (newStatusCode, reason = null) => {
     const taskId = task?.id || task?._id;
 
     if (!taskId) {
@@ -51,9 +59,16 @@ function StatusDropdown({ status, onChange, canEdit, task, currentUser }) {
         },
       );
 
+      const payload = { status: newStatusCode };
+      if (reason) {
+        payload.notes = reason;
+        payload.reason = reason;
+        payload.changeReason = reason;
+      }
+
       const response = await axios.patch(
         `/api/tasks/${taskId}/status`,
-        { status: newStatusCode },
+        payload,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -63,6 +78,14 @@ function StatusDropdown({ status, onChange, canEdit, task, currentUser }) {
       );
 
       console.log("Status update successful:", response.data);
+
+      if (response.data?.requiresApproval) {
+        showSuccessToast(
+          response.data.message ||
+            "Your status change has been submitted for approval. The task creator has been notified.",
+        );
+        return false;
+      }
 
       // Call the parent's status change handler for immediate UI update
       if (onChange) {
@@ -195,6 +218,22 @@ function StatusDropdown({ status, onChange, canEdit, task, currentUser }) {
       showErrorToast(
         `Cannot mark task as completed. There are ${incompleteCount} incomplete sub-tasks that must be completed or cancelled first.`,
       );
+      return;
+    }
+
+    // Check if status requires creator approval
+    const isApprovalRequired = await checkRequiresApprovalAsync({
+      task,
+      field: "status",
+      user: currentUser,
+    });
+    if (isApprovalRequired) {
+      setIsOpen(false);
+      setChangeReasonModal({
+        isOpen: true,
+        requestedStatus: statusOption.value,
+        requestedLabel: statusOption.label,
+      });
       return;
     }
 
@@ -501,6 +540,32 @@ function StatusDropdown({ status, onChange, canEdit, task, currentUser }) {
             </div>
           </div>
         </div>
+      )}
+
+      {changeReasonModal.isOpen && (
+        <TaskChangeReasonModal
+          isOpen={changeReasonModal.isOpen}
+          onClose={() =>
+            setChangeReasonModal({
+              isOpen: false,
+              requestedStatus: "",
+              requestedLabel: "",
+            })
+          }
+          taskTitle={task?.title || "Task"}
+          field="status"
+          fieldName="Status"
+          currentValue={currentStatus.label || status}
+          requestedValue={
+            changeReasonModal.requestedLabel || changeReasonModal.requestedStatus
+          }
+          onSubmit={async (reason) => {
+            await executeStatusChange(
+              changeReasonModal.requestedStatus,
+              reason,
+            );
+          }}
+        />
       )}
     </>
   );

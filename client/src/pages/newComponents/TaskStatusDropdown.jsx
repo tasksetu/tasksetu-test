@@ -9,6 +9,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import TaskChangeReasonModal from "@/components/modals/TaskChangeReasonModal";
+import { useTaskApprovalGating } from "@/hooks/useTaskApprovalGating";
 
 export default function TaskStatusDropdown({
   task,
@@ -33,9 +35,15 @@ export default function TaskStatusDropdown({
   const [isUpdating, setIsUpdating] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(null); // Track which specific status is updating
   const { showSuccessToast, showErrorToast } = useShowToast();
+  const { checkRequiresApproval, checkRequiresApprovalAsync } = useTaskApprovalGating();
+  const [changeReasonModal, setChangeReasonModal] = useState({
+    isOpen: false,
+    requestedStatus: "",
+    requestedLabel: "",
+  });
 
   // API integration function
-  const executeStatusChange = async (newStatusCode) => {
+  const executeStatusChange = async (newStatusCode, reason = null) => {
     const taskId = task?.id || task?._id;
 
     if (!taskId) {
@@ -48,7 +56,7 @@ export default function TaskStatusDropdown({
       console.log(`TaskStatusDropdown: Forwarding status change to parent handler for task ${taskId}`);
       setIsUpdating(true);
       try {
-        await onStatusChange(newStatusCode);
+        await onStatusChange(newStatusCode, reason);
         return true;
       } catch (err) {
         console.error("TaskStatusDropdown parent status change error:", err);
@@ -72,9 +80,16 @@ export default function TaskStatusDropdown({
         toStatus: newStatusCode
       });
 
+      const payload = { status: newStatusCode };
+      if (reason) {
+        payload.notes = reason;
+        payload.reason = reason;
+        payload.changeReason = reason;
+      }
+
       const response = await axios.patch(
         `/api/tasks/${taskId}/status`,
-        { status: newStatusCode },
+        payload,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -84,6 +99,14 @@ export default function TaskStatusDropdown({
       );
 
       console.log('TaskStatusDropdown: Status update successful:', response.data);
+
+      if (response.data?.requiresApproval) {
+        showSuccessToast(
+          response.data.message ||
+            "Your status change has been submitted for approval. The task creator has been notified.",
+        );
+        return false;
+      }
 
       showSuccessToast("Status updated");
 
@@ -442,6 +465,19 @@ const baseWidth = 176;
                         className="w-full text-left px-2 py-1 text-sm flex items-center gap-2 transition-all duration-200 group relative overflow-hidden hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed justify-start h-auto rounded-md"
                         disabled={updatingStatus === transitionCode}
                         onClick={async () => {
+                          const isApprovalRequired = await checkRequiresApprovalAsync({
+                            task,
+                            field: "status",
+                          });
+                          if (isApprovalRequired) {
+                            setIsOpen(false);
+                            setChangeReasonModal({
+                              isOpen: true,
+                              requestedStatus: transitionCode,
+                              requestedLabel: targetStatus.label,
+                            });
+                            return;
+                          }
                           setUpdatingStatus(transitionCode);
                           const success = await executeStatusChange(transitionCode);
                           setUpdatingStatus(null);
@@ -519,6 +555,32 @@ const baseWidth = 176;
           </>,
           document.body,
         )}
+
+      {changeReasonModal.isOpen && (
+        <TaskChangeReasonModal
+          isOpen={changeReasonModal.isOpen}
+          onClose={() =>
+            setChangeReasonModal({
+              isOpen: false,
+              requestedStatus: "",
+              requestedLabel: "",
+            })
+          }
+          taskTitle={task?.title || "Task"}
+          field="status"
+          fieldName="Status"
+          currentValue={currentStatusObj?.label || currentStatus}
+          requestedValue={
+            changeReasonModal.requestedLabel || changeReasonModal.requestedStatus
+          }
+          onSubmit={async (reason) => {
+            await executeStatusChange(
+              changeReasonModal.requestedStatus,
+              reason,
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

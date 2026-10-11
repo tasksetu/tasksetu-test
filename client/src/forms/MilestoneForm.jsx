@@ -267,28 +267,6 @@ export function MilestoneForm({
         </div>
       </div>
 
-      {/* Visibility */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Visibility *
-        </label>
-        <select
-          value={formData.milestone?.visibility || "private"}
-          onChange={(e) => handleMilestoneChange("visibility", e.target.value)}
-          className="w-full h-9 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          data-testid="select-milestone-visibility"
-          required
-        >
-          <option value="private">Private</option>
-          <option value="project">Project Team</option>
-          <option value="organization">Organization</option>
-          <option value="public">Public</option>
-        </select>
-        <p className="text-xs text-gray-500 mt-1">
-          If created under a project: inherit project visibility.
-        </p>
-      </div>
-
       {/* Priority */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">

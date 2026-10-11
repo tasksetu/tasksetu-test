@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -18,9 +20,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Building, Globe, MapPin, Phone, Mail, Clock } from "lucide-react";
+import {
+  Building,
+  Globe,
+  MapPin,
+  Phone,
+  Mail,
+  Clock,
+  ShieldAlert,
+  CheckCircle2,
+  AlertTriangle,
+  Calendar,
+  Users,
+} from "lucide-react";
 
 export default function GeneralSettings() {
   const { toast } = useToast();
@@ -45,6 +69,38 @@ export default function GeneralSettings() {
     email: "",
   });
 
+  const [approvalToggles, setApprovalToggles] = useState({
+    dueDateApprovalEnabled: false,
+    statusApprovalEnabled: false,
+    priorityApprovalEnabled: false,
+    assigneeApprovalEnabled: false,
+  });
+
+  useEffect(() => {
+    const orgData = organization?.data || organization;
+    if (orgData) {
+      setFormData({
+        name: orgData.name || "",
+        description: orgData.description || "",
+        website: orgData.website || "",
+        industry: orgData.industry || "",
+        size: orgData.size || "",
+        address: orgData.address || "",
+        city: orgData.city || "",
+        country: orgData.country || "",
+        timezone: orgData.timezone || "",
+        phone: orgData.phone || "",
+        email: orgData.email || "",
+      });
+      setApprovalToggles({
+        dueDateApprovalEnabled: Boolean(orgData.dueDateApprovalEnabled),
+        statusApprovalEnabled: Boolean(orgData.statusApprovalEnabled),
+        priorityApprovalEnabled: Boolean(orgData.priorityApprovalEnabled),
+        assigneeApprovalEnabled: Boolean(orgData.assigneeApprovalEnabled),
+      });
+    }
+  }, [organization]);
+
   const updateSettingsMutation = useMutation({
     mutationFn: (data) => apiRequest("PUT", "/api/organization/settings", data),
     onSuccess: () => {
@@ -65,6 +121,43 @@ export default function GeneralSettings() {
       });
     },
   });
+
+  const toggleApprovalFieldMutation = useMutation({
+    mutationFn: ({ field, value }) =>
+      apiRequest("PATCH", "/api/organization/settings", {
+        [field]: value,
+      }),
+    onSuccess: (_, { field, value }) => {
+      setApprovalToggles((prev) => ({ ...prev, [field]: value }));
+      queryClient.invalidateQueries({
+        queryKey: ["/api/organization/settings"],
+      });
+      const fieldLabels = {
+        dueDateApprovalEnabled: "Due Date Approval",
+        statusApprovalEnabled: "Status Approval",
+        priorityApprovalEnabled: "Priority Approval",
+        assigneeApprovalEnabled: "Assignee Approval",
+      };
+      toast({
+        title: `${fieldLabels[field] || "Approval Rule"} ${value ? "Enabled" : "Disabled"}`,
+        description: value
+          ? "Employee changes to this field will now require creator approval."
+          : "Employee changes to this field will now be applied immediately without approval.",
+        variant: "default",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Action Failed",
+        description: error.message || "Failed to update approval setting",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleToggle = (field, currentVal) => {
+    toggleApprovalFieldMutation.mutate({ field, value: !currentVal });
+  };
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -360,6 +453,160 @@ export default function GeneralSettings() {
           </CardContent>
         </Card>
 
+        {/* Task Management Settings (Task Edit Approval Workflow) */}
+        <Card className="shadow-sm border-gray-200">
+          <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-100">
+            {(() => {
+              const activeCount = Object.values(approvalToggles).filter(Boolean).length;
+              return (
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-3 text-xl">
+                    <div className="p-2 bg-amber-100 rounded-sm">
+                      <ShieldAlert className="h-6 w-6 text-amber-600" />
+                    </div>
+                    Task Edit Approval
+                  </CardTitle>
+                  <Badge
+                    variant={activeCount > 0 ? "default" : "secondary"}
+                    className={
+                      activeCount > 0
+                        ? "bg-amber-600 hover:bg-amber-700 text-white font-medium"
+                        : "bg-gray-200 text-gray-700 font-medium"
+                    }
+                  >
+                    {activeCount > 0 ? `${activeCount} / 4 Rules Active` : "All Rules OFF"}
+                  </Badge>
+                </div>
+              );
+            })()}
+            <CardDescription className="text-base text-gray-600 mt-2">
+              Control whether employees need approval from the task creator when modifying specific task fields.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 p-7">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 1. Due Date Approval */}
+              <div className="flex items-start justify-between gap-4 p-4 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-blue-100 text-blue-700 rounded-md mt-0.5">
+                    <Calendar className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <Label htmlFor="dueDateApprovalToggle" className="text-sm font-bold text-gray-900 cursor-pointer">
+                      Due Date
+                    </Label>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                      Require creator approval when an employee changes the task due date.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                  <Switch
+                    id="dueDateApprovalToggle"
+                    checked={approvalToggles.dueDateApprovalEnabled}
+                    onCheckedChange={() => handleToggle("dueDateApprovalEnabled", approvalToggles.dueDateApprovalEnabled)}
+                    disabled={toggleApprovalFieldMutation.isPending}
+                  />
+                  <span className="text-xs font-semibold w-8 text-gray-700">
+                    {approvalToggles.dueDateApprovalEnabled ? "ON" : "OFF"}
+                  </span>
+                </div>
+              </div>
+
+              {/* 2. Status Approval */}
+              <div className="flex items-start justify-between gap-4 p-4 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-emerald-100 text-emerald-700 rounded-md mt-0.5">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <Label htmlFor="statusApprovalToggle" className="text-sm font-bold text-gray-900 cursor-pointer">
+                      Status
+                    </Label>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                      Require creator approval when an employee changes the task status.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                  <Switch
+                    id="statusApprovalToggle"
+                    checked={approvalToggles.statusApprovalEnabled}
+                    onCheckedChange={() => handleToggle("statusApprovalEnabled", approvalToggles.statusApprovalEnabled)}
+                    disabled={toggleApprovalFieldMutation.isPending}
+                  />
+                  <span className="text-xs font-semibold w-8 text-gray-700">
+                    {approvalToggles.statusApprovalEnabled ? "ON" : "OFF"}
+                  </span>
+                </div>
+              </div>
+
+              {/* 3. Priority Approval */}
+              <div className="flex items-start justify-between gap-4 p-4 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-amber-100 text-amber-700 rounded-md mt-0.5">
+                    <AlertTriangle className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <Label htmlFor="priorityApprovalToggle" className="text-sm font-bold text-gray-900 cursor-pointer">
+                      Priority
+                    </Label>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                      Require creator approval when an employee changes the task priority.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                  <Switch
+                    id="priorityApprovalToggle"
+                    checked={approvalToggles.priorityApprovalEnabled}
+                    onCheckedChange={() => handleToggle("priorityApprovalEnabled", approvalToggles.priorityApprovalEnabled)}
+                    disabled={toggleApprovalFieldMutation.isPending}
+                  />
+                  <span className="text-xs font-semibold w-8 text-gray-700">
+                    {approvalToggles.priorityApprovalEnabled ? "ON" : "OFF"}
+                  </span>
+                </div>
+              </div>
+
+              {/* 4. Assignee Approval */}
+              <div className="flex items-start justify-between gap-4 p-4 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-purple-100 text-purple-700 rounded-md mt-0.5">
+                    <Users className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <Label htmlFor="assigneeApprovalToggle" className="text-sm font-bold text-gray-900 cursor-pointer">
+                      Assignee
+                    </Label>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                      Require creator approval when an employee changes the task assignee.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                  <Switch
+                    id="assigneeApprovalToggle"
+                    checked={approvalToggles.assigneeApprovalEnabled}
+                    onCheckedChange={() => handleToggle("assigneeApprovalEnabled", approvalToggles.assigneeApprovalEnabled)}
+                    disabled={toggleApprovalFieldMutation.isPending}
+                  />
+                  <span className="text-xs font-semibold w-8 text-gray-700">
+                    {approvalToggles.assigneeApprovalEnabled ? "ON" : "OFF"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-amber-50/60 border border-amber-200/80 text-xs text-slate-700 space-y-1.5">
+              <div className="font-semibold text-slate-900">Governance Policy Details:</div>
+              <div>• <strong>ON:</strong> When an employee modifies this protected field, changes are not applied immediately; a Task Change Request is submitted to the creator for approval.</div>
+              <div>• <strong>OFF (Default):</strong> Changes are applied immediately without requiring approval.</div>
+              <div>• <strong>Note:</strong> Authorized managers, creators, and admins retain direct modification authority without triggering approval.</div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Save Button */}
         <div className="border-t border-gray-200 pt-8">
           <div className="flex justify-between items-center">
@@ -383,6 +630,8 @@ export default function GeneralSettings() {
           </div>
         </div>
       </form>
+
+
     </div>
   );
 }

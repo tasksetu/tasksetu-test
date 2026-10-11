@@ -174,6 +174,7 @@ export default function MilestoneCreator({
     if (validateForm()) {
       const milestoneData = {
         ...formData,
+        visibility: "private",
         type: "milestone",
         taskType: "milestone",
       };
@@ -475,7 +476,7 @@ export default function MilestoneCreator({
           </div>
 
           {/* Priority */}
-          <div className="form-group">
+          <div className="form-group col-span-2 md:col-span-2 lg:col-span-2">
             <label className="form-label flex items-center gap-2">
               <svg
                 className="w-4 h-4 text-orange-500"
@@ -514,51 +515,6 @@ export default function MilestoneCreator({
                 handleInputChange("priority", selectedOption.value)
               }
             />
-          </div>
-
-          {/* Visibility */}
-          <div className="form-group">
-            <label className="form-label flex items-center gap-2">
-              <svg
-                className="w-4 h-4 text-yellow-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                />
-              </svg>
-              Visibility
-            </label>
-            <SearchableSelect
-              options={[
-                { value: "private", label: "🔒 Private" },
-                { value: "public", label: "👥 Public" },
-              ]}
-              value={{
-                value: formData.visibility,
-                label:
-                  formData.visibility === "private"
-                    ? "🔒 Private"
-                    : "👥 Public",
-              }}
-              onChange={(selectedOption) =>
-                handleInputChange("visibility", selectedOption.value)
-              }
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Inherits from parent project settings
-            </p>
           </div>
         </div>
 

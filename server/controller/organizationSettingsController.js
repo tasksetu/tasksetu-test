@@ -1,28 +1,49 @@
 import { User } from "../modals/userModal.js";
+import { Organization } from "../modals/organizationModal.js";
+import { TaskChangeRequestService } from "../services/taskChangeRequestService.js";
 import mongoose from "mongoose";
 import * as r2Storage from '../services/r2Storage.js';
-
-// In production, you'd have an OrganizationSettings model
-// For now, we'll use a simple structure
 
 /**
  * Get organization settings
  * GET /api/organization/settings
+ * GET /api/organizations/:organizationId/settings
  */
 export const getSettings = async (req, res) => {
   try {
-    const organizationId = req.user.organizationId;
+    const requestedOrgId = req.params?.organizationId;
+    const organizationId = requestedOrgId || req.user.organizationId;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "Organization ID is required",
+      });
+    }
+
+    // Multi-tenant check: if requesting specific org, verify user belongs to it or is super_admin
+    const userRole = Array.isArray(req.user.role) ? req.user.role[0] : req.user.role;
+    const isSuperAdmin = ["super_admin", "super-admin", "tasksetu-admin"].includes(userRole);
+    if (requestedOrgId && !isSuperAdmin && String(req.user.organizationId) !== String(requestedOrgId)) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to view settings for this organization",
+      });
+    }
 
     console.log(`⚙️ Fetching settings for organization: ${organizationId}`);
 
-    // TODO: Fetch from OrganizationSettings collection
-    // For now, return default settings
-    const settings = {
+    const org = await Organization.findById(organizationId).lean();
+
+    const approvalSettings =
+      await TaskChangeRequestService.getOrganizationApprovalSettings(organizationId);
+
+    const defaultSettings = {
       branding: {
-        logo: null,
+        logo: org?.logo || null,
         primaryColor: "#3B82F6",
         secondaryColor: "#1E40AF",
-        companyName: "Your Company"
+        companyName: org?.name || "Your Company",
       },
       notifications: {
         emailEnabled: true,
@@ -32,37 +53,170 @@ export const getSettings = async (req, res) => {
           taskAssigned: true,
           taskCompleted: true,
           commentAdded: true,
-          dueDate: true
-        }
+          dueDate: true,
+        },
       },
       regional: {
-        timezone: "UTC",
+        timezone: org?.settings?.timezone || "UTC",
         workingHours: {
           start: "09:00",
           end: "17:00",
-          weekends: ["Saturday", "Sunday"]
+          weekends: ["Saturday", "Sunday"],
         },
         dateFormat: "MM/DD/YYYY",
-        timeFormat: "12h"
+        timeFormat: "12h",
       },
       templates: {
         task: [],
         workflow: [],
-        email: []
-      }
+        email: [],
+      },
+    };
+
+    const responseData = {
+      ...defaultSettings,
+      ...(org?.settings || {}),
+      ...approvalSettings,
+      _id: org?._id,
+      id: org?._id,
+      name: org?.name || "",
+      description: org?.description || "",
+      website: org?.website || "",
+      industry: org?.industry || "",
+      size: org?.size || "",
+      numberOfEmployees: org?.numberOfEmployees,
+      phone: org?.settings?.phone || "",
+      email: org?.settings?.email || "",
+      address: org?.settings?.address || "",
+      city: org?.settings?.city || "",
+      country: org?.settings?.country || "",
+      timezone: org?.settings?.timezone || "UTC",
     };
 
     return res.status(200).json({
       success: true,
-      data: settings
+      data: responseData,
     });
-
   } catch (error) {
     console.error("❌ Get settings error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch settings",
-      error: error.message
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Update organization settings
+ * PUT /api/organization/settings
+ * PATCH /api/organization/settings
+ * PUT /api/organizations/:organizationId/settings
+ * PATCH /api/organizations/:organizationId/settings
+ */
+export const updateSettings = async (req, res) => {
+  try {
+    const requestedOrgId = req.params?.organizationId;
+    const organizationId = requestedOrgId || req.user.organizationId;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: "Organization ID is required",
+      });
+    }
+
+    // Multi-tenant check
+    const userRole = Array.isArray(req.user.role) ? req.user.role[0] : req.user.role;
+    const isSuperAdmin = ["super_admin", "super-admin", "tasksetu-admin"].includes(userRole);
+    if (requestedOrgId && !isSuperAdmin && String(req.user.organizationId) !== String(requestedOrgId)) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to modify settings for this organization",
+      });
+    }
+
+    console.log(`⚙️ Updating settings for organization: ${organizationId}`, req.body);
+
+    const org = await Organization.findById(organizationId);
+    if (!org) {
+      return res.status(404).json({
+        success: false,
+        message: "Organization not found",
+      });
+    }
+
+    // Handle task edit approval toggles if provided
+    let approvalSettingResult = null;
+    const hasApprovalUpdate =
+      req.body.dueDateApprovalEnabled !== undefined ||
+      req.body.statusApprovalEnabled !== undefined ||
+      req.body.priorityApprovalEnabled !== undefined ||
+      req.body.assigneeApprovalEnabled !== undefined ||
+      req.body.taskEditApprovalEnabled !== undefined;
+
+    if (hasApprovalUpdate) {
+      approvalSettingResult =
+        await TaskChangeRequestService.updateOrganizationApprovalSettings({
+          organizationId,
+          settings: req.body,
+          enabled: req.body.taskEditApprovalEnabled,
+          user: req.user,
+        });
+    }
+
+    // Handle other organization fields if provided
+    const {
+      name,
+      description,
+      website,
+      industry,
+      size,
+      phone,
+      email,
+      address,
+      city,
+      country,
+      timezone,
+    } = req.body;
+
+    if (name) org.name = name;
+    if (description !== undefined) org.description = description;
+    if (website !== undefined) org.website = website;
+    if (industry !== undefined) org.industry = industry;
+    if (size !== undefined) org.size = size;
+
+    if (!org.settings) org.settings = {};
+    if (phone !== undefined) org.settings.phone = phone;
+    if (email !== undefined) org.settings.email = email;
+    if (address !== undefined) org.settings.address = address;
+    if (city !== undefined) org.settings.city = city;
+    if (country !== undefined) org.settings.country = country;
+    if (timezone !== undefined) org.settings.timezone = timezone;
+
+    org.markModified("settings");
+    await org.save();
+
+    const approvalSettings =
+      await TaskChangeRequestService.getOrganizationApprovalSettings(organizationId);
+
+    return res.status(200).json({
+      success: true,
+      message:
+        approvalSettingResult?.message ||
+        "Organization settings updated successfully",
+      data: {
+        ...org.toObject(),
+        ...approvalSettings,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Update settings error:", error);
+    const statusCode = error.status || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || "Failed to update settings",
+      error: error.message,
     });
   }
 };

@@ -43,6 +43,13 @@ export class ActivityHelper {
     APPROVAL_APPROVED: { type: 'approval_approved', icon: '✅', category: 'approval' },
     APPROVAL_REJECTED: { type: 'approval_rejected', icon: '❌', category: 'approval' },
 
+    // Task Change Request activities
+    CHANGE_REQUEST_CREATED: { type: 'change_request_created', icon: '📋', category: 'approval' },
+    CHANGE_REQUEST_APPROVED: { type: 'change_request_approved', icon: '✅', category: 'approval' },
+    CHANGE_REQUEST_REJECTED: { type: 'change_request_rejected', icon: '❌', category: 'approval' },
+    CHANGE_REQUEST_CONFLICT: { type: 'change_request_conflict', icon: '⚠️', category: 'approval' },
+    CHANGE_REQUEST_CANCELLED: { type: 'change_request_cancelled', icon: '🚫', category: 'approval' },
+
     // File activities
     FILE_ATTACHED: { type: 'file_attached', icon: '📎', category: 'file' },
     FILE_REMOVED: { type: 'file_removed', icon: '🗑️', category: 'file' },
@@ -174,6 +181,21 @@ export class ActivityHelper {
 
       case 'approval_rejected':
         return `Task "${taskTitle}" approval was rejected`;
+
+      case 'change_request_created':
+        return `Task change request submitted for "${taskTitle}" by ${userName || 'employee'}`;
+
+      case 'change_request_approved':
+        return `Task change request approved for "${taskTitle}"`;
+
+      case 'change_request_rejected':
+        return `Task change request rejected for "${taskTitle}"`;
+
+      case 'change_request_conflict':
+        return `Task change request conflict detected for "${taskTitle}"`;
+
+      case 'change_request_cancelled':
+        return `Task change request cancelled for "${taskTitle}"`;
 
       case 'file_attached':
         return `File "${fileName}" was attached to task "${taskTitle}"`;

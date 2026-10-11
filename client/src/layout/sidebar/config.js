@@ -80,7 +80,7 @@ const baseItems = {
       },
       {
         id: "create-milestone",
-        label: "Milestone",
+        label: "Milestone Task",
         icon: MilestoneTaskIcon,
         path: "/tasks/create?type=milestone",
       },
@@ -88,7 +88,7 @@ const baseItems = {
   },
   quickTasks: {
     id: "quick-tasks",
-    label: "Quick Tasks",
+    label: "Quick Task",
     icon: Zap,
     path: "/quick-tasks",
     feature: "TASK_QUICK",
@@ -116,7 +116,7 @@ const baseItems = {
   // },
   approvals: {
     id: "approvals",
-    label: "Approvals",
+    label: "Approval Task",
     icon: ApprovalTaskIcon,
     path: "/approvals",
     feature: "TASK_APPROVAL",

@@ -193,6 +193,7 @@ export default function EmailSubtaskForm({
 
     const payload = {
       ...data,
+      visibility: "private",
       taskType: "email",
       mainTaskType: "email",
       linkedTaskId,

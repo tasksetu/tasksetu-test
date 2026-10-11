@@ -78,7 +78,7 @@ export function TaskForm({ onSubmit, onSaveDraft, onClose, initialData = {} }) {
     },
 
     ...initialData,
-  });
+  }));
 
   const [validationErrors, setValidationErrors] = useState({});
 
@@ -155,6 +155,7 @@ export function TaskForm({ onSubmit, onSaveDraft, onClose, initialData = {} }) {
 
       const submissionData = {
         ...formData,
+        visibility: "private",
         taskType: formData.isMilestone
           ? "milestone"
           : formData.isApproval

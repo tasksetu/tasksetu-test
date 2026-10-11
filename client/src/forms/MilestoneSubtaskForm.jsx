@@ -405,7 +405,7 @@ const MilestoneSubtaskForm = ({
       dueDate: data.dueDate,
       priority: data.priority?.value || data.priority || "medium",
       status: data.status || "OPEN",
-      visibility: data.visibility || "private",
+      visibility: "private",
       assignee: data.assignedTo?.value || data.assignedTo || "self",
       assignedTo: data.assignedTo?.value || data.assignedTo || "self",
       collaborators: data.collaborators?.map((c) => c.value) || [],
@@ -721,38 +721,6 @@ const MilestoneSubtaskForm = ({
             )}
           />
         </div>
-      </div>
-
-      {/* Visibility */}
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1">
-          Visibility <span className="text-red-500">*</span>
-        </label>
-        <div className="flex items-center gap-6 mt-1">
-          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-            <input
-              type="radio"
-              value="private"
-              {...register("visibility")}
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-            />
-            Private
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
-            <input
-              type="radio"
-              value="team"
-              {...register("visibility")}
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-            />
-            Team
-          </label>
-        </div>
-        <p className="text-xs text-gray-500 mt-1">
-          {watch("visibility") === "private"
-            ? "Private: Only you and assignee can view."
-            : "Team: All team members can view."}
-        </p>
       </div>
 
       {/* Submit Controls */}

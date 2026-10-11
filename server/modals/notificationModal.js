@@ -34,7 +34,10 @@ export const TriggerEvent = {
   SYSTEM_MAINTENANCE: 'system_maintenance', // ✅ NEW: referenced in notificationService but was missing
   SECURITY_ALERT: 'security_alert',         // ✅ NEW: referenced in notificationService but was missing
   LICENSE_EXPIRY_REMINDER: 'license_expiry_reminder', // ✅ NEW: license expiry warnings
-  SYSTEM_TEST: 'system_test'
+  SYSTEM_TEST: 'system_test',
+  TASK_CHANGE_REQUESTED: 'task_change_requested',
+  TASK_CHANGE_APPROVED: 'task_change_approved',
+  TASK_CHANGE_REJECTED: 'task_change_rejected',
 };
 
 export const EntityType = {
@@ -42,6 +45,7 @@ export const EntityType = {
   SUBTASK: 'subtask',
   QUICK_TASK: 'quick_task',
   APPROVAL: 'approval',
+  TASK_CHANGE_REQUEST: 'task_change_request',
   COMMENT: 'comment',
   ATTACHMENT: 'attachment',
   MILESTONE: 'milestone',

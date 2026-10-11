@@ -207,7 +207,10 @@ const TaskTable = React.memo(function TaskTable({
   ];
   const formatDateTime = (dateStr) => {
     if (!dateStr) return "-";
-    const d = new Date(dateStr);
+    const str = String(dateStr).trim();
+    const hasTimezone =
+      /[Zz]$|(T\d{2}:\d{2}(:\d{2})?(\.[0-9]+)?[+-]\d{2}:?\d{2})$/.test(str);
+    const d = new Date(hasTimezone ? str : str + "Z");
     if (isNaN(d.getTime())) return "-";
 
     const day = d.getUTCDate();
@@ -230,7 +233,10 @@ const TaskTable = React.memo(function TaskTable({
       const dateStr =
         overrideDateStr || task.dueDate || task.recurringConfig?.startDate;
       if (!dateStr) return "-";
-      const d = new Date(dateStr);
+      const str = String(dateStr).trim();
+      const hasTimezone =
+        /[Zz]$|(T\d{2}:\d{2}(:\d{2})?(\.[0-9]+)?[+-]\d{2}:?\d{2})$/.test(str);
+      const d = new Date(hasTimezone ? str : str + "Z");
       if (isNaN(d.getTime())) return "-";
 
       const day = d.getUTCDate();
@@ -555,10 +561,11 @@ const TaskTable = React.memo(function TaskTable({
                           task={task}
                           currentStatus={task.status}
                           statuses={companyStatuses}
-                          onStatusChange={(newStatus) =>
+                          onStatusChange={(newStatus, reason) =>
                             applyTaskStatusUpdateFromDropdown(
                               task.id ?? task._id,
                               newStatus,
+                              reason,
                             )
                           }
                           canEdit={canEditTaskStatusFn(task, currentUser)}
@@ -1146,10 +1153,11 @@ const TaskTable = React.memo(function TaskTable({
                               task={instance}
                               currentStatus={instance.status}
                               statuses={companyStatuses}
-                              onStatusChange={(newStatus) =>
+                              onStatusChange={(newStatus, reason) =>
                                 applyTaskStatusUpdateFromDropdown(
                                   instance.id ?? instance._id,
                                   newStatus,
+                                  reason,
                                 )
                               }
                               canEdit={canEditTaskStatusFn(

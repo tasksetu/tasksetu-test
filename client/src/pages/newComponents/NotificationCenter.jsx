@@ -8,6 +8,7 @@ import { useShowToast } from "@/utils/ToastMessage";
 import { useAuth } from "../../features/shared/hooks/useAuth";
 import { getTimezoneOptions } from "../../utils/timezoneList";
 import { Loader } from "lucide-react";
+import eventEmitter from "../../utils/eventEmitter";
 
 // API base URL
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -61,7 +62,7 @@ const mapPriority = (priority) => {
 };
 
 export default function NotificationCenter() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { showSuccessToast, showErrorToast } = useShowToast();
   const { user, role: userRole, refetch: refetchUser } = useAuth();
 
@@ -134,7 +135,18 @@ export default function NotificationCenter() {
   const [settingsLoading, setSettingsLoading] = useState(false);
 
   const [filter, setFilter] = useState("all");
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const isSettingsPath =
+      window.location.pathname === "/settings/notifications" ||
+      window.location.pathname === "/notification-settings";
+    return (
+      isSettingsPath ||
+      params.get("settings") === "true" ||
+      params.get("tab") === "settings" ||
+      params.get("view") === "settings"
+    );
+  });
 
   // Fetch notifications from API
   const fetchNotifications = useCallback(async () => {
@@ -336,6 +348,53 @@ export default function NotificationCenter() {
     fetchNotificationSettings();
   }, [fetchNotifications, fetchNotificationSettings]);
 
+  // Sync showSettings from URL parameters and route changes
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const isSettingsPath =
+      window.location.pathname === "/settings/notifications" ||
+      window.location.pathname === "/notification-settings";
+    const shouldShow =
+      isSettingsPath ||
+      params.get("settings") === "true" ||
+      params.get("tab") === "settings" ||
+      params.get("view") === "settings";
+
+    if (shouldShow) {
+      setShowSettings(true);
+      fetchNotificationSettings();
+    }
+  }, [location, fetchNotificationSettings]);
+
+  // Listen to open-notification-settings event and browser navigation
+  useEffect(() => {
+    const handleOpenSettings = () => {
+      setShowSettings(true);
+      fetchNotificationSettings();
+    };
+
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const isSettingsPath =
+        window.location.pathname === "/settings/notifications" ||
+        window.location.pathname === "/notification-settings";
+      const shouldShow =
+        isSettingsPath ||
+        params.get("settings") === "true" ||
+        params.get("tab") === "settings" ||
+        params.get("view") === "settings";
+      setShowSettings(shouldShow);
+    };
+
+    eventEmitter.on("open-notification-settings", handleOpenSettings);
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      eventEmitter.off("open-notification-settings", handleOpenSettings);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [fetchNotificationSettings]);
+
   // Poll for new notifications every minute
   useEffect(() => {
     const interval = setInterval(() => {
@@ -435,12 +494,35 @@ export default function NotificationCenter() {
     deleteNotification(notificationId);
   };
 
+  const handleBackFromSettings = () => {
+    setShowSettings(false);
+    if (window.location.pathname === "/settings/notifications") {
+      setLocation("/notifications");
+      return;
+    }
+    const url = new URL(window.location.href);
+    if (
+      url.searchParams.has("settings") ||
+      url.searchParams.has("tab") ||
+      url.searchParams.has("view")
+    ) {
+      url.searchParams.delete("settings");
+      url.searchParams.delete("tab");
+      url.searchParams.delete("view");
+      window.history.replaceState(
+        {},
+        "",
+        url.pathname + (url.search ? url.search : "")
+      );
+    }
+  };
+
   if (showSettings) {
     return (
       <NotificationSettings
         settings={notificationSettings}
         onSettingsChange={updateNotificationSettings}
-        onBack={() => setShowSettings(false)}
+        onBack={handleBackFromSettings}
         isLoading={settingsLoading}
         hasAdvancedNotifications={hasAdvancedNotifications}
         licenseTier={license?.code || "EXPLORE"}

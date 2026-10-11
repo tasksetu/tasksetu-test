@@ -101,10 +101,8 @@ const EnhancedRegularTaskForm = ({
   const getCurrentDateTime = () => toDatetimeLocal(new Date());
 
   const handleFormSubmit = (data) => {
-    // Ensure visibility is set appropriately based on permissions
-    if (!fields.canManageVisibility) {
-      data.visibility = "private";
-    }
+    // Ensure visibility is always private
+    data.visibility = "private";
 
     onSubmit(data);
   };
@@ -280,52 +278,6 @@ const EnhancedRegularTaskForm = ({
             )}
           </div>
         </div>
-
-        {/* Visibility Field with RBAC */}
-        <VisibilityFieldGuard defaultValue="private">
-          <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
-              Visibility <span className="text-red-500">*</span>
-            </label>
-            <div className="flex space-x-3">
-              <label className="flex items-center">
-                <input
-                  {...register("visibility")}
-                  type="radio"
-                  value="private"
-                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                  data-testid="radio-private"
-                />
-                <span className="ml-2 text-sm text-gray-900">Private</span>
-              </label>
-              {isOrgUser && (
-                <label className="flex items-center">
-                  <input
-                    {...register("visibility")}
-                    type="radio"
-                    value="team"
-                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                    data-testid="radio-team"
-                  />
-                  <span className="ml-2 text-sm text-gray-900">Team</span>
-                </label>
-              )}
-              <label className="flex items-center">
-                <input
-                  {...register("visibility")}
-                  type="radio"
-                  value="public"
-                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                  data-testid="radio-public"
-                />
-                <span className="ml-2 text-sm text-gray-900">Public</span>
-              </label>
-            </div>
-            <p className="text-blue-600 text-xs mt-1">
-              ℹ️ Visibility settings control who can see this task
-            </p>
-          </div>
-        </VisibilityFieldGuard>
 
         {/* Advanced Features - Show only to managers and above */}
         <AdvancedFeaturesGuard feature="milestones">

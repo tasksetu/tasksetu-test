@@ -271,7 +271,7 @@ export default function ApprovalManager() {
         description: editFormData.description,
         priority: editFormData.priority,
         dueDate: editFormData.dueDate,
-        visibility: editFormData.visibility,
+        visibility: "private",
         approvalMode: editFormData.mode,
       };
 
@@ -1071,53 +1071,6 @@ export default function ApprovalManager() {
                       <option value="sequential">Sequential</option>
                     </select>
                   </div>
-                </div>
-
-                {/* Visibility Section */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Task Visibility <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex space-x-3">
-                    <label className="flex items-center px-4 py-2.5 cursor-pointer transition-all ">
-                      <input
-                        type="radio"
-                        value="private"
-                        checked={editFormData.visibility === "private"}
-                        onChange={(e) =>
-                          setEditFormData({
-                            ...editFormData,
-                            visibility: e.target.value,
-                          })
-                        }
-                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                      />
-                      <span className="ml-2 text-sm font-medium text-gray-900">
-                        Private
-                      </span>
-                    </label>
-                    <label className="flex items-center px-4 py-2.5 cursor-pointer transition-all ">
-                      <input
-                        type="radio"
-                        value="public"
-                        checked={editFormData.visibility === "public"}
-                        onChange={(e) =>
-                          setEditFormData({
-                            ...editFormData,
-                            visibility: e.target.value,
-                          })
-                        }
-                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                      />
-                      <span className="ml-2 text-sm font-medium text-gray-900">
-                        Public
-                      </span>
-                    </label>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Choose whether this task is visible to all or only assigned
-                    members
-                  </p>
                 </div>
               </div>
             </form>

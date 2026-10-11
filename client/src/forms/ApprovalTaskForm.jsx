@@ -353,7 +353,7 @@ const ApprovalTaskForm = ({
       attachments: uploadedFiles,
       priority: data.priority?.value || data.priority,
       assignedTo: data.assignedTo?.value || data.assignedTo,
-      visibility: data.visibility,
+      visibility: "private",
       collaborators:
         data.collaborators?.map((c) => ({ id: c.value, value: c.value })) || [],
       taskType: "approval",
@@ -970,37 +970,6 @@ const ApprovalTaskForm = ({
         <p className="text-xs text-gray-500 mt-1">
           Collaborators will be notified but are not approvers
         </p>
-      </div>
-
-      {/* Visibility */}
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1">
-          Visibility <span className="text-red-500">*</span>
-        </label>
-        <div className="flex space-x-3">
-          <label className="flex items-center">
-            <input
-              {...register("visibility")}
-              type="radio"
-              value="private"
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-              data-testid="radio-private"
-            />
-            <span className="ml-2 text-sm text-gray-900">Private</span>
-          </label>
-          {isOrgUser && (
-            <label className="flex items-center">
-              <input
-                {...register("visibility")}
-                type="radio"
-                value="team"
-                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                data-testid="radio-team"
-              />
-              <span className="ml-2 text-sm text-gray-900">Team</span>
-            </label>
-          )}
-        </div>
       </div>
 
       {/* Restrictions Information */}

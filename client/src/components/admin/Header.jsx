@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import ProfileUpdateModal from "@/components/profile/ProfileUpdateModal";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import TaskChangeApprovalModal from "@/components/modals/TaskChangeApprovalModal";
 import RoleSwitcher, { getRoleDisplayName } from "../RoleSwitcher";
 import { useAuthStore } from "../../stores/useAuthStore";
 import { quickTasksAPI } from "../../services/quickTasksAPI";
@@ -35,6 +36,8 @@ export default function Header({ user, onMenuClick }) {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [activeChangeRequestId, setActiveChangeRequestId] = useState(null);
   const notificationRef = useRef(null);
   const [quickTaskText, setQuickTaskText] = useState("");
   const [isSubmittingQuickTask, setIsSubmittingQuickTask] = useState(false);
@@ -225,6 +228,9 @@ export default function Header({ user, onMenuClick }) {
       approval_requested: "📋",
       approval_approved: "✅",
       approval_denied: "❌",
+      task_change_requested: "📋",
+      task_change_approved: "✅",
+      task_change_rejected: "❌",
       task_reminder: "🔔",
       system_test: "🧪",
       assignment: "👤",
@@ -276,6 +282,23 @@ export default function Header({ user, onMenuClick }) {
     );
 
     const { related_entity } = notification;
+    const changeRequestId =
+      notification.metadata?.changeRequestId ||
+      (related_entity?.entity_type === "task_change_request" ? related_entity.entity_id : null);
+
+    if (
+      notification.trigger_event === "task_change_requested" ||
+      notification.trigger_event === "approval_requested" ||
+      related_entity?.entity_type === "task_change_request" ||
+      changeRequestId
+    ) {
+      if (changeRequestId) {
+        setActiveChangeRequestId(changeRequestId);
+        setShowApprovalModal(true);
+        return;
+      }
+    }
+
     if (!related_entity) return;
 
     const { entity_type, entity_id } = related_entity;
@@ -429,12 +452,29 @@ export default function Header({ user, onMenuClick }) {
                     <h3 className="text-base sm:text-lg font-semibold text-gray-900">
                       Notifications
                     </h3>
-                    <Link
-                      href="/notifications"
-                      className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-medium hover:underline"
-                    >
-                      Read All
-                    </Link>
+                    <div className="flex items-center space-x-2.5">
+                      <Link
+                        href="/notifications"
+                        onClick={() => setShowNotifications(false)}
+                        className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                      >
+                        Read All
+                      </Link>
+                      <span className="text-gray-300">|</span>
+                      <Link
+                        href="/notifications?settings=true"
+                        onClick={() => {
+                          setShowNotifications(false);
+                          setLocation("/notifications?settings=true");
+                          eventEmitter.emit("open-notification-settings");
+                        }}
+                        className="inline-flex items-center gap-1 text-xs sm:text-sm text-gray-600 hover:text-gray-900 font-medium hover:underline transition-colors cursor-pointer"
+                        title="Notification Settings"
+                      >
+                        <Settings className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-500 hover:text-gray-700" />
+                        <span>Settings</span>
+                      </Link>
+                    </div>
                   </div>
                 </div>
 
@@ -564,13 +604,13 @@ export default function Header({ user, onMenuClick }) {
                 <Edit3 className="mr-2 sm:mr-3 h-3 w-3 sm:h-4 sm:w-4 text-gray-500" />
                 <span>Edit Profile</span>
               </DropdownMenuItem>
-              <DropdownMenuItem
+              {/* <DropdownMenuItem
                 onClick={() => setLocation("/notifications?settings=true")}
                 className="cursor-pointer hover:bg-gray-50 text-xs sm:text-sm"
               >
                 <Settings className="mr-2 sm:mr-3 h-3 w-3 sm:h-4 sm:w-4 text-gray-500" />
                 <span>Settings</span>
-              </DropdownMenuItem>
+              </DropdownMenuItem> */}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={handleLogout}
@@ -623,6 +663,20 @@ export default function Header({ user, onMenuClick }) {
           </div>
         </div>
       )}
+
+      {/* Task Change Approval Modal (In-App popup) */}
+      <TaskChangeApprovalModal
+        isOpen={showApprovalModal}
+        onClose={() => {
+          setShowApprovalModal(false);
+          setActiveChangeRequestId(null);
+        }}
+        changeRequestId={activeChangeRequestId}
+        onDecisionComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+        }}
+      />
     </header>
   );
 }

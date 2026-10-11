@@ -1093,9 +1093,9 @@ const RecurringTaskManager = () => {
                   <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
                     Task Settings
                   </h3>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     {recurringTaskFormModel
-                      .filter((f) => f.section === "settings")
+                      .filter((f) => f.section === "settings" && f.name !== "visibility")
                       .map((field) => {
                         // ✅ Disable Frequency field (show as display-only)
                         const isFrequencyField = field.name === "frequency";
@@ -1157,8 +1157,7 @@ const RecurringTaskManager = () => {
                       })}
                   </div>
                   <p className="text-xs text-gray-500">
-                    Configure priority (Low, Medium, High, Critical) and
-                    visibility (Private{canAssignToOthers ? ", Public" : ""}).
+                    Configure priority (Low, Medium, High, Critical).
                     Pattern frequency cannot be changed after creation.
                   </p>
                 </div>

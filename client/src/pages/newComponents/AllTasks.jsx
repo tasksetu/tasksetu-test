@@ -332,7 +332,12 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
       };
       const backendStatus =
         statusMapping[newStatusCode] || newStatusCode?.toString().toUpperCase();
-      const payload = { status: backendStatus, notes: reason || undefined };
+      const payload = {
+        status: backendStatus,
+        notes: reason || undefined,
+        reason: reason || undefined,
+        changeReason: reason || undefined,
+      };
       if (newStatusCode === "DONE")
         payload.completedDate = new Date().toISOString();
 
@@ -346,9 +351,14 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
 
       if (!response.data?.success)
         throw new Error(response.data?.message || "Failed to update status");
-      return { taskId, newStatusCode, taskTitle: task.title };
+      return {
+        taskId,
+        newStatusCode,
+        taskTitle: task.title,
+        responseData: response.data,
+      };
     },
-    onMutate: async ({ taskId, newStatusCode }) => {
+    onMutate: async ({ taskId, newStatusCode, reason }) => {
       await queryClient.cancelQueries({
         queryKey: [
           "allTasks",
@@ -372,38 +382,42 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
         showSnooze,
       ]);
 
-      queryClient.setQueryData(
-        [
-          "allTasks",
-          activeRole,
-          searchTerm,
-          statusFilter,
-          priorityFilter,
-          taskTypeFilter,
-          dueDateFilter,
-          showSnooze,
-        ],
-        (old) => {
-          if (!old) return old;
-          const statusObj = companyStatuses.find(
-            (s) => s.code === newStatusCode,
-          );
-          const mappedTasks = old.tasks.map((t) =>
-            t.id === taskId || t._id === taskId
-              ? {
-                  ...t,
-                  status: newStatusCode,
-                  statusColor: statusObj?.color,
-                  progress: newStatusCode === "DONE" ? 100 : t.progress,
-                }
-              : t,
-          );
-          return {
-            ...old,
-            tasks: recalculateMilestonesInList(mappedTasks),
-          };
-        },
-      );
+      // Only perform optimistic UI update if no reason was supplied
+      // (If a reason is supplied, this is an approval request, so the status should remain pending approval)
+      if (!reason) {
+        queryClient.setQueryData(
+          [
+            "allTasks",
+            activeRole,
+            searchTerm,
+            statusFilter,
+            priorityFilter,
+            taskTypeFilter,
+            dueDateFilter,
+            showSnooze,
+          ],
+          (old) => {
+            if (!old) return old;
+            const statusObj = companyStatuses.find(
+              (s) => s.code === newStatusCode,
+            );
+            const mappedTasks = old.tasks.map((t) =>
+              t.id === taskId || t._id === taskId
+                ? {
+                    ...t,
+                    status: newStatusCode,
+                    statusColor: statusObj?.color,
+                    progress: newStatusCode === "DONE" ? 100 : t.progress,
+                  }
+                : t,
+            );
+            return {
+              ...old,
+              tasks: recalculateMilestonesInList(mappedTasks),
+            };
+          },
+        );
+      }
 
       return { previousTasks };
     },
@@ -424,6 +438,15 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
       showErrorToast?.(err.response?.data?.message || err.message || "Failed to update status");
     },
     onSuccess: (data) => {
+      if (data?.responseData?.requiresApproval) {
+        showSuccessToast?.(
+          data.responseData.message ||
+            "Your status change has been submitted for approval.",
+        );
+        queryClient.invalidateQueries({ queryKey: ["allTasks"] });
+        return;
+      }
+
       const newStatus = companyStatuses.find(
         (s) => s.code === data.newStatusCode,
       );
@@ -435,7 +458,7 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
   });
 
   const applyTaskStatusUpdateFromDropdown = (taskId, newStatusCode, reason) => {
-    updateTaskStatusMutation.mutate({ taskId, newStatusCode, reason });
+    return updateTaskStatusMutation.mutateAsync({ taskId, newStatusCode, reason });
   };
 
   // ── Task operations hook ───────────────────────────────────────────────────
@@ -1080,7 +1103,7 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium text-blue-800">
                   Active Filters:
-                </span>
+                </span> 
                 {searchTerm && (
                   <FilterChip
                     label={`Search: "${searchTerm}"`}

@@ -432,7 +432,7 @@ const MilestoneTaskForm = ({
         .trim()
         .toLowerCase(),
       dueDate: data.dueDate,
-      visibility: data.visibility === "public" ? "team" : data.visibility, // Map public to team for backend compatibility
+      visibility: "private",
       collaborators: data.collaborators
         ? data.collaborators.map((c) => c.value || c.id || c)
         : [],
@@ -825,42 +825,6 @@ const MilestoneTaskForm = ({
           </p> */}
           </div>
         )}
-      </div>
-
-      {/* Visibility */}
-      <div>
-        <label className="block text-sm font-medium text-gray-900 mb-1">
-          Visibility <span className="text-red-500">*</span>
-        </label>
-        <div className="flex space-x-3">
-          <label className="flex items-center">
-            <input
-              {...register("visibility")}
-              type="radio"
-              value="private"
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-              data-testid="radio-private"
-            />
-            <span className="ml-2 text-sm text-gray-900">Private</span>
-          </label>
-          {isOrgUser && (
-            <label className="flex items-center">
-              <input
-                {...register("visibility")}
-                type="radio"
-                value="team"
-                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                data-testid="radio-team"
-              />
-              <span className="ml-2 text-sm text-gray-900">Team</span>
-            </label>
-          )}
-        </div>
-        <p className="text-xs text-gray-500 mt-1">
-          {isOrgUser
-            ? "Private: Only you and assignee can view. Team: All team members can view."
-            : "Private: Only you can view."}
-        </p>
       </div>
 
       {/* Status Information */}

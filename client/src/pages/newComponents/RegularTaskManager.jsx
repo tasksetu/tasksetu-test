@@ -106,6 +106,8 @@ import { useTaskStatuses } from "@/hooks/useTaskStatuses";
 import { useTaskPriorities } from "@/hooks/useTaskPriorities";
 import { useAssignmentOptions } from "../../features/shared/hooks/useAssignmentOptions";
 import AssigneeSearchSelect from "../../components/common/AssigneeSearchSelect";
+import { useTaskApprovalGating } from "@/hooks/useTaskApprovalGating";
+import TaskChangeReasonModal from "@/components/modals/TaskChangeReasonModal";
 // THEME: Regular Task uses blue; Milestone uses green; Approval uses amber
 const RT = {
   // base
@@ -268,6 +270,15 @@ export default function RegularTaskManager() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState(null);
+  const { checkRequiresApproval, checkRequiresApprovalAsync } = useTaskApprovalGating();
+  const [changeReasonModal, setChangeReasonModal] = useState({
+    isOpen: false,
+    field: "dueDate",
+    fieldName: "Due Date",
+    currentValue: "",
+    requestedValue: "",
+    submitHandler: null,
+  });
 
   // Fetch regular tasks from API
   const {
@@ -590,24 +601,109 @@ export default function RegularTaskManager() {
       setEditError(err);
       return;
     }
+
+    // Extract assignedTo ID (from AssigneeSearchSelect format {value, label})
+    let assignedToId = "";
+    if (editForm.assignedTo && typeof editForm.assignedTo === "object") {
+      assignedToId =
+        editForm.assignedTo.value ||
+        editForm.assignedTo._id ||
+        editForm.assignedTo.id ||
+        "";
+    } else if (editForm.assignedToId) {
+      assignedToId = editForm.assignedToId;
+    }
+
+    // Check if any approval-protected fields changed
+    const changedFields = [];
+    const originalDueDate = editingTask?.dueDate
+      ? new Date(editingTask.dueDate).toISOString().split("T")[0]
+      : "";
+    const newDueDate = editForm.dueDate
+      ? new Date(editForm.dueDate).toISOString().split("T")[0]
+      : "";
+    if (
+      newDueDate &&
+      originalDueDate &&
+      newDueDate !== originalDueDate &&
+      (await checkRequiresApprovalAsync({ task: editingTask, field: "dueDate" }))
+    ) {
+      changedFields.push({
+        field: "dueDate",
+        name: "Due Date",
+        current: originalDueDate,
+        requested: newDueDate,
+      });
+    }
+
+    if (
+      editForm.priority &&
+      String(editForm.priority).toLowerCase() !==
+        String(editingTask?.priority || "").toLowerCase() &&
+      (await checkRequiresApprovalAsync({ task: editingTask, field: "priority" }))
+    ) {
+      changedFields.push({
+        field: "priority",
+        name: "Priority",
+        current: editingTask?.priority
+          ? String(editingTask.priority).toUpperCase()
+          : "MEDIUM",
+        requested: String(editForm.priority).toUpperCase(),
+      });
+    }
+
+    const origAssigneeId =
+      editingTask?.assignedTo?._id ||
+      editingTask?.assignedTo ||
+      editingTask?.assignedToId;
+    if (
+      assignedToId &&
+      String(assignedToId) !== String(origAssigneeId) &&
+      (await checkRequiresApprovalAsync({ task: editingTask, field: "assignedTo" }))
+    ) {
+      changedFields.push({
+        field: "assignedTo",
+        name: "Assignee",
+        current:
+          editingTask?.assignedTo?.name ||
+          editingTask?.assignedTo ||
+          "Unassigned",
+        requested:
+          editForm.assignedTo?.label ||
+          editForm.assignedTo ||
+          "Selected Assignee",
+      });
+    }
+
+    if (changedFields.length > 0) {
+      closeEditModal();
+      setChangeReasonModal({
+        isOpen: true,
+        field: changedFields[0].field,
+        fieldName: changedFields.map((f) => f.name).join(", "),
+        currentValue: changedFields
+          .map((f) => `${f.name}: ${f.current}`)
+          .join(" | "),
+        requestedValue: changedFields
+          .map((f) => `${f.name}: ${f.requested}`)
+          .join(" | "),
+        submitHandler: async (reasonText) => {
+          await executeEditSave(assignedToId, reasonText);
+        },
+      });
+      return;
+    }
+
+    await executeEditSave(assignedToId);
+  };
+
+  const executeEditSave = async (assignedToId, reasonText = "") => {
     setEditLoading(true);
     setEditError(null);
 
     try {
       // Create FormData to support file uploads
       const formData = new FormData();
-
-      // Extract assignedTo ID (from AssigneeSearchSelect format {value, label})
-      let assignedToId = "";
-      if (editForm.assignedTo && typeof editForm.assignedTo === "object") {
-        assignedToId =
-          editForm.assignedTo.value ||
-          editForm.assignedTo._id ||
-          editForm.assignedTo.id ||
-          "";
-      } else if (editForm.assignedToId) {
-        assignedToId = editForm.assignedToId;
-      }
 
       // Add basic fields
       formData.append("title", editForm.taskName);
@@ -620,6 +716,9 @@ export default function RegularTaskManager() {
       );
       formData.append("visibility", editForm.visibility);
       formData.append("status", editingTask.status || "not_started");
+      if (reasonText) {
+        formData.append("reason", reasonText);
+      }
 
       // Add tags (labels) - append each tag individually for proper array handling
       if (Array.isArray(editForm.labels) && editForm.labels.length > 0) {
@@ -650,7 +749,7 @@ export default function RegularTaskManager() {
       console.log("Task ID:", editingTask.id);
 
       // Make API call using PUT method with FormData
-      const response = await fetch(`/api/tasks/${editingTask.id}`, {
+      const response = await fetch(`/api/tasks/${editingTask.id || editingTask._id}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -664,6 +763,18 @@ export default function RegularTaskManager() {
 
       // Handle successful response
       if (response.ok && data.success) {
+        if (data.requiresApproval) {
+          showSuccessToast(
+            data.message ||
+              "Your task changes have been submitted for approval. The task creator has been notified.",
+          );
+          closeEditModal();
+          setTimeout(() => {
+            refetch();
+          }, 500);
+          return;
+        }
+
         // Update local tasks state immediately for better UX
         const updatedTask = {
           ...editingTask,
@@ -717,8 +828,9 @@ export default function RegularTaskManager() {
 
       setEditError(errorMessage);
       showErrorToast(errorMessage);
+    } finally {
+      setEditLoading(false);
     }
-    setEditLoading(false);
   };
 
   const resetForm = () => {
@@ -1252,23 +1364,6 @@ export default function RegularTaskManager() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Visibility
-                  </label>
-                  <select
-                    value={editForm.visibility}
-                    onChange={(e) =>
-                      handleEditFormChange("visibility", e.target.value)
-                    }
-                    className="w-full h-9 border rounded-md px-3 text-sm"
-                  >
-                    <option value="private">Private</option>
-                    {canAssignToOthers && (
-                      <option value="public">Public</option>
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
                     Labels / Tags
                   </label>
                   <div className="space-y-2">
@@ -1493,6 +1588,25 @@ export default function RegularTaskManager() {
             )}
           </div>
         </div>
+      )}
+
+      {changeReasonModal.isOpen && (
+        <TaskChangeReasonModal
+          isOpen={changeReasonModal.isOpen}
+          onClose={() =>
+            setChangeReasonModal((prev) => ({ ...prev, isOpen: false }))
+          }
+          taskTitle={editingTask?.taskName || editingTask?.title || "Task"}
+          field={changeReasonModal.field}
+          fieldName={changeReasonModal.fieldName}
+          currentValue={changeReasonModal.currentValue}
+          requestedValue={changeReasonModal.requestedValue}
+          onSubmit={async (reason) => {
+            if (changeReasonModal.submitHandler) {
+              await changeReasonModal.submitHandler(reason);
+            }
+          }}
+        />
       )}
 
       {/* Header */}

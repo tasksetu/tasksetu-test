@@ -221,19 +221,6 @@ function SubtaskForm({
               </div>
             </div>
 
-            {/* Visibility */}
-            <div className="form-group">
-              <label className="form-label">Visibility</label>
-              <select
-                value={formData.visibility}
-                onChange={(e) => setFormData({ ...formData, visibility: e.target.value })}
-                className="form-select"
-              >
-                <option value="Private">Private</option>
-                <option value="Public">Public</option>
-              </select>
-            </div>
-
             {/* Description */}
             <div className="form-group">
               <label className="form-label">Description</label>
@@ -323,7 +310,6 @@ function SubtaskForm({
                 Inheritance Rules
               </h4>
               <div className="inheritance-info">
-                <p>Visibility: Inherits "Private" (can override)</p>
                 <p>Priority Impact: Changes due date automatically</p>
                 <p>Suggested Due: 2024-01-25</p>
                 <p>Max Length: Title 60 chars</p>

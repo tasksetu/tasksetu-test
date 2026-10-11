@@ -29,7 +29,7 @@ export default function SubtaskCreator({
     dueDate: parentTask?.dueDate || "",
     priority: getDefaultPriority(),
     status: "To Do",
-    visibility: parentTask?.visibility || "private",
+    visibility: "private",
     notes: "",
     attachments: [],
   });
@@ -181,7 +181,7 @@ export default function SubtaskCreator({
         dueDate: parentTask?.dueDate || "",
         priority: "low",
         status: "To Do",
-        visibility: parentTask?.visibility || "private",
+        visibility: "private",
         notes: "",
         attachments: [],
       });
@@ -478,40 +478,6 @@ export default function SubtaskCreator({
               }
             />
           </div>
-        </div>
-
-        {/* Visibility */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Visibility
-            <span className="text-xs text-gray-500 ml-2">
-              (Inherited from parent: {parentTask?.visibility})
-            </span>
-          </label>
-          <SearchableSelect
-            options={
-              userType === "individual"
-                ? [{ value: "private", label: "🔒 Private" }]
-                : [
-                    { value: "private", label: "🔒 Private" },
-                    { value: "public", label: "🌐 Public" },
-                  ]
-            }
-            value={{
-              value: formData.visibility,
-              label:
-                formData.visibility === "public" ? "🌐 Public" : "🔒 Private",
-            }}
-            onChange={(selectedOption) =>
-              handleInputChange("visibility", selectedOption.value)
-            }
-            isDisabled={userType === "individual"}
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            {userType === "individual"
-              ? "Individual users can only create private sub-tasks"
-              : "Can override parent visibility if needed"}
-          </p>
         </div>
 
         {/* Notes */}

@@ -567,6 +567,15 @@ const convertQuickTaskToRegular = async (req, res) => {
 
     await quickTask.save();
 
+    // 📊 Track REPORT_QUICK_CONVERSION usage
+    try {
+      if (userId) {
+        await licenseService.consumeFeature(userId, 'REPORT_QUICK_CONVERSION', 1);
+      }
+    } catch (consumeErr) {
+      console.warn('⚠️ [QUICK TASK CONVERSION] Failed to track REPORT_QUICK_CONVERSION usage:', consumeErr.message);
+    }
+
     // 🔔 Send QUICK_TASK_CONVERTED notification to the user
     try {
       const { NotificationService } = await import('../services/notificationService.js');

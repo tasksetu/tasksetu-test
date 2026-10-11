@@ -452,6 +452,7 @@ function SubtaskForm({
         dueDate: formPayload.dueDate || formPayload.targetDate,
         priority: priorityVal,
         status: statusVal,
+        visibility: formPayload.visibility || "Private",
         taskType: type,
         mainTaskType: parentTask?.mainTaskType || parentTask?.taskType || "regular",
         isSubtask: true,
@@ -1315,7 +1316,7 @@ function SubtaskForm({
         } else if (formData.dueTime) {
           updateFormData.append("dueTime", formData.dueTime);
         }
-        updateFormData.append("visibility", formData.visibility);
+        updateFormData.append("visibility", formData.visibility || "Private");
         (formData.tags || []).forEach((tag) =>
           updateFormData.append("tags", tag),
         );
@@ -1901,45 +1902,8 @@ function SubtaskForm({
               </div>
             </div>
 
-            {/* Row 3: Visibility & Labels/Tags */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-              {/* Visibility */}
-              <div className="flex flex-col">
-                <div className="h-5 flex items-center gap-1.5 mb-1.5">
-                  <Label
-                    htmlFor="visibility"
-                    className="text-xs font-semibold text-gray-700 uppercase tracking-wider"
-                  >
-                    Visibility
-                  </Label>
-                  {!isOrgUser && (
-                    <span className="text-[11px] text-gray-400 font-normal">
-                      (Defaults from parent)
-                    </span>
-                  )}
-                </div>
-                <select
-                  id="visibility"
-                  value={formData.visibility}
-                  onChange={(e) =>
-                    setFormData({ ...formData, visibility: e.target.value })
-                  }
-                  className="w-full !h-8 px-3 border border-gray-300 rounded-md bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
-                  style={{ height: "32px", minHeight: "32px", maxHeight: "32px" }}
-                  disabled={!isOrgUser}
-                >
-                  <option value="Private">Private</option>
-                  <option value="Public">Public</option>
-                </select>
-                {!isOrgUser && (
-                  <p className="text-[11px] text-gray-500 mt-1">
-                    Only company users can override visibility
-                  </p>
-                )}
-              </div>
-
-              {/* Labels / Tags */}
-              <div className="flex flex-col">
+            {/* Row 3: Labels/Tags */}
+            <div className="flex flex-col">
                 <div className="h-5 flex items-center gap-1.5 mb-1.5">
                   <Label
                     htmlFor="tagsInput"
@@ -2034,7 +1998,6 @@ function SubtaskForm({
                   )}
                 </div>
               </div>
-            </div>
 
             {/* Description */}
             <div className="space-y-1.5">

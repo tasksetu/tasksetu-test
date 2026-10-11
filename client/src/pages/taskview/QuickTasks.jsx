@@ -547,6 +547,7 @@ export default function QuickTasks() {
         console.log("✅ Quick Task marked as converted successfully");
         // Refresh the quick tasks list
         await fetchQuickTasks();
+        queryClient.invalidateQueries({ queryKey: ["/api/license/current"] });
         return true;
       } else {
         console.error("❌ Failed to mark quick task as converted:", response);
@@ -1098,23 +1099,23 @@ export default function QuickTasks() {
             <div className="w-full overflow-x-auto">
               <Table className="w-full">
               <TableHeader>
-                <TableRow>
-                  <TableHead className="px-6 py-2 h-10 text-left text-xs font-medium leading-none text-gray-500 uppercase tracking-wider w-12">
+                <TableRow className="border-b border-gray-200 bg-gray-50/70 hover:bg-gray-50/70">
+                  <TableHead className="px-6 py-2.5 h-9 text-left text-xs font-semibold leading-none text-gray-500 uppercase tracking-wider w-12">
                     Status
                   </TableHead>
-                  <TableHead className="px-6 py-2 h-10 text-left text-xs font-medium leading-none text-gray-500 uppercase tracking-wider">
+                  <TableHead className="px-6 py-2.5 h-9 text-left text-xs font-semibold leading-none text-gray-500 uppercase tracking-wider">
                     Task Title
                   </TableHead>
-                  <TableHead className="px-6 py-2 h-10 text-left text-xs font-medium leading-none text-gray-500 uppercase tracking-wider">
+                  <TableHead className="px-6 py-2.5 h-9 text-left text-xs font-semibold leading-none text-gray-500 uppercase tracking-wider">
                     Priority
                   </TableHead>
-                  <TableHead className="px-6 py-2 h-10 text-left text-xs font-medium leading-none text-gray-500 uppercase tracking-wider">
-                    Due Date
-                  </TableHead>
-                  <TableHead className="px-6 py-2 h-10 text-left text-xs font-medium leading-none text-gray-500 uppercase tracking-wider">
+                  <TableHead className="px-6 py-2.5 h-9 text-left text-xs font-semibold leading-none text-gray-500 uppercase tracking-wider">
                     Created
                   </TableHead>
-                  <TableHead className="px-6 py-2 h-10 text-left text-xs font-medium leading-none text-gray-500 uppercase tracking-wider">
+                  <TableHead className="px-6 py-2.5 h-9 text-left text-xs font-semibold leading-none text-gray-500 uppercase tracking-wider">
+                    Due Date
+                  </TableHead>
+                  <TableHead className="px-6 py-2.5 h-9 text-left text-xs font-semibold leading-none text-gray-500 uppercase tracking-wider">
                     Actions
                   </TableHead>
                 </TableRow>
@@ -1123,13 +1124,13 @@ export default function QuickTasks() {
               <TableBody>
                 {sortedTasks.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="px-6 py-6 text-center">
+                    <TableCell colSpan={6} className="px-6 py-8 text-center">
                       <div className="text-gray-500">
-                        <div className="text-6xl mb-3">📝</div>
-                        <h3 className="text-lg font-medium mb-2">
+                        <div className="text-5xl mb-3">📝</div>
+                        <h3 className="text-base font-medium text-gray-800 mb-1.5">
                           No quick tasks found
                         </h3>
-                        <p className="text-sm mb-3">
+                        <p className="text-sm text-gray-500 mb-3">
                           {quickTasks.length === 0
                             ? "You don't have any quick tasks yet."
                             : "No tasks match your current filters."}
@@ -1153,17 +1154,18 @@ export default function QuickTasks() {
                       key={task.id ?? task._id}
                       data-quick-task-id={String(task.id ?? task._id ?? "")}
                       className={`${
-                        task.status === "done" ? "opacity-75" : ""
-                      } border-b`}
+                        task.status === "done" ? "opacity-75 bg-gray-50/40" : "hover:bg-blue-50/20"
+                      } border-b border-gray-100 transition-colors`}
                     >
-                      <TableCell className="px-6 py-2">
+                      {/* Status */}
+                      <TableCell className="px-6 py-2.5 w-12">
                         <button
                           onClick={() => handleMarkAsDone(task.id)}
                           disabled={task.status === "done"}
-                          className={`${
+                          className={`rounded-full p-0.5 transition-colors focus:outline-none ${
                             task.status === "done"
                               ? "opacity-50 cursor-not-allowed"
-                              : ""
+                              : "hover:bg-blue-50 cursor-pointer"
                           }`}
                           title={
                             task.status === "done"
@@ -1175,7 +1177,8 @@ export default function QuickTasks() {
                         </button>
                       </TableCell>
 
-                      <TableCell className="px-6 py-2">
+                      {/* Task Title */}
+                      <TableCell className="px-6 py-2.5">
                         <div className="flex items-center gap-2">
                           {editingTaskId === task.id ? (
                             <input
@@ -1192,17 +1195,17 @@ export default function QuickTasks() {
                                   handleTitleCancel();
                                 }
                               }}
-                              className="w-full h-8 px-2 py-0 border border-blue-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-full h-8 px-2.5 py-1 text-sm border border-blue-400 rounded-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
                               autoFocus
                             />
                           ) : (
-                            <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap min-h-[28px]">
                               <span
-                                className={`font-medium truncate max-w-[200px] ${
+                                className={`text-sm font-medium truncate max-w-[280px] ${
                                   task.status === "done"
-                                    ? "text-gray-500 cursor-not-allowed"
-                                    : "text-gray-900 cursor-pointer"
-                                } h-8 px-2 py-0 rounded-sm`}
+                                    ? "text-gray-400 line-through cursor-not-allowed"
+                                    : "text-gray-800 hover:text-blue-600 cursor-pointer"
+                                } transition-colors`}
                                 onClick={() =>
                                   task.status !== "done" &&
                                   handleTitleEdit(task)
@@ -1210,14 +1213,14 @@ export default function QuickTasks() {
                                 title={
                                   task.status === "done"
                                     ? "Cannot edit completed tasks"
-                                    : task.title
+                                    : "Click to rename task"
                                 }
                               >
                                 {task.title}
                               </span>
                               {task.convertedToTask?.isConverted && (
                                 <span
-                                  className="inline-flex items-center h-8 gap-1 px-2 py-0 text-xs font-medium bg-green-100 text-green-800 border border-green-300 rounded-sm"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium leading-tight bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full shrink-0"
                                   title={`Converted to task on ${new Date(
                                     task.convertedToTask.convertedAt,
                                   )
@@ -1229,7 +1232,7 @@ export default function QuickTasks() {
                                     .replace(",", "")}`}
                                 >
                                   <svg
-                                    className="w-3 h-3"
+                                    className="w-3 h-3 text-emerald-600 shrink-0"
                                     fill="currentColor"
                                     viewBox="0 0 20 20"
                                   >
@@ -1247,7 +1250,8 @@ export default function QuickTasks() {
                         </div>
                       </TableCell>
 
-                      <TableCell className="px-6 py-2">
+                      {/* Priority */}
+                      <TableCell className="px-6 py-2.5 whitespace-nowrap">
                         <span
                           className={getPriorityBadgeClasses(task.priority)}
                         >
@@ -1256,46 +1260,53 @@ export default function QuickTasks() {
                         </span>
                       </TableCell>
 
-                      <TableCell className="px-6 py-2 text-sm text-gray-900">
-                        {task.dueDate ? (
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-4 h-4 text-gray-400" />
-                            {new Date(task.dueDate)
+                      {/* Created Date (Before Due Date) */}
+                      <TableCell className="px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                          <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <span>
+                            {new Date(task.createdAt)
                               .toLocaleDateString("en-GB", {
                                 day: "2-digit",
                                 month: "short",
                                 year: "numeric",
                               })
                               .replace(",", "")}
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">No due date</span>
-                        )}
-                      </TableCell>
-
-                      <TableCell className="px-6 py-2 text-sm text-gray-500">
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          {new Date(task.createdAt)
-                            .toLocaleDateString("en-GB", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            })
-                            .replace(",", "")}
+                          </span>
                         </div>
                       </TableCell>
 
-                      <TableCell className="px-6 py-2">
-                        <div className="flex items-center gap-2">
+                      {/* Due Date (After Created Date) */}
+                      <TableCell className="px-6 py-2.5 text-sm text-gray-900 whitespace-nowrap">
+                        {task.dueDate ? (
+                          <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700">
+                            <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span>
+                              {new Date(task.dueDate)
+                                .toLocaleDateString("en-GB", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                })
+                                .replace(",", "")}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-xs italic">No due date</span>
+                        )}
+                      </TableCell>
+
+                      {/* Actions */}
+                      <TableCell className="px-6 py-2.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleEditModal(task)}
                             disabled={task.status === "done"}
-                            className={`${
+                            className={`h-7 w-7 rounded-sm ${
                               task.status === "done"
-                                ? "text-gray-400 cursor-not-allowed opacity-50"
+                                ? "text-gray-300 cursor-not-allowed opacity-40"
                                 : "text-blue-500 hover:text-blue-700 hover:bg-blue-50"
                             }`}
                             title={
@@ -1304,7 +1315,7 @@ export default function QuickTasks() {
                                 : "Edit task"
                             }
                           >
-                            <Edit3 className="w-4 h-4" />
+                            <Edit3 className="w-3.5 h-3.5" />
                           </Button>
 
                           {!task.convertedToTask?.isConverted && (
@@ -1312,10 +1323,10 @@ export default function QuickTasks() {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleConvertToTask(task)}
-                              className="text-green-500 hover:text-green-700 hover:bg-green-50"
+                              className="h-7 w-7 rounded-sm text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                               title="Convert to full task"
                             >
-                              <ArrowRight className="w-4 h-4" />
+                              <ArrowRight className="w-3.5 h-3.5" />
                             </Button>
                           )}
 
@@ -1324,9 +1335,9 @@ export default function QuickTasks() {
                             size="icon"
                             onClick={() => handleDeleteTask(task.id)}
                             disabled={task.status === "done"}
-                            className={`${
+                            className={`h-7 w-7 rounded-sm ${
                               task.status === "done"
-                                ? "text-gray-400 cursor-not-allowed opacity-50"
+                                ? "text-gray-300 cursor-not-allowed opacity-40"
                                 : "text-red-500 hover:text-red-700 hover:bg-red-50"
                             }`}
                             title={
@@ -1335,7 +1346,7 @@ export default function QuickTasks() {
                                 : "Delete task"
                             }
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
                       </TableCell>

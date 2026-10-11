@@ -23,6 +23,27 @@ const organizationSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    taskEditApprovalEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    // Four independent task edit approval toggles (Default: OFF)
+    dueDateApprovalEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    statusApprovalEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    priorityApprovalEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    assigneeApprovalEnabled: {
+      type: Boolean,
+      default: false,
+    },
     settings: {
       type: Object,
       default: {},
@@ -69,4 +90,4 @@ const organizationSchema = new mongoose.Schema(
   }
 );
 organizationSchema.index({ name: 1 }); // for faster name lookups
-export const Organization = mongoose.model("Organization", organizationSchema);
+export const Organization = mongoose.models.Organization || mongoose.model("Organization", organizationSchema);

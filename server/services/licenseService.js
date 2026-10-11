@@ -5,6 +5,7 @@ import { LicenseFeatureMapping } from "../modals/licenseFeatureMappingModal.js";
 import { FeatureUsageTracking } from "../modals/featureUsageTrackingModal.js";
 import { UserFeatureUsage } from "../modals/userFeatureUsageModal.js";
 import { License } from "../modals/licenseModal.js";
+import { Feature } from "../modals/featureModal.js";
 import LicenseInstance from "../modals/licenseInstanceModal.js";
 import mongoose from "mongoose";
 import { PLAN_ORDER_UPPERCASE } from "../utils/licenseConstants.js";
@@ -621,6 +622,31 @@ export const checkFeatureLimit = async (entityOrUserId, feature_code) => {
           });
           currentUsage = Math.max(currentUsage, dbCount);
         } catch (e) {}
+      } else if (featureCodeUpper === "REPORT_QUICK_CONVERSION") {
+        try {
+          const { QuickTask } = await import("../modals/quickTaskModal.js");
+          const orgId = accessCheck.subscription?.organization_id;
+          const userQuery = orgId
+            ? {
+                $or: [
+                  { user: userId },
+                  {
+                    user: {
+                      $in: await User.find({ organization_id: orgId }).distinct("_id"),
+                    },
+                  },
+                ],
+              }
+            : { user: userId };
+          const dbCount = await QuickTask.countDocuments({
+            ...userQuery,
+            $or: [
+              { "convertedToTask.isConverted": true },
+              { "conversionFlag.isConverted": true },
+            ],
+          });
+          currentUsage = Math.max(currentUsage, dbCount);
+        } catch (e) {}
       }
     } else {
       currentUsage = await UserFeatureUsage.getCurrentUsage(
@@ -628,6 +654,19 @@ export const checkFeatureLimit = async (entityOrUserId, feature_code) => {
         feature_code,
         limitType,
       );
+      if (feature_code.toUpperCase() === "REPORT_QUICK_CONVERSION") {
+        try {
+          const { QuickTask } = await import("../modals/quickTaskModal.js");
+          const dbCount = await QuickTask.countDocuments({
+            user: userId,
+            $or: [
+              { "convertedToTask.isConverted": true },
+              { "conversionFlag.isConverted": true },
+            ],
+          });
+          currentUsage = Math.max(currentUsage, dbCount);
+        } catch (e) {}
+      }
     }
     const limit = accessCheck.usageLimit;
 
@@ -1021,10 +1060,22 @@ export const getLicenseSummary = async (entityOrUserId) => {
     }
 
     // Get all features for this license
-    const featureMappings = await LicenseFeatureMapping.find({
+    const rawFeatureMappings = await LicenseFeatureMapping.find({
       license_code: userLicense.license_code,
       is_enabled: true,
     }).lean();
+
+    // Verify against globally active and visible features (controlled by "Manage System Features" in Admin Panel)
+    const activeFeatures = await Feature.find({
+      is_active: true,
+      view: { $ne: false },
+    }).select("feature_code").lean();
+    const activeFeatureCodes = new Set(activeFeatures.map((f) => f.feature_code));
+
+    // Only include features that are active and visible globally
+    const featureMappings = rawFeatureMappings.filter((m) =>
+      activeFeatureCodes.has(m.feature_code)
+    );
 
     // ✅ APPROACH A: Check if user has an assigned license instance (Seat-based usage)
     let usageData = {};
@@ -1035,40 +1086,6 @@ export const getLicenseSummary = async (entityOrUserId) => {
         featureMappings,
         userLicense.expiry_date
       );
-
-      // Check DB counts for PROC_CREATE / PROC_LAUNCH
-      for (const mapping of featureMappings) {
-        if (mapping.feature_code === "PROC_CREATE") {
-          try {
-            const { default: ProcessTemplate } = await import("../process-builder/processTemplateModal.js");
-            const dbCount = await ProcessTemplate.countDocuments({
-              licenseInstanceId: userLicense.license_instance_id,
-              isDeleted: { $ne: true }
-            });
-            if (usageData["PROC_CREATE"]) {
-              usageData["PROC_CREATE"].used = Math.max(usageData["PROC_CREATE"].used, dbCount);
-              const lim = usageData["PROC_CREATE"].limit;
-              usageData["PROC_CREATE"].remaining = lim === -1 ? -1 : Math.max(0, lim - usageData["PROC_CREATE"].used);
-              usageData["PROC_CREATE"].percentage = lim === -1 || lim === 0 ? 0 : Math.min(100, Math.round((usageData["PROC_CREATE"].used / lim) * 100));
-            }
-          } catch (e) {}
-        } else if (mapping.feature_code === "PROC_LAUNCH") {
-          try {
-            const { default: Task } = await import("../modals/taskModal.js");
-            const dbCount = await Task.countDocuments({
-              licenseInstanceId: userLicense.license_instance_id,
-              is_deleted: { $ne: true },
-              isSubtask: { $ne: true }
-            });
-            if (usageData["PROC_LAUNCH"]) {
-              usageData["PROC_LAUNCH"].used = Math.max(usageData["PROC_LAUNCH"].used, dbCount);
-              const lim = usageData["PROC_LAUNCH"].limit;
-              usageData["PROC_LAUNCH"].remaining = lim === -1 ? -1 : Math.max(0, lim - usageData["PROC_LAUNCH"].used);
-              usageData["PROC_LAUNCH"].percentage = lim === -1 || lim === 0 ? 0 : Math.min(100, Math.round((usageData["PROC_LAUNCH"].used / lim) * 100));
-            }
-          } catch (e) {}
-        }
-      }
     } else {
       usageData = await UserFeatureUsage.getUserCurrentUsage(
         userId,
@@ -1087,6 +1104,68 @@ export const getLicenseSummary = async (entityOrUserId) => {
           percentage: 0,
           limitType: mapping.limit_type,
         };
+      }
+    }
+
+    // Apply DB counts as real-time source of truth for features that back onto DB collections
+    for (const mapping of featureMappings) {
+      if (mapping.feature_code === "PROC_CREATE") {
+        try {
+          const { default: ProcessTemplate } = await import("../process-builder/processTemplateModal.js");
+          const query = userLicense.license_instance_id
+            ? { licenseInstanceId: userLicense.license_instance_id, isDeleted: { $ne: true } }
+            : { userId, isDeleted: { $ne: true } };
+          const dbCount = await ProcessTemplate.countDocuments(query);
+          if (usageData["PROC_CREATE"]) {
+            usageData["PROC_CREATE"].used = Math.max(usageData["PROC_CREATE"].used, dbCount);
+            const lim = usageData["PROC_CREATE"].limit;
+            usageData["PROC_CREATE"].remaining = lim === -1 ? -1 : Math.max(0, lim - usageData["PROC_CREATE"].used);
+            usageData["PROC_CREATE"].percentage = lim === -1 || lim === 0 ? 0 : Math.min(100, Math.round((usageData["PROC_CREATE"].used / lim) * 100));
+          }
+        } catch (e) {}
+      } else if (mapping.feature_code === "PROC_LAUNCH") {
+        try {
+          const { default: Task } = await import("../modals/taskModal.js");
+          const query = userLicense.license_instance_id
+            ? { licenseInstanceId: userLicense.license_instance_id, is_deleted: { $ne: true }, isSubtask: { $ne: true } }
+            : { createdBy: userId, is_deleted: { $ne: true }, isSubtask: { $ne: true } };
+          const dbCount = await Task.countDocuments(query);
+          if (usageData["PROC_LAUNCH"]) {
+            usageData["PROC_LAUNCH"].used = Math.max(usageData["PROC_LAUNCH"].used, dbCount);
+            const lim = usageData["PROC_LAUNCH"].limit;
+            usageData["PROC_LAUNCH"].remaining = lim === -1 ? -1 : Math.max(0, lim - usageData["PROC_LAUNCH"].used);
+            usageData["PROC_LAUNCH"].percentage = lim === -1 || lim === 0 ? 0 : Math.min(100, Math.round((usageData["PROC_LAUNCH"].used / lim) * 100));
+          }
+        } catch (e) {}
+      } else if (mapping.feature_code === "REPORT_QUICK_CONVERSION") {
+        try {
+          const { QuickTask } = await import("../modals/quickTaskModal.js");
+          const userQuery = user?.organization_id
+            ? {
+                $or: [
+                  { user: userId },
+                  {
+                    user: {
+                      $in: await User.find({ organization_id: user.organization_id }).distinct("_id"),
+                    },
+                  },
+                ],
+              }
+            : { user: userId };
+          const dbCount = await QuickTask.countDocuments({
+            ...userQuery,
+            $or: [
+              { "convertedToTask.isConverted": true },
+              { "conversionFlag.isConverted": true },
+            ],
+          });
+          if (usageData["REPORT_QUICK_CONVERSION"]) {
+            usageData["REPORT_QUICK_CONVERSION"].used = Math.max(usageData["REPORT_QUICK_CONVERSION"].used, dbCount);
+            const lim = usageData["REPORT_QUICK_CONVERSION"].limit;
+            usageData["REPORT_QUICK_CONVERSION"].remaining = lim === -1 ? -1 : Math.max(0, lim - usageData["REPORT_QUICK_CONVERSION"].used);
+            usageData["REPORT_QUICK_CONVERSION"].percentage = lim === -1 || lim === 0 ? 0 : Math.min(100, Math.round((usageData["REPORT_QUICK_CONVERSION"].used / lim) * 100));
+          }
+        } catch (e) {}
       }
     }
 

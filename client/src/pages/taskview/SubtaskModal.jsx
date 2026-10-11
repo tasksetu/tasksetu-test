@@ -140,19 +140,6 @@ function SubtaskModal({ isOpen, onClose, onSubmit, parentTask }) {
           </div>
 
           <div className="form-row">
-            <div className="form-group half">
-              <label>🔒 Visibility</label>
-              <select
-                value={formData.visibility}
-                onChange={(e) => setFormData({ ...formData, visibility: e.target.value })}
-              >
-                <option value="Private">Private</option>
-                <option value="Public">Public</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="form-row">
             <div className="form-group">
               <label>📝 Description</label>
               <CustomEditor
@@ -183,7 +170,6 @@ function SubtaskModal({ isOpen, onClose, onSubmit, parentTask }) {
                   <div className="info-row">
                     <label>Inheritance Rules</label>
                     <div className="inheritance-info">
-                      <p>Visibility: Inherits "Private" (can override)</p>
                       <p>Priority Impact: Changes due date automatically</p>
                       <p>Suggested Due: 2024-01-25</p>
                       <p>Max Length: Title 60 chars</p>

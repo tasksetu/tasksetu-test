@@ -158,7 +158,27 @@ function CoreInfoPanel({ moreInfo, setMoreInfo, task, onUpdate, permissions }) {
                       Start Date:
                     </label>
                     <span className="text-sm text-gray-900">
-                      {task.startDate || "Not set"}
+                      {(() => {
+                        if (!task.startDate || task.startDate === "Not set") return "Not set";
+                        try {
+                          const str = String(task.startDate).trim();
+                          const hasTimezone =
+                            /[Zz]$|(T\d{2}:\d{2}(:\d{2})?(\.[0-9]+)?[+-]\d{2}:?\d{2})$/.test(str);
+                          const d = new Date(hasTimezone ? str : str + "Z");
+                          if (isNaN(d.getTime())) return String(task.startDate);
+                          return d.toLocaleString("en-GB", {
+                            timeZone: "UTC",
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: true,
+                          }).replace(",", "").replace(/(am|pm)/i, (m) => m.toUpperCase());
+                        } catch {
+                          return String(task.startDate);
+                        }
+                      })()}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -166,7 +186,27 @@ function CoreInfoPanel({ moreInfo, setMoreInfo, task, onUpdate, permissions }) {
                       Due Date:
                     </label>
                     <span className="text-sm text-gray-900">
-                      {task.dueDate || "Not set"}
+                      {(() => {
+                        if (!task.dueDate || task.dueDate === "Not set") return "Not set";
+                        try {
+                          const str = String(task.dueDate).trim();
+                          const hasTimezone =
+                            /[Zz]$|(T\d{2}:\d{2}(:\d{2})?(\.[0-9]+)?[+-]\d{2}:?\d{2})$/.test(str);
+                          const d = new Date(hasTimezone ? str : str + "Z");
+                          if (isNaN(d.getTime())) return String(task.dueDate);
+                          return d.toLocaleString("en-GB", {
+                            timeZone: "UTC",
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: true,
+                          }).replace(",", "").replace(/(am|pm)/i, (m) => m.toUpperCase());
+                        } catch {
+                          return String(task.dueDate);
+                        }
+                      })()}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">

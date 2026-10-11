@@ -39,7 +39,12 @@ export const useTaskOperations = ({
         };
         const backendStatus =
           statusMapping[newStatusCode] || newStatusCode?.toString().toUpperCase();
-        const payload = { status: backendStatus, notes: reason || undefined };
+        const payload = {
+          status: backendStatus,
+          notes: reason || undefined,
+          reason: reason || undefined,
+          changeReason: reason || undefined,
+        };
         if (newStatusCode === "DONE") payload.completedDate = new Date().toISOString();
 
         const response = await axios.patch(`/api/tasks/${apiTaskId}/status`, payload, {
@@ -47,6 +52,15 @@ export const useTaskOperations = ({
         });
 
         if (response.data?.success) {
+          if (response.data?.requiresApproval) {
+            showSuccessToast?.(
+              response.data.message ||
+                "Your status change has been submitted for approval.",
+            );
+            await refetchTasks?.();
+            return response.data;
+          }
+
           setApiTasks((prev) =>
             prev.map((t) => {
               if (t.id === task.id || t._id === task._id) {

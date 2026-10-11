@@ -34,9 +34,9 @@ class TaskTransitionServiceClass {
       );
     }
 
-    // 3. Linked Task Engine: block status changes if prerequisite task is not completed
+    // 3. Linked Task Engine: block status changes if prerequisite task is not completed or cancelled
     if (task.linkedTaskId) {
-      await LinkedTaskService.validateLinkedTaskCompletion(task);
+      await LinkedTaskService.validateLinkedTaskCompletion(task, newStatus);
     }
 
     // 4. (Future) Form-required validation

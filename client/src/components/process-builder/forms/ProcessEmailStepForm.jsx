@@ -13,6 +13,7 @@ import {
   X,
   Users,
   Info,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import EmailTaskConfig from "../../workflow/EmailTaskConfig";
@@ -105,6 +106,10 @@ export default function ProcessEmailStepForm({
   const [attachmentError, setAttachmentError] = useState("");
   const fileInputRef = useRef(null);
 
+  const [formAttachmentId, setFormAttachmentId] = useState(
+    stepToEdit?.formId || stepToEdit?.emailConfig?.attachedFormId || "none"
+  );
+
   const [emailConfig, setEmailConfig] = useState(
     stepToEdit?.emailConfig || {
       recipients: [{ name: "", email: "", source: "manual" }],
@@ -122,15 +127,28 @@ export default function ProcessEmailStepForm({
 
   useEffect(() => {
     if (stepToEdit) {
+      const rawFormId = stepToEdit.formId || stepToEdit.emailConfig?.attachedFormId;
+      const matchedForm = (orgForms || []).find(
+        (f) =>
+          String(f.id) === String(rawFormId) ||
+          String(f._id) === String(rawFormId) ||
+          String(f.form_id) === String(rawFormId)
+      );
+      const resolvedFormId = matchedForm ? matchedForm.id : (rawFormId || "none");
+      setFormAttachmentId(resolvedFormId);
+
       if (stepToEdit.emailConfig) {
-        setEmailConfig(stepToEdit.emailConfig);
+        setEmailConfig({
+          ...stepToEdit.emailConfig,
+          attachedFormId: resolvedFormId === "none" ? (stepToEdit.emailConfig.attachedFormId || "") : resolvedFormId,
+        });
       }
       if (stepToEdit.linkedTaskId) setLinkedTaskId(stepToEdit.linkedTaskId);
       if (stepToEdit.configuration?.autoInitiate)
         setAutoInitiate(stepToEdit.configuration.autoInitiate);
       if (stepToEdit.attachments) setAttachments(stepToEdit.attachments);
     }
-  }, [stepToEdit]);
+  }, [stepToEdit, orgForms]);
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -249,7 +267,7 @@ export default function ProcessEmailStepForm({
       emailSubject: sanitizedEmailConfig.subject,
       emailBody: sanitizedEmailConfig.body,
       emailAutoComplete: sanitizedEmailConfig.autoComplete,
-      formId: sanitizedEmailConfig.attachedFormId || null,
+      formId: formAttachmentId !== "none" ? formAttachmentId : (sanitizedEmailConfig.attachedFormId || null),
       attachments,
     };
     onSubmit(payload);
@@ -374,11 +392,54 @@ export default function ProcessEmailStepForm({
         </p>
       </div>
 
+      {/* Form Attachment Dropdown */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+            <FileText className="w-4 h-4 text-indigo-600" />
+            Form Attachment
+          </label>
+          {orgForms.length > 0 && (
+            <span className="text-[11px] text-gray-400 font-normal">
+              ({orgForms.length} available)
+            </span>
+          )}
+        </div>
+        <select
+          value={formAttachmentId}
+          onChange={(e) => {
+            const val = e.target.value;
+            setFormAttachmentId(val);
+            setEmailConfig((prev) => ({
+              ...prev,
+              attachedFormId: val === "none" ? "" : val,
+              formLinkEnabled: val !== "none" ? true : prev.formLinkEnabled,
+            }));
+          }}
+          className="w-full !h-8 px-3 border border-gray-300 rounded-md bg-white text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option value="none">— No Attached Form —</option>
+          {orgForms.map((f) => (
+            <option key={f.id || f._id} value={f.id || f._id}>
+              📋 {f.title} ({f.category || "General"}){f.status && f.status !== "PUBLISHED" ? ` [${f.status}]` : ""}
+            </option>
+          ))}
+        </select>
+        <p className="text-[11px] text-gray-500">
+          Attach a custom dynamic form for users or email recipients during this step.
+        </p>
+      </div>
+
       {/* Email Configuration Component */}
       <EmailTaskConfig
         value={emailConfig}
         onChange={(cfg) => {
           setEmailConfig(cfg);
+          if (cfg.attachedFormId) {
+            setFormAttachmentId(cfg.attachedFormId);
+          } else if (cfg.formLinkEnabled === false && formAttachmentId === emailConfig.attachedFormId) {
+            // Keep in sync if cleared
+          }
           setConfigErrors({});
         }}
         disabled={false}

@@ -16,33 +16,71 @@ import { WorkflowStatus } from "../constants/workflowEnums.js";
 
 class LinkedTaskServiceClass {
   /**
-   * Validate that the linked task is completed before allowing IN_PROGRESS.
-   * Throws if the linked task is not completed.
+   * Validate that the linked task is completed or cancelled (terminal status) before allowing status changes.
+   * Throws if the linked prerequisite task is still in an open or in-progress status.
    *
-   * @param {Object} task - The task trying to move to IN_PROGRESS
+   * @param {Object} task - The task trying to update status
+   * @param {string} [targetStatus] - The requested new status (optional)
    */
-  async validateLinkedTaskCompletion(task) {
+  async validateLinkedTaskCompletion(task, targetStatus = null) {
     if (!task || !task.linkedTaskId) return; // No dependency → allow
 
-    const linkedTask = await Task.findById(task.linkedTaskId).select("status title isDeleted");
+    // If the task itself is being moved to CANCELLED, allow it without blocking
+    if (targetStatus) {
+      const normTarget = String(targetStatus).trim().toUpperCase();
+      if (["CANCELLED", "CANCELED", WorkflowStatus.CANCELLED].includes(normTarget)) {
+        return;
+      }
+    }
+
+    const linkedTask = await Task.findById(task.linkedTaskId).select(
+      "status title isDeleted organizationId",
+    );
     if (!linkedTask || linkedTask.isDeleted) return; // Linked task deleted → allow (graceful)
 
-    const completedStatuses = [
+    const finalStatuses = [
       WorkflowStatus.COMPLETED,
       WorkflowStatus.DONE,
+      WorkflowStatus.CANCELLED,
+      WorkflowStatus.REJECTED,
       "COMPLETED",
       "DONE",
-      "completed",
-      "done",
-      "Completed",
-      "Done",
+      "CANCELLED",
+      "CANCELED",
+      "REJECTED",
+      "ACHIEVED",
     ];
 
-    if (!completedStatuses.includes(linkedTask.status)) {
-      throw new Error(
-        `Cannot change status: Linked prerequisite task "${linkedTask.title}" is not completed. You can only update this task after "${linkedTask.title}" is completed.`,
-      );
+    const normLinkedStatus = String(linkedTask.status || "").trim().toUpperCase();
+
+    if (finalStatuses.includes(normLinkedStatus)) {
+      return; // Prerequisite reached final status (done/completed or cancelled) → allow
     }
+
+    // Check organization-specific TaskStatusConfig (for custom final statuses)
+    try {
+      const orgId = linkedTask.organizationId || task.organizationId;
+      if (orgId && normLinkedStatus) {
+        const TaskStatusConfig = (await import("../modals/taskStatusConfigModal.js")).default;
+        const statusCfg = await TaskStatusConfig.findOne({
+          organizationId: orgId,
+          code: normLinkedStatus,
+        }).select("isFinal systemStatus");
+
+        if (
+          statusCfg &&
+          (statusCfg.isFinal || ["DONE", "CANCELLED"].includes(statusCfg.systemStatus))
+        ) {
+          return;
+        }
+      }
+    } catch (e) {
+      // Non-blocking fallback
+    }
+
+    throw new Error(
+      `Cannot change status: Linked prerequisite task "${linkedTask.title}" is not completed or cancelled. You can only update this task after "${linkedTask.title}" is completed or cancelled.`,
+    );
   }
 
   /**

@@ -335,68 +335,34 @@ const MilesToneCreateModal = ({ setShowAddForm }) => {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="form-group">
-                    <label
-                      htmlFor="visibility"
-                      className="form-label flex items-center gap-2"
+                <div className="form-group">
+                  <label
+                    htmlFor="priority"
+                    className="form-label flex items-center gap-2"
+                  >
+                    <svg
+                      className="w-4 h-4 text-orange-500"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
                     >
-                      <svg
-                        className="w-4 h-4 text-yellow-500"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                        />
-                      </svg>
-                      Visibility
-                    </label>
-                    <select id="visibility" className="form-select">
-                      <option value="private">🔒 Private</option>
-                      <option value="public">👥 Public</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label
-                      htmlFor="priority"
-                      className="form-label flex items-center gap-2"
-                    >
-                      <svg
-                        className="w-4 h-4 text-orange-500"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                      Priority
-                    </label>
-                    <select id="priority" className="form-select">
-                      <option value="low">🟢 Low</option>
-                      <option value="medium" defaultSelected>
-                        🟡 Medium
-                      </option>
-                      <option value="high">🟠 High</option>
-                      <option value="critical">🔴 Critical</option>
-                    </select>
-                  </div>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    Priority
+                  </label>
+                  <select id="priority" className="form-select">
+                    <option value="low">🟢 Low</option>
+                    <option value="medium" defaultSelected>
+                      🟡 Medium
+                    </option>
+                    <option value="high">🟠 High</option>
+                    <option value="critical">🔴 Critical</option>
+                  </select>
                 </div>
 
                 <div className="form-group">

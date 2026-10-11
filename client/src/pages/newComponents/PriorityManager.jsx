@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useShowToast } from "@/utils/ToastMessage";
@@ -48,41 +49,86 @@ function CompanyPriorityRow({
   const priorityId = priority?._id || priority?.id;
 
   return (
-    <tr>
-      <td className="px-6 py-2 text-sm text-gray-900">
-        {priority.label || "Unnamed Priority"}
-      </td>
-      <td className="px-6 py-4">
-        <div className="flex items-center space-x-2">
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
-            {priority.daysToDue ?? 0} days
+    <tr className="hover:bg-gray-50/80 transition-colors">
+      <td className="px-6 py-3.5 whitespace-nowrap">
+        <div className="flex items-center gap-2.5">
+          <span
+            className="w-2.5 h-2.5 rounded-full ring-2 ring-white shadow-sm shrink-0"
+            style={{ backgroundColor: priority.color || "#6b7280" }}
+          />
+          <span className="font-medium text-gray-900 text-sm">
+            {priority.label || "Unnamed Priority"}
           </span>
           {priority.isDefault && (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-green-100 text-green-800">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
               Default
             </span>
           )}
         </div>
       </td>
-      <td className="px-6 py-2 whitespace-nowrap">
-        <div className="text-sm">
-          <div className="text-gray-900 font-medium">{taskCount}</div>
-          <div className="text-gray-500">tasks</div>
-        </div>
+      <td className="px-6 py-3.5 whitespace-nowrap">
+        <code className="text-xs font-mono font-medium text-gray-700 bg-gray-100 px-2.5 py-1 rounded border border-gray-200/80">
+          {priority.code || "-"}
+        </code>
       </td>
-      <td className="px-6 py-2">
-        <div className="flex items-center space-x-2">
+      <td className="px-6 py-3.5 whitespace-nowrap">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200/70">
+          {priority.daysToDue ?? 0} {priority.daysToDue === 1 ? "day" : "days"}
+        </span>
+      </td>
+      <td className="px-6 py-3.5 whitespace-nowrap">
+        <span
+          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+            priority.active !== false
+              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+              : "bg-gray-100 text-gray-600 border-gray-200"
+          }`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              priority.active !== false ? "bg-emerald-500" : "bg-gray-400"
+            }`}
+          />
+          {priority.active !== false ? "Active" : "Inactive"}
+        </span>
+      </td>
+      <td className="px-6 py-3.5 whitespace-nowrap text-center">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-gray-600 bg-gray-100 border border-gray-200">
+          {taskCount} {taskCount === 1 ? "task" : "tasks"}
+        </span>
+      </td>
+      <td className="px-6 py-3.5 whitespace-nowrap text-center">
+        <div className="flex justify-center items-center gap-1.5">
           <Button
-            variant="outline"
-            className="h-8"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2.5 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 font-medium transition-colors"
             onClick={onEdit}
             disabled={!canEdit}
           >
             Edit
           </Button>
           <Button
-            variant="destructive"
-            className="h-8"
+            variant="ghost"
+            size="sm"
+            disabled={!canEdit || priority.isDefault}
+            className={`h-7 px-2.5 text-xs font-medium transition-colors ${
+              priority.isDefault
+                ? "text-gray-300 cursor-not-allowed hover:bg-transparent"
+                : "text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50"
+            }`}
+            onClick={priority.isDefault ? undefined : onSetDefault}
+          >
+            Set Default
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-7 px-2.5 text-xs font-medium transition-colors ${
+              taskCount > 0 || !canEdit
+                ? "text-gray-300 cursor-not-allowed hover:bg-transparent"
+                : "text-red-600 hover:text-red-800 hover:bg-red-50"
+            }`}
             onClick={() => onDelete(priorityId)}
             disabled={!canEdit || taskCount > 0}
             title={
@@ -92,14 +138,6 @@ function CompanyPriorityRow({
             }
           >
             Delete
-          </Button>
-          <Button
-            variant="primary"
-            className="h-8 bg-green-600 hover:bg-green-700"
-            onClick={onSetDefault}
-            disabled={!canEdit}
-          >
-            Set Default
           </Button>
         </div>
       </td>
@@ -239,118 +277,104 @@ export default function PriorityManager() {
   };
 
   return (
-    <div className="py-3 px-6 min-h-full overflow-x-hidden bg-gray-50 [&_button]:!rounded-md">
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-4 pb-2 border-b border-gray-200">
+    <div className="py-4 px-4 sm:px-6 max-w-7xl mx-auto space-y-4">
+      {/* Header */}
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between pb-1">
         <div>
-          <h1 className="text-2xl font-normal m-0"
-                style={{ color: "#676a6c" }}>Priority Manager</h1>
-           <p className="mt-0 text-sm text-blue-600">
+          <h1 className="text-2xl font-normal m-0" style={{ color: "#676a6c" }}>
+            Priority Manager
+          </h1>
+          <p className="mt-0.5 text-sm text-blue-600">
             Manage task priorities and their system mappings
           </p>
         </div>
-        {/* <Button
-          variant="primary"
-          className="h-8 mt-4 lg:mt-0"
-          onClick={() => setShowAddForm(true)}
-        >
-          <svg
-            className="w-4 h-4 mr-2"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          Add Priority
-        </Button> */}
       </div>
 
       {showAddForm && (
-        <div className="card rounded-md [&:hover]:!transform-none [&:hover]:!shadow-none">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">
-            {editingPriority ? "Edit Priority" : "Add New Priority"}
-          </h3>
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="grid grid-cols-3  gap-3">
+        <div className="card p-5 rounded-md border border-gray-200 shadow-sm bg-white">
+          <div className="border-b border-gray-200 pb-3 mb-4">
+            <h3 className="text-base font-semibold text-gray-900">
+              {editingPriority ? "Edit Priority" : "Add New Priority"}
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Configure priority details and automatic due-date SLA offsets.
+            </p>
+          </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="form-label">Code</label>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  Code
+                </label>
                 <input
                   type="text"
                   value={formData.code}
                   onChange={(e) =>
                     setFormData({ ...formData, code: e.target.value })
                   }
-                  className="form-input"
+                  className="w-full h-9 px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                   placeholder="e.g., medium"
                   required
                   disabled={!!editingPriority}
                 />
               </div>
               <div>
-                <label className="form-label">Label</label>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  Label
+                </label>
                 <input
                   type="text"
                   value={formData.label}
                   onChange={(e) =>
                     setFormData({ ...formData, label: e.target.value })
                   }
-                  className="form-input"
+                  className="w-full h-9 px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
                   placeholder="e.g., Medium"
                   required
                 />
               </div>
               <div>
-                <label className="form-label">Days to Due Date</label>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  Days to Due Date
+                </label>
                 <input
                   type="number"
                   value={formData.daysToDue}
                   onChange={(e) =>
                     setFormData({ ...formData, daysToDue: e.target.value })
                   }
-                  className="form-input"
+                  className="w-full h-9 px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
                   placeholder="7"
                   min="1"
                   max="365"
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-[11px] text-gray-400 mt-1">
                   Auto-assign due date after this many days
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="form-label">Color</label>
-                <input
-                  type="color"
-                  value={formData.color}
-                  onChange={(e) =>
-                    setFormData({ ...formData, color: e.target.value })
-                  }
-                  className="w-full h-10 border border-gray-300 rounded-md"
-                />
-              </div>
-              <div className="flex items-center gap-2 mt-6">
-                <input
-                  type="checkbox"
-                  checked={!!formData.active}
-                  onChange={(e) =>
-                    setFormData({ ...formData, active: e.target.checked })
-                  }
-                />
-                <span className="text-sm text-gray-700">Active</span>
-              </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="priorityActive"
+                checked={!!formData.active}
+                onChange={(e) =>
+                  setFormData({ ...formData, active: e.target.checked })
+                }
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+              />
+              <label htmlFor="priorityActive" className="text-sm font-medium text-gray-700 cursor-pointer">
+                Active (available in task forms)
+              </label>
             </div>
-            <div className="flex justify-between space-x-3">
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
               <Button
                 type="button"
                 variant="outline"
-                className="h-8"
+                className="h-8 rounded-sm"
                 onClick={() => {
                   setShowAddForm(false);
                   setEditingPriority(null);
@@ -365,49 +389,77 @@ export default function PriorityManager() {
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" className="h-8">
-                {editingPriority ? "Update Priority" : "Add Priority"}
+              <Button
+                type="submit"
+                variant="primary"
+                className="h-8 rounded-sm"
+                disabled={updatePriorityMutation.isPending || createPriorityMutation.isPending}
+              >
+                {(updatePriorityMutation.isPending || createPriorityMutation.isPending) && (
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                )}
+                {editingPriority ? "Save Changes" : "Add Priority"}
               </Button>
             </div>
           </form>
         </div>
       )}
 
-      <div className="card rounded-md p-0 overflow-hidden [&:hover]:!transform-none [&:hover]:!shadow-none">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Priority
-                </th>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Days to Due
-                </th>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tasks Using
-                </th>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {(Array.isArray(priorities) ? priorities : [])
-                .filter((priority) => priority && (priority._id || priority.id))
-                .map((priority) => (
-                  <CompanyPriorityRow
-                    key={priority._id || priority.id}
-                    priority={priority}
-                    onEdit={() => handleEdit(priority)}
-                    onDelete={handleDelete}
-                    onSetDefault={() => handleSetDefault(priority)}
-                    canEdit={true}
-                  />
-                ))}
-            </tbody>
-          </table>
+      {/* Main Table Card */}
+      <div className="card p-0 rounded-md border border-gray-200 shadow-sm overflow-hidden bg-white">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">
+              Company Task Priorities
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Task priority configured for your organization
+            </p>
+          </div>
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 w-fit">
+            {(Array.isArray(priorities) ? priorities : []).length} Priorities
+          </span>
         </div>
+
+        {prioritiesLoading ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+            <p className="text-sm text-gray-500">Loading priorities...</p>
+          </div>
+        ) : (Array.isArray(priorities) ? priorities : []).length === 0 ? (
+          <div className="text-center py-12 text-sm text-gray-500">
+            No priorities configured.
+          </div>
+        ) : (
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50/70 text-gray-500 text-xs font-semibold uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left">Priority</th>
+                  <th className="px-6 py-3 text-left">Code</th>
+                  <th className="px-6 py-3 text-left">Days to Due</th>
+                  <th className="px-6 py-3 text-left">Status</th>
+                  <th className="px-6 py-3 text-center">Tasks Using</th>
+                  <th className="px-6 py-3 text-center w-56">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {(Array.isArray(priorities) ? priorities : [])
+                  .filter((priority) => priority && (priority._id || priority.id))
+                  .map((priority) => (
+                    <CompanyPriorityRow
+                      key={priority._id || priority.id}
+                      priority={priority}
+                      onEdit={() => handleEdit(priority)}
+                      onDelete={handleDelete}
+                      onSetDefault={() => handleSetDefault(priority)}
+                      canEdit={true}
+                    />
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

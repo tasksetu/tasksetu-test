@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useOrgUsers, useOrgForms } from "@/hooks/useProcessBuilder";
+import { stripHtmlToText } from "../common/SafeHtml";
 import { ProcessStepModal } from "./ProcessStepModal";
 import {
   Play,
@@ -242,9 +243,9 @@ export function StartProcessModal({
                             </div>
 
                             {/* Step Description Preview */}
-                            {step.description && (
+                            {stripHtmlToText(step.description) && (
                               <p className="text-[11px] text-gray-500 line-clamp-1">
-                                {step.description.replace(/<[^>]*>/g, "")}
+                                {stripHtmlToText(step.description)}
                               </p>
                             )}
 

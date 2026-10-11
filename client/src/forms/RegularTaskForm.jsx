@@ -14,6 +14,7 @@ import {
 import { getReactSelectStyles } from "@/components/ui/design-system.config";
 import { useTaskPriorities } from "@/hooks/useTaskPriorities";
 import { getDefaultPriorityCode } from "@/utils/priorityUtils";
+import { Users, Loader2 } from "lucide-react";
 
 // Advanced Fields Modal Component
 const AdvancedFieldsModal = ({
@@ -213,13 +214,17 @@ const AdvancedFieldsModal = ({
 const RegularTaskForm = ({
   onSubmit,
   onCancel,
+  onClose,
   isOrgUser = false,
-  defaultValues = {},
+  userRole = "individual",
+  defaultValues: propDefaultValues = {},
+  initialData = {},
   collaboratorOptions = [],
   isLoadingCollaborators = false,
   drawer = false,
   isSubmitting = false,
 }) => {
+  const defaultValues = { ...initialData, ...propDefaultValues };
   const { showSuccessToast, showErrorToast } = useShowToast();
   const { data: taskPriorities = [] } = useTaskPriorities();
 
@@ -241,6 +246,7 @@ const RegularTaskForm = ({
       visibility: "private",
       tags: [],
       attachments: [],
+      collaborators: defaultValues.collaborators || [],
       ...defaultValues,
     },
   });
@@ -253,6 +259,7 @@ const RegularTaskForm = ({
   const attachmentsInputRef = useRef(null);
   const isFirstRender = useRef(true);
   const watchedPriority = watch("priority");
+  const watchedCollaborators = watch("collaborators");
 
   // Set default priority when taskPriorities loads
   useEffect(() => {
@@ -298,10 +305,33 @@ const RegularTaskForm = ({
         visibility: "private",
         tags: [],
         attachments: [],
+        collaborators: defaultValues.collaborators || [],
         ...defaultValues,
       });
     }
   }, [defaultValues, reset, isOrgUser, taskPriorities]);
+
+  // Sync pre-filled collaborators when collaborator options become available
+  useEffect(() => {
+    if (
+      defaultValues?.collaborators &&
+      defaultValues.collaborators.length > 0 &&
+      collaboratorOptions.length > 0
+    ) {
+      if (!watchedCollaborators || watchedCollaborators.length === 0) {
+        const mapped = defaultValues.collaborators
+          .map((c) => {
+            if (typeof c === "object" && c !== null && c.value) return c;
+            const id = typeof c === "object" && c !== null ? c.id || c._id : c;
+            return collaboratorOptions.find((opt) => opt.value === id);
+          })
+          .filter(Boolean);
+        if (mapped.length > 0) {
+          setValue("collaborators", mapped);
+        }
+      }
+    }
+  }, [defaultValues?.collaborators, collaboratorOptions, setValue, watchedCollaborators]);
 
   // Legacy prefill support - for backward compatibility
   useEffect(() => {
@@ -432,6 +462,71 @@ const RegularTaskForm = ({
     isLoadingCollaborators,
   });
 
+  // Custom option renderer for collaborators with role badges
+  const formatCollaboratorOptionLabel = (option, { context }) => {
+    const roles = Array.isArray(option.role)
+      ? option.role
+      : option.role
+        ? [option.role]
+        : [];
+    const displayName = option.name || option.label?.split(" (")[0] || "User";
+
+    const getRoleBadgeClass = (roleName) => {
+      switch (String(roleName).toLowerCase()) {
+        case "org_admin":
+        case "org admin":
+          return "bg-red-50 text-red-700 border-red-200";
+        case "manager":
+          return "bg-blue-50 text-blue-700 border-blue-200";
+        case "employee":
+          return "bg-green-50 text-green-700 border-green-200";
+        default:
+          return "bg-gray-50 text-gray-700 border-gray-200";
+      }
+    };
+
+    if (context === "value") {
+      return (
+        <div className="flex items-center gap-1.5 max-w-full h-full my-auto">
+          <span className="truncate font-medium leading-none">
+            {displayName}
+          </span>
+          {roles.slice(0, 1).map((r) => (
+            <span
+              key={r}
+              className={`text-[10px] font-bold px-1.5 py-[2px] rounded border uppercase tracking-wider leading-none flex items-center justify-center ${getRoleBadgeClass(r)}`}
+            >
+              {r}
+            </span>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-between py-1">
+        <div className="flex flex-col">
+          <span className="font-medium text-gray-900">
+            {option.name || option.label}
+          </span>
+          {option.email && (
+            <span className="text-xs text-gray-500">{option.email}</span>
+          )}
+        </div>
+        <div className="flex gap-1">
+          {roles.map((r) => (
+            <span
+              key={r}
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${getRoleBadgeClass(r)}`}
+            >
+              {r}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   // Shared attachment processing for click + drag/drop flows
   const processFiles = (files) => {
     if (!files || files.length === 0) return;
@@ -515,7 +610,12 @@ const RegularTaskForm = ({
     const formData = {
       ...data,
       ...advancedData,
+      visibility: "private",
       attachments: uploadedFiles,
+      collaborators: data.collaborators || [],
+      collaboratorIds: (data.collaborators || []).map(
+        (c) => c.value || c.id || c._id || c,
+      ),
     };
 
     if (typeof onSubmit === "function") {
@@ -722,6 +822,56 @@ const RegularTaskForm = ({
           {/* Tags */}
         </div>
 
+        {/* Collaborators */}
+        {(isOrgUser || (collaboratorOptions && collaboratorOptions.length > 0)) && (
+          <div>
+            <label className="block text-sm font-medium text-gray-900 mb-1 flex items-center">
+              <Users className="w-4 h-4 mr-1 text-gray-600" />
+              Collaborators
+              {isLoadingCollaborators && (
+                <Loader2 className="w-4 h-4 animate-spin ml-2 text-blue-500" />
+              )}
+            </label>
+            <Controller
+              name="collaborators"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  {...field}
+                  menuPlacement="auto"
+                  isMulti
+                  options={collaboratorOptions.filter((opt) => opt.value !== "self")}
+                  isLoading={isLoadingCollaborators}
+                  isDisabled={isLoadingCollaborators}
+                  className="react-select-container h-8-select"
+                  classNamePrefix="react-select"
+                  menuPortalTarget={
+                    typeof document !== "undefined" ? document.body : undefined
+                  }
+                  styles={{
+                    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                  }}
+                  placeholder={
+                    isLoadingCollaborators
+                      ? "Loading collaborators..."
+                      : "Select collaborators"
+                  }
+                  noOptionsMessage={() =>
+                    isLoadingCollaborators
+                      ? "Loading..."
+                      : "No collaborators available"
+                  }
+                  formatOptionLabel={formatCollaboratorOptionLabel}
+                  data-testid="select-collaborators"
+                />
+              )}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Collaborators can view and comment on the task.
+            </p>
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-gray-900 mb-1">
             Labels / Tags
@@ -817,46 +967,6 @@ const RegularTaskForm = ({
                 </div>
               );
             }}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-900  mb-1">
-            Visibility <span className="text-red-500">*</span>
-          </label>
-          <Controller
-            name="visibility"
-            control={control}
-            defaultValue="private"
-            render={({ field }) => (
-              <div className="flex space-x-3">
-                <label className="flex items-center">
-                  <input
-                    {...field}
-                    type="radio"
-                    value="private"
-                    checked={field.value === "private"}
-                    className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                    data-testid="radio-private"
-                  />
-                  <span className="ml-2 text-sm text-gray-900">Private</span>
-                </label>
-
-                {isOrgUser && (
-                  <label className="flex items-center">
-                    <input
-                      {...field}
-                      type="radio"
-                      value="team"
-                      checked={field.value === "team"}
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                      data-testid="radio-team"
-                    />
-                    <span className="ml-2 text-sm text-gray-900">Team</span>
-                  </label>
-                )}
-              </div>
-            )}
           />
         </div>
 
@@ -1016,5 +1126,6 @@ const RegularTaskForm = ({
   );
 };
 
+export { RegularTaskForm };
 export default RegularTaskForm;
   

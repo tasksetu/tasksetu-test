@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { GripVertical, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StatusFormModal from "./StatusFormModal";
 import { apiRequest } from "@/lib/queryClient";
@@ -210,109 +211,87 @@ export default function StatusManager() {
     [companyStatuses],
   );
 
+  const sortedActiveCompanyStatuses = useMemo(
+    () => [...activeCompanyStatuses].sort((a, b) => a.order - b.order),
+    [activeCompanyStatuses],
+  );
+
   return (
-    <div className="status-manager-container py-3 px-6 max-w-7xl mx-auto space-y-3 bg-gray-50 min-h-full">
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-        <div className="relative">
-         <h1 className="text-2xl font-normal mt-2"
-                style={{ color: "#676a6c" }}>
+    <div className="py-4 px-4 sm:px-6 max-w-7xl mx-auto space-y-4">
+      {/* Header */}
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between pb-1">
+        <div>
+          <h1 className="text-2xl font-normal m-0" style={{ color: "#676a6c" }}>
             Company Status Configuration
           </h1>
-           <p className="mt-0 text-sm text-blue-600">
+          <p className="mt-0.5 text-sm text-blue-600">
             Configure task status for your organization
           </p>
         </div>
       </div>
 
-      <div className="bg-white/90 backdrop-blur-sm rounded-sm shadow-xl border border-gray-200/50 p-7">
-        {/* <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <Button
-              variant="primary"
-              className="h-9 relative overflow-hidden group"
-              onClick={() => setShowAddForm(true)}
-            >
-              <svg
-                className="w-5 h-5 mr-2 transition-transform duration-300 group-hover:rotate-90"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              Add Status
-            </Button>
+      {/* Main Table Card */}
+      <div className="card p-0 rounded-md border border-gray-200 shadow-sm overflow-hidden bg-white">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">
+              Company Task Status
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Task status configured for your organization. Drag and drop rows to customize workflow order.
+            </p>
           </div>
-          <div className="text-sm text-gray-500">
-            {statusesLoading
-              ? "Loading statuses..."
-              : `Statuses: ${activeCompanyStatuses.length}`}
-          </div>
-        </div> */}
-
-        <div className="">
-          <div className="status-list company-statuses">
-            <div className="section-header">
-              <h3>Company Task Status</h3>
-              <p>Task status configured for your organization</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full bg-white border border-gray-200 rounded-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Order
-                    </th>
-                    <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Code
-                    </th>
-                    <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tasks Using
-                    </th>
-                    <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {activeCompanyStatuses
-                    .sort((a, b) => a.order - b.order)
-                    .map((status) => (
-                      <CompanyStatusRow
-                        key={status._id || status.id}
-                        status={status}
-                        onEdit={() => setEditingStatus(status)}
-                        onDelete={() => setDeleteModal(status)}
-                        onSetDefault={() => handleSetDefault(status)}
-                        canEdit={true}
-                        onDragStart={handleDragStart}
-                        onDragEnd={handleDragEnd}
-                        onDragOver={handleDragOver}
-                        onDragEnter={handleDragEnter}
-                        onDrop={handleDrop}
-                        isDraggedOver={
-                          dragOverItem &&
-                          (dragOverItem._id || dragOverItem.id) ===
-                            (status._id || status.id)
-                        }
-                      />
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 w-fit">
+            {activeCompanyStatuses.length} Statuses
+          </span>
         </div>
+
+        {statusesLoading ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+            <p className="text-sm text-gray-500">Loading statuses...</p>
+          </div>
+        ) : sortedActiveCompanyStatuses.length === 0 ? (
+          <div className="text-center py-12 text-sm text-gray-500">
+            No task statuses found.
+          </div>
+        ) : (
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50/70 text-gray-500 text-xs font-semibold uppercase tracking-wider">
+                  <th className="px-6 py-3 w-28 text-left">Order</th>
+                  <th className="px-6 py-3 text-left">Status</th>
+                  <th className="px-6 py-3 text-left">Code</th>
+                  <th className="px-6 py-3 text-left">Type</th>
+                  <th className="px-6 py-3 text-center">Tasks Using</th>
+                  <th className="px-6 py-3 text-center w-36">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {sortedActiveCompanyStatuses.map((status) => (
+                  <CompanyStatusRow
+                    key={status._id || status.id}
+                    status={status}
+                    onEdit={() => setEditingStatus(status)}
+                    onDelete={() => setDeleteModal(status)}
+                    onSetDefault={() => handleSetDefault(status)}
+                    canEdit={true}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={handleDragOver}
+                    onDragEnter={handleDragEnter}
+                    onDrop={handleDrop}
+                    isDraggedOver={
+                      dragOverItem &&
+                      getStatusId(dragOverItem) === getStatusId(status)
+                    }
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {showAddForm && (
@@ -374,7 +353,11 @@ function CompanyStatusRow({
 
   return (
     <tr
-      className={`${isDraggedOver ? "bg-blue-50" : "hover:bg-gray-50"} transition-colors duration-200`}
+      className={`transition-colors duration-150 ${
+        isDraggedOver
+          ? "bg-blue-50/80 ring-2 ring-blue-400 ring-inset"
+          : "hover:bg-gray-50/80"
+      }`}
       draggable={canEdit}
       onDragStart={(e) => onDragStart(e, status)}
       onDragEnd={onDragEnd}
@@ -382,92 +365,79 @@ function CompanyStatusRow({
       onDragEnter={(e) => onDragEnter(e, status)}
       onDrop={(e) => onDrop(e, status)}
     >
-      <td className="px-6 py-2 whitespace-nowrap">
-        <div className="flex items-center space-x-2">
-          <div className={`text-gray-400 ${canEdit ? "cursor-move" : ""}`}>
-            &#894;&#894;
-          </div>
-          <span className="text-sm font-medium text-gray-900">
+      <td className="px-6 py-3.5 whitespace-nowrap">
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <div
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-md cursor-grab active:cursor-grabbing transition-colors inline-flex items-center justify-center"
+              title="Drag to reorder"
+            >
+              <GripVertical className="w-4 h-4" />
+            </div>
+          )}
+          <span className="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-semibold text-gray-700 bg-gray-100/80 border border-gray-200/60">
             {status.order}
           </span>
         </div>
       </td>
-      <td className="px-6 py-2 whitespace-nowrap">
-        <div className="flex items-center space-x-3">
+      <td className="px-6 py-3.5 whitespace-nowrap">
+        <div className="flex items-center gap-2.5">
           <span
-            className="inline-block w-3 h-3 rounded-full"
-            style={{ backgroundColor: status.color }}
+            className="w-2.5 h-2.5 rounded-full ring-2 ring-white shadow-sm shrink-0"
+            style={{ backgroundColor: status.color || "#6b7280" }}
           />
-          <span className="text-sm font-medium text-gray-900">
+          <span className="font-medium text-gray-900 text-sm">
             {status.label}
           </span>
           {status.isDefault && (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
-              DEFAULT
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+              Default
             </span>
           )}
         </div>
       </td>
-      <td className="px-6 py-2 whitespace-nowrap">
-        <code className="text-sm bg-gray-100 px-2 py-1 rounded-md">
+      <td className="px-6 py-3.5 whitespace-nowrap">
+        <code className="text-xs font-mono font-medium text-gray-700 bg-gray-100 px-2 py-0.5 rounded border border-gray-200/80">
           {status.code}
         </code>
       </td>
-      <td className="px-6 py-2 whitespace-nowrap">
+      <td className="px-6 py-3.5 whitespace-nowrap">
         <span
-          className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium ${
+          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
             status.isFinal
-              ? "bg-red-100 text-red-800"
-              : "bg-green-100 text-green-800"
+              ? "bg-rose-50 text-rose-700 border-rose-200"
+              : "bg-emerald-50 text-emerald-700 border-emerald-200"
           }`}
         >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              status.isFinal ? "bg-rose-500" : "bg-emerald-500"
+            }`}
+          />
           {status.isFinal ? "Final" : "Active"}
         </span>
       </td>
-      <td className="px-6 py-2 whitespace-nowrap">
-        <div className="text-sm">
-          <div className="text-gray-900 font-medium">{taskCount}</div>
-          <div className="text-gray-500">tasks</div>
-        </div>
+      <td className="px-6 py-3.5 whitespace-nowrap text-center">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200">
+          {taskCount} {taskCount === 1 ? "task" : "tasks"}
+        </span>
       </td>
-      <td className="px-6 py-2 whitespace-nowrap text-right text-sm font-medium">
-        <div className="flex space-x-2">
+      <td className="px-6 py-3.5 whitespace-nowrap text-center">
+        <div className="flex justify-center items-center">
           {canEdit && (
-            <>
-              <Button
-                variant="ghost"
-                className="text-indigo-600 hover:text-indigo-900 transition-colors duration-200"
-                onClick={onEdit}
-              >
-                Edit
-              </Button>
-              {!status.isDefault && (
-                <Button
-                  variant="ghost"
-                  className="text-blue-600 hover:text-blue-900 transition-colors duration-200"
-                  onClick={onSetDefault}
-                >
-                  Set Default
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                className={`transition-colors duration-200 ${
-                  taskCount > 0
-                    ? "text-gray-400 cursor-not-allowed"
-                    : "text-red-600 hover:text-red-900"
-                }`}
-                onClick={() => onDelete(statusId)}
-                disabled={taskCount > 0}
-                title={
-                  taskCount > 0
-                    ? `Cannot delete: ${taskCount} tasks using this status`
-                    : "Delete status"
-                }
-              >
-                Delete
-              </Button>
-            </>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={status.isDefault}
+              className={`h-7 px-3 text-xs font-medium transition-colors ${
+                status.isDefault
+                  ? "text-gray-300 cursor-not-allowed hover:bg-transparent"
+                  : "text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+              }`}
+              onClick={status.isDefault ? undefined : onSetDefault}
+            >
+              Set Default
+            </Button>
           )}
         </div>
       </td>

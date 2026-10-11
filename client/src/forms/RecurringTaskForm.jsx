@@ -2304,6 +2304,7 @@ export const RecurringTaskForm = ({
     // Combine task and recurrence data
     const formData = {
       ...data,
+      visibility: "private",
       attachments: uploadedFiles,
       taskType: "recurring",
       dueDate: dueDate,
@@ -2464,7 +2465,7 @@ export const RecurringTaskForm = ({
         {(userRole !== "individual" || userRole === "employee") && (
           <div>
             <label className="block text-xs sm:text-sm font-medium text-gray-900 mb-1">
-              Contributors
+              Collaborators
             </label>
             <Controller
               name="contributors"
@@ -2480,16 +2481,15 @@ export const RecurringTaskForm = ({
                   classNamePrefix="react-select"
                   placeholder={
                     isLoadingCollaborators
-                      ? "Loading contributors..."
-                      : "Select contributors"
+                      ? "Loading collaborators..."
+                      : "Select collaborators"
                   }
                   data-testid="select-contributors"
                 />
               )}
             />
             <p className="text-xs text-gray-500 mt-1 leading-tight">
-              Contributors will receive notifications and can view/comment on
-              the task
+              Collaborators can view and comment on the task
             </p>
           </div>
         )}
@@ -2596,46 +2596,6 @@ export const RecurringTaskForm = ({
             }}
           />
         </div>
-      </div>
-
-      {/* Visibility */}
-      <div>
-        <label className="block text-xs sm:text-sm font-medium text-gray-900 mb-1">
-          Visibility <span className="text-red-500">*</span>
-        </label>
-        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-          <label className="flex items-center">
-            <input
-              {...register("visibility")}
-              type="radio"
-              value="private"
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-              data-testid="radio-private"
-            />
-            <span className="ml-2 text-xs sm:text-sm text-gray-900">
-              Private
-            </span>
-          </label>
-          {isOrgUser && (
-            <label className="flex items-center">
-              <input
-                {...register("visibility")}
-                type="radio"
-                value="public"
-                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                data-testid="radio-public"
-              />
-              <span className="ml-2 text-xs sm:text-sm text-gray-900">
-                Public
-              </span>
-            </label>
-          )}
-        </div>
-        <p className="text-xs text-gray-500 mt-1">
-          {isOrgUser
-            ? "Private: Only you and assignee can view. Public: All users can view."
-            : "Private: Only you and assignee can view."}
-        </p>
       </div>
 
       {/* Notes / Instructions - Simple textarea for all users (max 100 words) */}

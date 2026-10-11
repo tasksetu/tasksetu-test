@@ -73,7 +73,7 @@ import TaskEditModal from "../newComponents/TaskEditModal";
 import SubtaskForm from "../../components/forms/SubtaskForm";
 import FormSubmissionsModal from "../../components/forms/FormSubmissionsModal";
 import FormSubmissionModal from "../../components/forms/FormSubmissionModal";
-import SafeHtml from "../../components/common/SafeHtml";
+import SafeHtml, { stripHtmlToText } from "../../components/common/SafeHtml";
 import "../../components/forms/FormsStyles.css";
 import {
   ReassignTaskModal,
@@ -94,6 +94,9 @@ import ConfirmDialog from "../../components/common/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import useLicense from "../../hooks/useLicense";
 import UpgradeRequiredModal from "../../components/modals/UpgradeRequiredModal";
+import TaskChangeApprovalModal from "../../components/modals/TaskChangeApprovalModal";
+import TaskChangeReasonModal from "../../components/modals/TaskChangeReasonModal";
+import { useTaskApprovalGating } from "../../hooks/useTaskApprovalGating";
 import "./TaskView.css";
 import "./DetailedView.css";
 
@@ -223,6 +226,17 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDoneModal, setShowDoneModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [pendingChangeRequest, setPendingChangeRequest] = useState(null);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const { checkRequiresApproval, checkRequiresApprovalAsync } = useTaskApprovalGating();
+  const [changeReasonModal, setChangeReasonModal] = useState({
+    isOpen: false,
+    field: "dueDate",
+    fieldName: "Due Date",
+    currentValue: "",
+    requestedValue: "",
+    submitHandler: null,
+  });
   const [moreInfo, setMoreInfo] = useState(false);
 
   // Dropdown states for interactive pills
@@ -238,24 +252,78 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
     return name.slice(0, 2).toUpperCase();
   };
 
-  const formatDateTimeCustom = (dateStr) => {
-    if (!dateStr) return "N/A";
+  const toDatetimeLocal = (date) => {
+    if (!date) return "";
     try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr;
-      const formatted = d.toLocaleString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      });
-      return formatted
-        .replace(",", "")
-        .replace(/(am|pm)/i, (m) => m.toUpperCase());
+      if (date instanceof Date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hours = String(date.getHours()).padStart(2, "0");
+        const minutes = String(date.getMinutes()).padStart(2, "0");
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+      }
+      const str = String(date).trim();
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(str)) {
+        return str;
+      }
+      const hasTimezone =
+        /[Zz]$|(T\d{2}:\d{2}(:\d{2})?(\.[0-9]+)?[+-]\d{2}:?\d{2})$/.test(str);
+      const d = new Date(hasTimezone ? str : str + "Z");
+      if (isNaN(d.getTime())) return "";
+      const year = d.getUTCFullYear();
+      const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(d.getUTCDate()).padStart(2, "0");
+      const hours = String(d.getUTCHours()).padStart(2, "0");
+      const minutes = String(d.getUTCMinutes()).padStart(2, "0");
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch {
+      return "";
+    }
+  };
+
+  const MONTH_NAMES_SHORT = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+
+  const formatDateTimeCustom = (dateStr) => {
+    if (!dateStr || dateStr === "No due date" || dateStr === "No start date")
+      return "No due date";
+    try {
+      let d;
+      if (dateStr instanceof Date) {
+        d = dateStr;
+      } else {
+        const str = String(dateStr).trim();
+        const hasTimezone =
+          /[Zz]$|(T\d{2}:\d{2}(:\d{2})?(\.[0-9]+)?[+-]\d{2}:?\d{2})$/.test(str);
+        d = new Date(hasTimezone ? str : str + "Z");
+      }
+      if (isNaN(d.getTime())) return String(dateStr);
+
+      const day = d.getUTCDate().toString().padStart(2, "0");
+      const month = MONTH_NAMES_SHORT[d.getUTCMonth()];
+      const year = d.getUTCFullYear();
+      const utcH = d.getUTCHours();
+      const utcM = d.getUTCMinutes();
+      const ampm = utcH >= 12 ? "PM" : "AM";
+      const hour12 = utcH % 12 || 12;
+      const minStr = utcM.toString().padStart(2, "0");
+
+      return `${day} ${month} ${year} ${hour12}:${minStr} ${ampm}`;
     } catch (e) {
-      return dateStr;
+      return String(dateStr);
     }
   };
 
@@ -263,9 +331,23 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
     const rawDate = rawTaskData?.dueDate || task?.dueDate;
     if (!rawDate) return null;
     try {
-      const dueDate = new Date(rawDate);
+      const str = String(rawDate).trim();
+      const hasTimezone =
+        /[Zz]$|(T\d{2}:\d{2}(:\d{2})?(\.[0-9]+)?[+-]\d{2}:?\d{2})$/.test(str);
+      const dueDate = new Date(hasTimezone ? str : str + "Z");
       if (isNaN(dueDate.getTime())) return null;
-      const today = new Date();
+
+      const now = new Date();
+      const today = new Date(
+        Date.UTC(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+          now.getHours(),
+          now.getMinutes(),
+          now.getSeconds(),
+        ),
+      );
       const diffDays = Math.ceil(
         (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
       );
@@ -632,24 +714,8 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
             taskData.assignedTo?.id ||
             taskData.assignedTo?._doc?._id ||
             null,
-          dueDate: taskData.dueDate
-            ? new Date(taskData.dueDate)
-                .toLocaleDateString("en-GB", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })
-                .replace(",", "")
-            : "No due date",
-          startDate: taskData.startDate
-            ? new Date(taskData.startDate)
-                .toLocaleDateString("en-GB", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })
-                .replace(",", "")
-            : "No start date",
+          dueDate: taskData.dueDate || null,
+          startDate: taskData.startDate || null,
           timeEstimate: taskData.timeEstimate || "Not specified",
           tags: taskData.tags || [],
           createdBy: taskData.createdBy
@@ -659,6 +725,9 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
             taskData.createdBy?._id ||
             taskData.createdBy?.id ||
             taskData.createdBy?._doc?._id ||
+            (typeof taskData.createdBy === "string" ? taskData.createdBy : null) ||
+            taskData.creatorId ||
+            taskData.creator ||
             null,
           createdAt: taskData.createdAt
             ? new Date(taskData.createdAt)
@@ -711,18 +780,21 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
                 : subtask.assignedTo
               : "Unassigned",
             assigneeId: subtask.assignedTo?._id || subtask.assignedTo || null,
-            dueDate: subtask.dueDate
-              ? new Date(subtask.dueDate)
-                  .toLocaleDateString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  })
-                  .replace(",", "")
-              : "No due date",
+            dueDate: subtask.dueDate || null,
+            creator: subtask.createdBy,
+            creatorId:
+              subtask.createdBy?._id ||
+              subtask.createdBy?.id ||
+              (typeof subtask.createdBy === "string" ? subtask.createdBy : null),
+            createdByName: subtask.createdBy
+              ? typeof subtask.createdBy === "object"
+                ? `${subtask.createdBy.firstName || ""}${subtask.createdBy.firstName && subtask.createdBy.lastName ? " " : ""}${subtask.createdBy.lastName || ""}`.trim() ||
+                  subtask.createdBy.email
+                : subtask.createdBy
+              : "Unknown",
             createdBy: subtask.createdBy
               ? typeof subtask.createdBy === "object"
-                ? `${subtask.createdBy.firstName || ""} ${subtask.createdBy.lastName || ""}`.trim() ||
+                ? `${subtask.createdBy.firstName || ""}${subtask.createdBy.firstName && subtask.createdBy.lastName ? " " : ""}${subtask.createdBy.lastName || ""}`.trim() ||
                   subtask.createdBy.email
                 : subtask.createdBy
               : "Unknown",
@@ -1251,6 +1323,31 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
     }
   };
 
+  // Fetch pending change request for this task
+  const fetchPendingChangeRequest = useCallback(async () => {
+    if (!taskId) return;
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const response = await axios.get(
+        `/api/task-change-requests/task/${taskId}/pending`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+      if (response.data?.success && response.data?.hasPending) {
+        setPendingChangeRequest(response.data.data);
+      } else {
+        setPendingChangeRequest(null);
+      }
+    } catch (err) {
+      console.error("Error fetching pending change request:", err);
+      setPendingChangeRequest(null);
+    }
+  }, [taskId]);
+
   // Fetch data when component mounts or taskId changes
   useEffect(() => {
     fetchTaskData();
@@ -1258,8 +1355,9 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
       fetchComments();
       fetchActivities(); // Add activity fetching
       fetchAttachments();
+      fetchPendingChangeRequest();
     }
-  }, [taskId, fetchAttachments]);
+  }, [taskId, fetchAttachments, fetchPendingChangeRequest]);
 
   // Control body scroll when drawer opens
   useEffect(() => {
@@ -2703,7 +2801,11 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
     );
   }
 
-  const handleStatusChange = async (newStatus, notes = null) => {
+  const handleStatusChange = async (newStatus, notesOrEvent = null) => {
+    const notes =
+      typeof notesOrEvent === "string" && notesOrEvent.trim()
+        ? notesOrEvent.trim()
+        : null;
     const taskId = task?.id || task?._id;
 
     if (!taskId) {
@@ -2720,6 +2822,32 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
       return;
     }
 
+    const isApprovalRequired = await checkRequiresApprovalAsync({
+      task: rawTaskData || task,
+      field: "status",
+      user: currentUser,
+    });
+
+    if (isApprovalRequired && !notes) {
+      setShowStatusDropdown(false);
+      setChangeReasonModal({
+        isOpen: true,
+        field: "status",
+        fieldName: "Status",
+        currentValue: task?.status || "OPEN",
+        requestedValue: newStatus,
+        submitHandler: async (reasonText) => {
+          await executeStatusChange(newStatus, reasonText);
+        },
+      });
+      return;
+    }
+
+    await executeStatusChange(newStatus, notes);
+  };
+
+  const executeStatusChange = async (newStatus, notes = null) => {
+    const taskId = task?.id || task?._id;
     try {
       setIsUpdatingStatus(true);
       const token = localStorage.getItem("token");
@@ -2742,6 +2870,7 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
       }
       if (notes !== null) {
         payload.notes = notes;
+        payload.reason = notes;
       }
 
       const response = await axios.patch(
@@ -2756,6 +2885,16 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
       );
 
       console.log("TaskDetail: Status update successful:", response.data);
+
+      if (response.data?.requiresApproval) {
+        showSuccessToast(
+          response.data.message ||
+            "Your status change has been submitted for approval. The task creator has been notified.",
+        );
+        fetchPendingChangeRequest();
+        fetchActivities();
+        return;
+      }
 
       // Invalidate caches
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
@@ -2817,7 +2956,11 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
     }
   };
 
-  const handlePriorityChange = async (newPriority) => {
+  const handlePriorityChange = async (newPriority, reasonOrEvent = null) => {
+    const reason =
+      typeof reasonOrEvent === "string" && reasonOrEvent.trim()
+        ? reasonOrEvent.trim()
+        : null;
     // Block priority change for non-editable tasks
     if (!isTaskEditable) {
       showErrorToast(
@@ -2828,6 +2971,38 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
       return;
     }
 
+    const isApprovalRequired = await checkRequiresApprovalAsync({
+      task: rawTaskData || task,
+      field: "priority",
+      user: currentUser,
+    });
+
+    if (isApprovalRequired && !reason) {
+      setShowPriorityDropdown(false);
+      const currentLabel = task?.priority
+        ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1)
+        : "Medium";
+      const requestedLabel = newPriority
+        ? newPriority.charAt(0).toUpperCase() + newPriority.slice(1)
+        : "";
+
+      setChangeReasonModal({
+        isOpen: true,
+        field: "priority",
+        fieldName: "Priority",
+        currentValue: currentLabel,
+        requestedValue: requestedLabel,
+        submitHandler: async (reasonText) => {
+          await executePriorityChange(newPriority, reasonText);
+        },
+      });
+      return;
+    }
+
+    await executePriorityChange(newPriority, reason);
+  };
+
+  const executePriorityChange = async (newPriority, reason = null) => {
     try {
       setIsUpdatingPriority(true);
       const token = localStorage.getItem("token");
@@ -2842,12 +3017,16 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
       console.log("⚡ Updating task priority:", {
         taskId: taskIdToUpdate,
         newPriority,
+        reason,
       });
+
+      const payload = { priority: newPriority };
+      if (reason) payload.reason = reason;
 
       // Update via API
       const response = await axios.put(
         `/api/tasks/${taskIdToUpdate}`,
-        { priority: newPriority },
+        payload,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -2855,6 +3034,16 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
           },
         },
       );
+
+      if (response.data?.requiresApproval) {
+        showSuccessToast(
+          response.data.message ||
+            "Your priority change has been submitted for approval. The task creator has been notified.",
+        );
+        fetchPendingChangeRequest();
+        fetchActivities();
+        return;
+      }
 
       if (response.data?.success || response.status === 200) {
         // Update local state immediately
@@ -2927,7 +3116,41 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
     }
   };
 
-  const handleReassignTask = async (assigneeData) => {
+  const handleReassignTask = async (assigneeData, reasonOrEvent = null) => {
+    const reason =
+      typeof reasonOrEvent === "string" && reasonOrEvent.trim()
+        ? reasonOrEvent.trim()
+        : null;
+    const isApprovalRequired = await checkRequiresApprovalAsync({
+      task: rawTaskData || task,
+      field: "assignedTo",
+      user: currentUser,
+    });
+
+    if (isApprovalRequired && !reason) {
+      setShowReassignModal(false);
+      const requestedAssigneeName =
+        assigneeData?.assigneeName ||
+        assigneeData?.name ||
+        "Selected Assignee";
+
+      setChangeReasonModal({
+        isOpen: true,
+        field: "assignedTo",
+        fieldName: "Assignee",
+        currentValue: task?.assignee || "Unassigned",
+        requestedValue: requestedAssigneeName,
+        submitHandler: async (reasonText) => {
+          await executeReassignTask(assigneeData, reasonText);
+        },
+      });
+      return;
+    }
+
+    await executeReassignTask(assigneeData, reason);
+  };
+
+  const executeReassignTask = async (assigneeData, reason = null) => {
     try {
       const token = localStorage.getItem("token");
       const taskIdToReassign = task?._id || task?.id;
@@ -2939,13 +3162,17 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
         taskTitle: task?.title,
         endpoint: `/api/tasks/${taskIdToReassign}`,
         method: "PUT",
+        reason,
       });
+
+      const payload = {
+        assignedTo: assigneeData.assigneeId || assigneeData,
+      };
+      if (reason) payload.reason = reason;
 
       const response = await axios.put(
         `/api/tasks/${taskIdToReassign}`,
-        {
-          assignedTo: assigneeData.assigneeId || assigneeData,
-        },
+        payload,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -2953,6 +3180,17 @@ export default function TaskDetail({ taskId: propTaskId, onClose }) {
           },
         },
       );
+
+      if (response.data?.requiresApproval) {
+        showSuccessToast(
+          response.data.message ||
+            "Your reassignment request has been submitted for approval. The task creator has been notified.",
+        );
+        setShowReassignModal(false);
+        fetchPendingChangeRequest();
+        fetchActivities();
+        return;
+      }
 
       if (response.data.success) {
         console.log("Task reassigned successfully");
@@ -3239,7 +3477,7 @@ Status: ${task.status}
 Priority: ${task.priority}
 Assignee: ${task.assignee}
 Created By: ${task.createdBy}
-Due Date: ${task.dueDate}
+Due Date: ${formatDateTimeCustom(task.dueDate)}
 Created: ${task.createdAt}
 Updated: ${task.updatedAt}
 
@@ -3543,7 +3781,11 @@ ${task.collaborators?.join(", ") || "No collaborators"}
     );
   };
 
-  const handleDueDateUpdate = async () => {
+  const handleDueDateUpdate = async (reasonOrEvent = null) => {
+    const reason =
+      typeof reasonOrEvent === "string" && reasonOrEvent.trim()
+        ? reasonOrEvent.trim()
+        : null;
     if (!isTaskEditable) {
       showErrorToast(
         isProcessStepTask
@@ -3556,25 +3798,67 @@ ${task.collaborators?.join(", ") || "No collaborators"}
 
     // Validate: due date cannot be in the past
     if (dueDateInput) {
-      // dueDateInput is stored as UTC (Z is appended by server), so compare against UTC now
-      const selectedUTC = new Date(dueDateInput + "Z");
-      const nowUTC = new Date();
-      if (selectedUTC < nowUTC) {
+      const selectedDate = new Date(dueDateInput);
+      const nowDate = new Date();
+      if (!isNaN(selectedDate.getTime()) && selectedDate < nowDate) {
         showErrorToast("Due date cannot be set to a past date or time.");
         return;
       }
     }
 
+    const isApprovalRequired = await checkRequiresApprovalAsync({
+      task: rawTaskData || task,
+      field: "dueDate",
+      user: currentUser,
+    });
+
+    if (isApprovalRequired && !reason) {
+      const formattedCurrent = formatDateTimeCustom(
+        task?.dueDate || rawTaskData?.dueDate,
+      );
+      const formattedRequested = dueDateInput
+        ? formatDateTimeCustom(dueDateInput)
+        : "No due date";
+
+      setChangeReasonModal({
+        isOpen: true,
+        field: "dueDate",
+        fieldName: "Due Date",
+        currentValue: formattedCurrent,
+        requestedValue: formattedRequested,
+        submitHandler: async (reasonText) => {
+          await executeDueDateUpdate(reasonText);
+        },
+      });
+      return;
+    }
+
+    await executeDueDateUpdate(reason);
+  };
+
+  const executeDueDateUpdate = async (reason = "") => {
     try {
       setIsSavingDueDate(true);
       const token = localStorage.getItem("token");
       const taskIdToUpdate = task?._id || task?.id;
 
-      const dueDateValue = dueDateInput || null;
+      let dueDateValue = null;
+      if (dueDateInput) {
+        const str = String(dueDateInput).trim();
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(str)) {
+          dueDateValue = `${str}:00.000Z`;
+        } else if (str.endsWith("Z")) {
+          dueDateValue = str;
+        } else {
+          dueDateValue = `${str}Z`;
+        }
+      }
+      const payload = { dueDate: dueDateValue };
+      if (reason) payload.reason = reason;
 
-      await axios.put(
+      const response = await axios.put(
         `/api/tasks/${taskIdToUpdate}`,
-        { dueDate: dueDateValue },
+        payload,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -3582,6 +3866,17 @@ ${task.collaborators?.join(", ") || "No collaborators"}
           },
         },
       );
+
+      if (response.data?.requiresApproval) {
+        showSuccessToast(
+          response.data.message ||
+            "Your due date change has been submitted for approval. The task creator has been notified.",
+        );
+        setIsEditingDueDate(false);
+        fetchPendingChangeRequest();
+        fetchActivities();
+        return;
+      }
 
       setTask((prev) => ({ ...prev, dueDate: dueDateValue }));
       setIsEditingDueDate(false);
@@ -3783,6 +4078,139 @@ ${task.collaborators?.join(", ") || "No collaborators"}
           </div>
         </div>
 
+        {/* Pending Change Request Banner */}
+        {pendingChangeRequest && (
+          <div className="bg-amber-50/95 border border-amber-300 rounded-sm p-4 mb-5 shadow-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-amber-100 rounded-sm text-amber-700 shrink-0 mt-0.5">
+                  <Clock size={18} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-amber-950 text-sm">
+                      Task Edit Pending Approval
+                    </span>
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-sm bg-amber-200/90 text-amber-900">
+                      {pendingChangeRequest.status || "PENDING"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-800 mt-1">
+                    Requested by <span className="font-semibold text-amber-950">{
+                      `${pendingChangeRequest.requestedBy?.firstName || ""} ${pendingChangeRequest.requestedBy?.lastName || ""}`.trim() ||
+                      pendingChangeRequest.requestedBy?.name ||
+                      pendingChangeRequest.requestedBy?.email ||
+                      "Employee"
+                    }</span>
+                    {pendingChangeRequest.createdAt && ` on ${new Date(pendingChangeRequest.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}`}
+                  </p>
+                  {pendingChangeRequest.reason && (
+                    <p className="text-xs text-amber-900/90 italic mt-1.5 bg-amber-100/60 p-2 rounded-sm border border-amber-200/60">
+                      <span className="font-medium not-italic">Reason: </span>"{pendingChangeRequest.reason}"
+                    </p>
+                  )}
+
+                  {/* List of changes requested */}
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    {Object.entries(pendingChangeRequest.requestedChanges || {}).map(([key, change]) => (
+                      <span key={key} className="inline-flex items-center gap-1.5 text-xs bg-white border border-amber-200 px-2.5 py-1 rounded-sm shadow-2xs text-slate-700">
+                        <span className="font-semibold text-slate-900 capitalize">{key}:</span>
+                        <span className="line-through text-slate-400">
+                          {key === "dueDate" || key === "startDate"
+                            ? formatDateTimeCustom(change.old)
+                            : String(change.old ?? "None")}
+                        </span>
+                        <span className="text-amber-600 font-bold">→</span>
+                        <span className="text-amber-800 font-semibold">
+                          {key === "dueDate" || key === "startDate"
+                            ? formatDateTimeCustom(change.new)
+                            : String(change.new ?? "None")}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Review Action: Shown only on task creator's side (or org admin), never to the employee who requested it */}
+              {(() => {
+                const currentUserId = String(currentUser?.id || currentUser?._id || "").trim();
+                const currentUserEmail = String(currentUser?.email || "").trim().toLowerCase();
+
+                const requestedById = String(
+                  pendingChangeRequest.requestedBy?._id ||
+                  pendingChangeRequest.requestedBy?.id ||
+                  (typeof pendingChangeRequest.requestedBy === "string" ? pendingChangeRequest.requestedBy : "") ||
+                  ""
+                ).trim();
+                const requestedByEmail = String(pendingChangeRequest.requestedBy?.email || "").trim().toLowerCase();
+
+                // Requesters can NEVER review their own request
+                const isRequester = Boolean(
+                  (currentUserId && requestedById && currentUserId === requestedById) ||
+                  (currentUserEmail && requestedByEmail && currentUserEmail === requestedByEmail)
+                );
+
+                const taskCreatorId = String(
+                  task?.creatorId ||
+                  rawTaskData?.createdBy?._id ||
+                  rawTaskData?.createdBy?.id ||
+                  (typeof rawTaskData?.createdBy === "string" ? rawTaskData.createdBy : "") ||
+                  task?.createdBy?._id ||
+                  task?.createdBy?.id ||
+                  (typeof task?.createdBy === "string" ? task.createdBy : "") ||
+                  ""
+                ).trim();
+
+                const approverId = String(
+                  pendingChangeRequest.approverId?._id ||
+                  pendingChangeRequest.approverId?.id ||
+                  (typeof pendingChangeRequest.approverId === "string" ? pendingChangeRequest.approverId : "") ||
+                  ""
+                ).trim();
+
+                const isCreatorOrApprover = Boolean(
+                  (currentUserId && approverId && currentUserId === approverId) ||
+                  (currentUserId && taskCreatorId && currentUserId === taskCreatorId)
+                );
+
+                const roles = Array.isArray(currentUser?.role)
+                  ? currentUser.role
+                  : [currentUser?.role].filter(Boolean);
+                const adminRoles = [
+                  "admin",
+                  "org_admin",
+                  "super_admin",
+                  "super-admin",
+                  "company-admin",
+                  "tasksetu-admin",
+                ];
+                const isOrgAdmin =
+                  roles.some((r) => adminRoles.includes(r)) ||
+                  adminRoles.includes(activeRole);
+
+                // Show "Review Request" only to the task creator or org admin (and never to the requester)
+                const canReview = !isRequester && (isCreatorOrApprover || isOrgAdmin);
+
+                return canReview ? (
+                  <Button
+                    size="sm"
+                    onClick={() => setShowApprovalModal(true)}
+                    className="shrink-0 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-sm cursor-pointer"
+                  >
+                    Review Request
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-amber-100/80 border border-amber-200 text-xs text-amber-800 font-medium shrink-0 self-start md:self-center">
+                    <Clock size={13} className="text-amber-600 animate-pulse" />
+                    <span>Awaiting task creator review</span>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
         {/* 2. Hero Header Card */}
         <div className="bg-white rounded-sm border border-slate-200/80 p-6 shadow-sm mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -3801,8 +4229,9 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                   const cleanDesc =
                     task.description &&
                     task.description !== "No description provided"
-                      ? task.description.replace(/<[^>]*>/g, "").trim()
-                      : "Fill in monthly finance projection for capex type expenses.";
+                      ? stripHtmlToText(task.description)
+                      : "";
+                  if (!cleanDesc) return null;
                   return (
                     <p
                       className="text-sm text-slate-500 mt-1 mb-3.5 line-clamp-1 truncate max-w-3xl"
@@ -4098,7 +4527,7 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                                 setDescriptionInput(
                                   task.description === "No description provided"
                                     ? ""
-                                    : task.description.replace(/<[^>]*>/g, ""),
+                                    : stripHtmlToText(task.description),
                                 );
                                 setIsEditingDescription(true);
                               }}
@@ -4993,7 +5422,7 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                               type="datetime-local"
                               value={dueDateInput}
                               disabled={isSavingDueDate}
-                              min={new Date().toISOString().slice(0, 16)}
+                              min={toDatetimeLocal(new Date())}
                               onChange={(e) => setDueDateInput(e.target.value)}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") handleDueDateUpdate();
@@ -5007,7 +5436,7 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                             />
                             <button
                               type="button"
-                              onClick={handleDueDateUpdate}
+                              onClick={() => handleDueDateUpdate()}
                               disabled={isSavingDueDate}
                               className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-sm transition-colors disabled:opacity-50"
                               title="Save due date"
@@ -5049,12 +5478,12 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                               />
                               <span>
                                 {formatDateTimeCustom(
-                                  task.dueDate || rawTaskData?.dueDate,
+                                  task?.dueDate || rawTaskData?.dueDate,
                                 )}
                               </span>
                             </div>
                             {renderDueDateBadge(
-                              task.dueDate || rawTaskData?.dueDate,
+                              task?.dueDate || rawTaskData?.dueDate,
                             )}
                             {isTaskEditable &&
                               task.status !== "DONE" &&
@@ -5064,14 +5493,16 @@ ${task.collaborators?.join(", ") || "No collaborators"}
                                   type="button"
                                   disabled={isSavingDueDate}
                                   onClick={() => {
-                                    const rawDate = rawTaskData?.dueDate
-                                      ? rawTaskData.dueDate.slice(0, 16)
-                                      : task?.dueDate
-                                        ? new Date(task.dueDate)
-                                            .toISOString()
-                                            .slice(0, 16)
-                                        : new Date().toISOString().slice(0, 16);
-                                    setDueDateInput(rawDate);
+                                    const sourceDate = task?.dueDate || rawTaskData?.dueDate;
+                                    if (sourceDate) {
+                                      const localFormatted = toDatetimeLocal(sourceDate);
+                                      if (localFormatted) {
+                                        setDueDateInput(localFormatted);
+                                        setIsEditingDueDate(true);
+                                        return;
+                                      }
+                                    }
+                                    setDueDateInput(toDatetimeLocal(new Date()));
                                     setIsEditingDueDate(true);
                                   }}
                                   className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-sm transition-colors disabled:opacity-50"
@@ -5429,7 +5860,7 @@ ${task.collaborators?.join(", ") || "No collaborators"}
 
                       <div className="detail-row">
                         <span className="detail-label">Due Date:</span>
-                        <span className="detail-value">{task.dueDate}</span>
+                        <span className="detail-value">{formatDateTimeCustom(task.dueDate)}</span>
                       </div>
                       <div className="detail-row">
                         <span className="detail-label">Time Estimate:</span>
@@ -6264,19 +6695,163 @@ ${task.collaborators?.join(", ") || "No collaborators"}
       {showEditModal && (
         <TaskEditModal
           task={rawTaskData || task}
-          onSave={() => {
-            setShowEditModal(false);
+          onSave={async (updatedTask) => {
+            const currentTask = rawTaskData || task;
+            const changedFields = [];
+
+            if (
+              updatedTask.dueDate &&
+              (new Date(updatedTask.dueDate).getTime() !== (currentTask.dueDate ? new Date(currentTask.dueDate).getTime() : 0)) &&
+              (await checkRequiresApprovalAsync({ task: currentTask, field: "dueDate", user: currentUser }))
+            ) {
+              changedFields.push({
+                field: "dueDate",
+                name: "Due Date",
+                current: formatDateTimeCustom(currentTask.dueDate),
+                requested: formatDateTimeCustom(updatedTask.dueDate),
+              });
+            }
+
+            if (
+              updatedTask.priority &&
+              String(updatedTask.priority).toLowerCase() !== String(currentTask.priority || "").toLowerCase() &&
+              (await checkRequiresApprovalAsync({ task: currentTask, field: "priority", user: currentUser }))
+            ) {
+              changedFields.push({
+                field: "priority",
+                name: "Priority",
+                current: currentTask.priority ? String(currentTask.priority).toUpperCase() : "MEDIUM",
+                requested: String(updatedTask.priority).toUpperCase(),
+              });
+            }
+
+            if (
+              updatedTask.status &&
+              String(updatedTask.status).toUpperCase() !== String(currentTask.status || "").toUpperCase() &&
+              (await checkRequiresApprovalAsync({ task: currentTask, field: "status", user: currentUser }))
+            ) {
+              changedFields.push({
+                field: "status",
+                name: "Status",
+                current: currentTask.status || "OPEN",
+                requested: updatedTask.status,
+              });
+            }
+
+            const currentAssigneeId =
+              currentTask.assignedTo?._id ||
+              currentTask.assignedTo ||
+              currentTask.assigneeId;
+            const requestedAssigneeId =
+              updatedTask.assignedTo || updatedTask.assigneeId;
+            if (
+              requestedAssigneeId &&
+              String(requestedAssigneeId) !== String(currentAssigneeId) &&
+              (await checkRequiresApprovalAsync({ task: currentTask, field: "assignedTo", user: currentUser }))
+            ) {
+              changedFields.push({
+                field: "assignedTo",
+                name: "Assignee",
+                current: currentTask.assignee || "Unassigned",
+                requested: updatedTask.assignee || "Selected Assignee",
+              });
+            }
+
+            const executeSaveTask = async (taskPayload) => {
+              try {
+                const token = localStorage.getItem("token");
+                const res = await axios.put(
+                  `/api/tasks/${taskId}`,
+                  taskPayload,
+                  {
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                      "Content-Type": "application/json",
+                    },
+                  },
+                );
+                if (res.data?.requiresApproval) {
+                  showSuccessToast(
+                    res.data.message ||
+                      "Your task changes have been submitted for approval. The task creator has been notified.",
+                  );
+                  fetchPendingChangeRequest();
+                } else {
+                  showSuccessToast("Task updated successfully");
+                  fetchTaskData(false);
+                }
+              } catch (err) {
+                showErrorToast(
+                  err.response?.data?.message || "Failed to update task",
+                );
+              }
+              setShowEditModal(false);
+              queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+              queryClient.invalidateQueries({
+                queryKey: [`/api/tasks/${taskId}`],
+              });
+              queryClient.invalidateQueries({ queryKey: ["tasks"] });
+              queryClient.invalidateQueries({ queryKey: ["regular-tasks"] });
+              fetchActivities();
+            };
+
+            if (changedFields.length > 0) {
+              setShowEditModal(false);
+              setChangeReasonModal({
+                isOpen: true,
+                field: changedFields[0].field,
+                fieldName: changedFields.map((f) => f.name).join(", "),
+                currentValue: changedFields.map((f) => `${f.name}: ${f.current}`).join(" | "),
+                requestedValue: changedFields.map((f) => `${f.name}: ${f.requested}`).join(" | "),
+                submitHandler: async (reasonText) => {
+                  await executeSaveTask({ ...updatedTask, reason: reasonText });
+                },
+              });
+              return;
+            }
+
+            await executeSaveTask(updatedTask);
+          }}
+          onClose={() => setShowEditModal(false)}
+          permissions={commentPermissions}
+        />
+      )}
+
+      {showApprovalModal && (
+        <TaskChangeApprovalModal
+          isOpen={showApprovalModal}
+          onClose={() => setShowApprovalModal(false)}
+          changeRequestId={
+            pendingChangeRequest?._id || pendingChangeRequest?.id
+          }
+          onSuccess={() => {
+            fetchPendingChangeRequest();
+            fetchTaskData(false);
+            fetchActivities();
             queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
             queryClient.invalidateQueries({
               queryKey: [`/api/tasks/${taskId}`],
             });
-            queryClient.invalidateQueries({ queryKey: ["tasks"] });
-            queryClient.invalidateQueries({ queryKey: ["regular-tasks"] });
-            fetchTaskData(false);
-            fetchActivities();
           }}
-          onClose={() => setShowEditModal(false)}
-          permissions={commentPermissions}
+        />
+      )}
+
+      {changeReasonModal.isOpen && (
+        <TaskChangeReasonModal
+          isOpen={changeReasonModal.isOpen}
+          onClose={() =>
+            setChangeReasonModal((prev) => ({ ...prev, isOpen: false }))
+          }
+          taskTitle={task?.title || "Task"}
+          field={changeReasonModal.field}
+          fieldName={changeReasonModal.fieldName}
+          currentValue={changeReasonModal.currentValue}
+          requestedValue={changeReasonModal.requestedValue}
+          onSubmit={async (reason) => {
+            if (changeReasonModal.submitHandler) {
+              await changeReasonModal.submitHandler(reason);
+            }
+          }}
         />
       )}
 

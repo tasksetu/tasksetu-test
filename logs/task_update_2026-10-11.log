@@ -1,0 +1,5 @@
+{"timestamp":"2026-10-11T13:31:17.361Z","eventType":"task_update","step":"USING_ENHANCED_HELPER","status":"START","data":{"taskId":"6abe4d6240c21256ad3a7440","updateKeys":["priority","updatedAt"]},"processId":13344}
+{"timestamp":"2026-10-11T13:31:17.364Z","eventType":"task_update","step":"NOTIFICATION_START","status":"START","data":{"taskId":"6abe4d6240c21256ad3a7440","taskTitle":"testing for visibilty","updatedBy":"6a676566479a5e77a638c843","changedFields":["priority"]},"processId":13344}
+{"timestamp":"2026-10-11T13:31:18.662Z","eventType":"task_update","step":"NOTIFY_USER_SUCCESS","status":"SUCCESS","data":{"userId":"6a67608a3177c4edda67c69d","notificationId":"6acb8fa614a7a12bfd1523df"},"processId":13344}
+{"timestamp":"2026-10-11T13:31:18.663Z","eventType":"task_update","step":"NOTIFICATION_COMPLETE","status":"SUCCESS","data":{"taskId":"6abe4d6240c21256ad3a7440","usersNotified":1},"processId":13344}
+{"timestamp":"2026-10-11T13:31:18.664Z","eventType":"task_update","step":"ENHANCED_NOTIFICATIONS_SENT","status":"SUCCESS","data":{"taskId":"6abe4d6240c21256ad3a7440","usersNotified":1},"processId":13344}

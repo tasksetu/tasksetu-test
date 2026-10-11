@@ -73,6 +73,7 @@ import VerifyAndSetPassword from "./pages/auth/VerifyAndSetPassword";
 import VerifyEmail from "./pages/auth/VerifyEmail";
 import VerifySuperAdmin from "./pages/auth/VerifySuperAdmin";
 import RegistrationSuccess from "./pages/auth/RegistrationSuccess";
+import TaskChangeActionPage from "./pages/TaskChangeActionPage";
 
 // Licensing & Subscription Components
 import LicenseManagementPage from "./features/licensing/pages/LicenseManagementPage";
@@ -428,6 +429,7 @@ function App() {
               {/* Public Form Submission Route - No Authentication Required */}
               <Route path="/forms/public/:token" component={PublicForm} />
               <Route path="/public/forms/:token" component={PublicFormPage} />
+              <Route path="/task-change-action" component={TaskChangeActionPage} />
 
               {/* Root Route - Role-based redirect */}
               <Route path="/" component={RoleBasedRedirect} />
@@ -1144,6 +1146,11 @@ function App() {
                 </AdminLayout>
               </Route>
               <Route path="/notifications">
+                <AdminLayout>
+                  <ProtectedRoute component={NotificationCenter} />
+                </AdminLayout>
+              </Route>
+              <Route path="/settings/notifications">
                 <AdminLayout>
                   <ProtectedRoute component={NotificationCenter} />
                 </AdminLayout>

@@ -21,11 +21,54 @@ const upload = multer({ storage: multer.memoryStorage() });
  *       500:
  *         description: Server error
  */
+const orgAdminRoles = [
+  "org_admin",
+  "company-admin",
+  "admin",
+  "super_admin",
+  "super-admin",
+  "tasksetu-admin",
+];
+
 router.get(
   "/organization/settings",
   authenticateToken,
-  roleAuth(["org_admin"]),
   orgSettingsController.getSettings
+);
+
+router.put(
+  "/organization/settings",
+  authenticateToken,
+  roleAuth(orgAdminRoles),
+  orgSettingsController.updateSettings
+);
+
+router.patch(
+  "/organization/settings",
+  authenticateToken,
+  roleAuth(orgAdminRoles),
+  orgSettingsController.updateSettings
+);
+
+// Organization specific endpoints (Section 59)
+router.get(
+  "/organizations/:organizationId/settings",
+  authenticateToken,
+  orgSettingsController.getSettings
+);
+
+router.put(
+  "/organizations/:organizationId/settings",
+  authenticateToken,
+  roleAuth(orgAdminRoles),
+  orgSettingsController.updateSettings
+);
+
+router.patch(
+  "/organizations/:organizationId/settings",
+  authenticateToken,
+  roleAuth(orgAdminRoles),
+  orgSettingsController.updateSettings
 );
 
 /**

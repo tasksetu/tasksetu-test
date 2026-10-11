@@ -3,6 +3,8 @@ import ProcessTemplate from "./processTemplateModal.js";
 import Task from "../modals/taskModal.js";
 import { User } from "../modals/userModal.js";
 import { FormTemplate } from "../modals/formTemplateModal.js";
+import { FormVersion } from "../modals/formVersionModal.js";
+import { FormUsage } from "../modals/formUsageModal.js";
 import { checkFeatureCodeLimit } from "../utils/licenseEnforcement.js";
 import * as licenseService from "../services/licenseService.js";
 
@@ -87,44 +89,89 @@ export const getOrgForms = async (req, res) => {
     const user = req.user;
     const orgId = user?.organizationId || user?.organization_id || user?.organization;
     const userId = user?.id || user?._id;
+    const userRoles = Array.isArray(user?.role) ? user.role : [user?.role].filter(Boolean);
+    const isSuperAdmin = userRoles.includes("super_admin");
+
+    const validUserId = (userId && mongoose.Types.ObjectId.isValid(userId))
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
 
     let query = {
-      is_deleted: { $ne: true },
-      isDeleted: { $ne: true },
+      $or: [
+        { deleted_at: null },
+        { deleted_at: { $exists: false } },
+      ],
+      status: { $ne: "ARCHIVED" },
     };
 
-    const conditions = [];
-    if (orgId) {
-      conditions.push({ organization_id: orgId });
-      conditions.push({ organization: orgId });
-      conditions.push({ company_id: orgId });
-    } else if (userId) {
-      const validUserId = (userId && mongoose.Types.ObjectId.isValid(userId))
-        ? new mongoose.Types.ObjectId(userId)
-        : userId;
-      conditions.push({ owner_user_id: validUserId });
-      conditions.push({ owner_user_id: userId });
-      conditions.push({ createdBy: validUserId });
-      conditions.push({ createdBy: userId });
-    }
+    if (!isSuperAdmin) {
+      const conditions = [];
 
-    if (conditions.length > 0) {
-      query.$or = conditions;
-    } else {
-      return res.json({ success: true, data: [] });
+      // If user belongs to an organization, find all forms owned by users in that same organization
+      if (orgId) {
+        const orgUsers = await User.find({
+          $or: [
+            { organization_id: orgId },
+            { organizationId: orgId },
+            { organization: orgId },
+          ],
+        }).select("_id");
+        const orgUserIds = orgUsers.map((u) => u._id);
+
+        if (orgUserIds.length > 0) {
+          conditions.push({ owner_user_id: { $in: orgUserIds } });
+        }
+
+        // Direct org field fallback if populated on any form
+        conditions.push({ organization_id: orgId });
+        conditions.push({ organization: orgId });
+        conditions.push({ company_id: orgId });
+
+        // Org-wide visibility forms
+        conditions.push({ visibility: "ORG" });
+      }
+
+      // Also include forms owned by or shared with current user
+      if (validUserId) {
+        conditions.push({ owner_user_id: validUserId });
+        conditions.push({ createdBy: validUserId });
+        conditions.push({ "shared_with.user_id": validUserId });
+      }
+
+      // Public forms
+      conditions.push({ visibility: "PUBLIC" });
+
+      if (conditions.length > 0) {
+        query.$and = [
+          {
+            $or: [
+              { deleted_at: null },
+              { deleted_at: { $exists: false } },
+            ],
+          },
+          { status: { $ne: "ARCHIVED" } },
+          { $or: conditions },
+        ];
+        delete query.$or;
+        delete query.status;
+      }
     }
 
     const forms = await FormTemplate.find(query)
-      .select("_id form_id title category fields status form_code owner_user_id")
+      .select("_id form_id title category category_id fields status form_code owner_user_id visibility")
+      .sort({ title: 1 })
       .lean();
 
     const formattedForms = forms.map((f) => ({
       _id: f._id.toString(),
       id: f._id.toString(),
-      form_id: f.form_id || f._id.toString(),
+      form_id: f.form_id ? f.form_id.toString() : f._id.toString(),
       title: f.title || "Untitled Form",
-      category: f.category || "General",
+      category: f.category || f.category_id || "General",
+      category_id: f.category_id || "",
       form_code: f.form_code || "",
+      status: f.status || "PUBLISHED",
+      visibility: f.visibility || "PRIVATE",
       fieldsCount: f.fields?.length || 0,
     }));
 
@@ -670,9 +717,37 @@ export const startProcessInstance = async (req, res) => {
         },
       };
 
-      if (step.formId) {
-        subtaskData.formId = step.formId;
+      // Resolve and attach form if configured
+      const effectiveFormId = step.formId || step.emailConfig?.attachedFormId;
+      if (effectiveFormId && effectiveFormId !== "none") {
+        try {
+          const formDoc = await FormTemplate.findOne({
+            $or: [
+              { _id: mongoose.Types.ObjectId.isValid(effectiveFormId) ? effectiveFormId : null },
+              { form_id: mongoose.Types.ObjectId.isValid(effectiveFormId) ? effectiveFormId : null },
+            ].filter(Boolean),
+          });
+
+          if (formDoc) {
+            const formVersion = await FormVersion.findOne({
+              $or: [
+                { form_id: formDoc._id },
+                { form_id: formDoc.form_id },
+                { form_template_id: formDoc._id },
+              ],
+            }).sort({ version_number: -1 });
+
+            if (formVersion) {
+              subtaskData.attached_form_version_id = formVersion._id;
+              subtaskData.form_submission_status = "NOT_STARTED";
+              subtaskData.form_required_for_completion = true;
+            }
+          }
+        } catch (fErr) {
+          console.warn("⚠️ Failed to attach form version during process step launch:", fErr.message);
+        }
       }
+
       if (stepTaskType === "email" || step.emailSubject || step.emailBody || step.emailConfig) {
         subtaskData.taskType = "email";
         subtaskData.subtaskType = "email";
@@ -737,6 +812,30 @@ export const startProcessInstance = async (req, res) => {
       const subtask = new Task(subtaskData);
       const savedSubtask = await subtask.save();
       createdSubtasks.push(savedSubtask);
+
+      if (subtaskData.attached_form_version_id) {
+        try {
+          const usage = new FormUsage({
+            form_id: subtaskData.attached_form_version_id,
+            attached_to_type: "SUBTASK",
+            attached_to_id: savedSubtask._id,
+            attached_by: userId,
+            attached_at: new Date(),
+            status: "ACTIVE",
+            version_locked: true,
+            version_id: subtaskData.attached_form_version_id,
+            metadata: {
+              process_template_id: template._id,
+              process_instance_id: savedMainTask._id,
+              step_id: step.id,
+            },
+          });
+          await usage.save();
+        } catch (uErr) {
+          console.warn("⚠️ Failed to record form usage for process subtask:", uErr.message);
+        }
+      }
+
       if (step.id) {
         stepIdToCreatedTaskIdMap[step.id] = savedSubtask._id.toString();
       }

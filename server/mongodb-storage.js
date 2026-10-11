@@ -804,9 +804,9 @@ export class MongoStorage {
           oldTask.status !== taskData.status && taskData.status;
         const priorityChanged =
           oldTask.priority !== taskData.priority && taskData.priority;
-        const dueDateChanged =
-          oldTask.dueDate?.getTime() !== taskData.dueDate?.getTime() &&
-          taskData.dueDate;
+        const oldDueDateMs = oldTask.dueDate ? new Date(oldTask.dueDate).getTime() : null;
+        const newDueDateMs = taskData.dueDate ? new Date(taskData.dueDate).getTime() : null;
+        const dueDateChanged = Boolean(taskData.dueDate && oldDueDateMs !== newDueDateMs);
 
         // Check for other meaningful changes (excluding specific tracked fields)
         const hasOtherChanges = Object.keys(taskData).some((key) => {

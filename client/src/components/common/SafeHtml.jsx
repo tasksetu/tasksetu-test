@@ -12,12 +12,22 @@ import DOMPurify from 'dompurify';
  * @param {number} maxLength - Max characters when truncated (default: 150)
  */
 
-// Strip HTML tags for plain text previews (tooltips, truncated cards)
+// Strip HTML tags and decode HTML entities for plain text previews (tooltips, truncated cards)
 export const stripHtmlToText = (html) => {
   if (!html) return '';
-  const tmp = document.createElement('DIV');
-  tmp.innerHTML = html;
-  return tmp.textContent || tmp.innerText || '';
+  if (typeof html !== 'string') return String(html);
+  try {
+    const tmp = document.createElement('DIV');
+    tmp.innerHTML = html;
+    const text = tmp.textContent || tmp.innerText || '';
+    return text.replace(/&nbsp;/gi, ' ').replace(/\u00a0/g, ' ').trim();
+  } catch (e) {
+    return String(html)
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/\u00a0/g, ' ')
+      .trim();
+  }
 };
 
 // Check if content has actual text (not just empty HTML tags)

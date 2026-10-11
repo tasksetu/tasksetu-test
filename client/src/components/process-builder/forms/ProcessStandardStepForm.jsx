@@ -109,6 +109,15 @@ export default function ProcessStandardStepForm({
 
   useEffect(() => {
     if (stepToEdit) {
+      const rawFormId = stepToEdit.formId || stepToEdit.attachedFormId;
+      const matchedForm = (orgForms || []).find(
+        (f) =>
+          String(f.id) === String(rawFormId) ||
+          String(f._id) === String(rawFormId) ||
+          String(f.form_id) === String(rawFormId)
+      );
+      const resolvedFormId = matchedForm ? matchedForm.id : (rawFormId || "none");
+
       setFormData({
         title: stepToEdit.name || stepToEdit.title || stepToEdit.taskName || "",
         assignee: stepToEdit.assignedUserId
@@ -120,7 +129,7 @@ export default function ProcessStandardStepForm({
         visibility: stepToEdit.visibility || "Private",
         description: stepToEdit.description || "",
         tags: Array.isArray(stepToEdit.tags) ? stepToEdit.tags : [],
-        formId: stepToEdit.formId || "none",
+        formId: resolvedFormId,
       });
       setLinkedTaskId(stepToEdit.linkedTaskId || null);
       setAutoInitiate(
@@ -145,7 +154,7 @@ export default function ProcessStandardStepForm({
     }
     setTagInput("");
     setErrors({});
-  }, [stepToEdit, orgUsers]);
+  }, [stepToEdit, orgUsers, orgForms]);
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -504,10 +513,17 @@ export default function ProcessStandardStepForm({
 
       {/* Form Attachment Dropdown */}
       <div className="space-y-1.5">
-        <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-          <FileText className="w-4 h-4 text-indigo-600" />
-          Form Attachment
-        </Label>
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+            <FileText className="w-4 h-4 text-indigo-600" />
+            Form Attachment
+          </Label>
+          {orgForms.length > 0 && (
+            <span className="text-[11px] text-gray-400 font-normal">
+              ({orgForms.length} available)
+            </span>
+          )}
+        </div>
         <select
           value={formData.formId}
           onChange={(e) => handleChange("formId", e.target.value)}
@@ -515,8 +531,8 @@ export default function ProcessStandardStepForm({
         >
           <option value="none">— No Attached Form —</option>
           {orgForms.map((f) => (
-            <option key={f.id} value={f.id}>
-              📋 {f.title} ({f.category || "General"})
+            <option key={f.id || f._id} value={f.id || f._id}>
+              📋 {f.title} ({f.category || "General"}){f.status && f.status !== "PUBLISHED" ? ` [${f.status}]` : ""}
             </option>
           ))}
         </select>

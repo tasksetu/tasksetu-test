@@ -1575,9 +1575,9 @@ const processInstanceSchema = new mongoose.Schema(
   },
 );
 
-export const Project = mongoose.model("Project", projectSchema);
-export const TaskStatus = mongoose.model("TaskStatus", taskStatusSchema);
-export const Task = mongoose.model("Task", taskSchema);
+export const Project = mongoose.models.Project || mongoose.model("Project", projectSchema);
+export const TaskStatus = mongoose.models.TaskStatus || mongoose.model("TaskStatus", taskStatusSchema);
+export const Task = mongoose.models.Task || mongoose.model("Task", taskSchema);
 export const Activity = mongoose.model("Activity", activitySchema);
 export const TaskComment = mongoose.model("TaskComment", taskCommentSchema);
 export const TaskAssignment = mongoose.model(
@@ -1659,3 +1659,7 @@ export const OrganizationHierarchy = mongoose.model(
   "OrganizationHierarchy",
   organizationHierarchySchema,
 );
+
+export { TaskChangeRequest } from "./modals/taskChangeRequestModal.js";
+export { ApprovalActionToken } from "./modals/approvalActionTokenModal.js";
+

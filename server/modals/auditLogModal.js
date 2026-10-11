@@ -83,12 +83,14 @@ const auditLogSchema = new mongoose.Schema(
 
         // Organization actions
         'ORG_BRANDING_UPDATED',
-        'ORG_PROFILE_UPDATED',
-
-        // Phase II actions (for future - not implemented yet)
-        // 'WORKFLOW_TRIGGERED',
-        // 'APPROVAL_REQUESTED',
-        // 'WEBHOOK_CALLED',
+        'ORGANIZATION_SETTING_UPDATED',
+        'ORG_SETTINGS_UPDATED',
+        // Task Change Request Actions
+        'CHANGE_REQUEST_CREATED',
+        'CHANGE_REQUEST_APPROVED',
+        'CHANGE_REQUEST_REJECTED',
+        'CHANGE_REQUEST_CONFLICT',
+        'CHANGE_REQUEST_CANCELLED',
       ],
       index: true,
     },
@@ -106,6 +108,7 @@ const auditLogSchema = new mongoose.Schema(
         'ORGANIZATION',
         'USER',
         'TASK',
+        'TASK_CHANGE_REQUEST',
         'LICENSE_POOL',
         'SYSTEM',
       ],
