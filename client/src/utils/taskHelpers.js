@@ -159,6 +159,108 @@ export const canEditTaskTitle = (task, currentUser) => {
   return Boolean(isAssignee);
 };
 
+export const checkTaskMatchesDueDateFilter = (
+  task,
+  dueDateFilter,
+  windowCalendarSpecificDate = null
+) => {
+  if (!dueDateFilter || dueDateFilter === "all") return true;
+
+  const rawDueDate = task?.dueDate;
+  if (!rawDueDate || rawDueDate === "No due date" || rawDueDate === "Not set") {
+    return false;
+  }
+
+  let d;
+  if (rawDueDate instanceof Date) {
+    d = rawDueDate;
+  } else {
+    const str = String(rawDueDate).trim();
+    const hasTimezone =
+      /[Zz]$|(T\d{2}:\d{2}(:\d{2})?(\.[0-9]+)?[+-]\d{2}:?\d{2})$/.test(str);
+    d = new Date(hasTimezone ? str : str + "Z");
+  }
+  if (isNaN(d.getTime())) return false;
+
+  // The backend stores the user's local date/time directly as UTC (e.g. 2026-10-18T12:08:00.000Z for 18 Oct 12:08 PM).
+  // TaskTable formats using d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate().
+  const dueYear = d.getUTCFullYear();
+  const dueMonth = d.getUTCMonth();
+  const dueDateNum = d.getUTCDate();
+
+  const today = new Date();
+  const startOfToday = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+  const startOfDue = new Date(dueYear, dueMonth, dueDateNum);
+
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const daysDiff = Math.round(
+    (startOfDue.getTime() - startOfToday.getTime()) / msPerDay
+  );
+
+  switch (dueDateFilter) {
+    case "overdue": {
+      const s = (task.status || "").toLowerCase().replace(/[^a-z]/g, "");
+      if (
+        [
+          "done",
+          "completed",
+          "cancelled",
+          "canceled",
+          "approved",
+          "rejected",
+          "terminated",
+        ].includes(s)
+      ) {
+        return false;
+      }
+      const displayNow = new Date(
+        Date.UTC(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate(),
+          today.getHours(),
+          today.getMinutes(),
+          today.getSeconds()
+        )
+      );
+      return d < displayNow || d < today || daysDiff < 0;
+    }
+    case "due_today":
+      return daysDiff === 0;
+    case "due_tomorrow":
+      return daysDiff === 1;
+    case "due_this_week":
+      return daysDiff >= 0 && daysDiff <= 7;
+    case "due_next_week":
+      return daysDiff > 7 && daysDiff <= 14;
+    case "due_this_month":
+      return (
+        daysDiff >= 0 &&
+        ((startOfDue.getFullYear() === startOfToday.getFullYear() &&
+          startOfDue.getMonth() === startOfToday.getMonth()) ||
+          daysDiff <= 30)
+      );
+    case "specific_date": {
+      if (!windowCalendarSpecificDate) return true;
+      const target = new Date(windowCalendarSpecificDate);
+      if (isNaN(target.getTime())) return false;
+      return (
+        dueYear === target.getFullYear() &&
+        dueMonth === target.getMonth() &&
+        dueDateNum === target.getDate()
+      );
+    }
+    case "no_due_date":
+      return false;
+    default:
+      return true;
+  }
+};
+
 export const applyFiltering = (tasks, filters) => {
   const {
     searchTerm,
@@ -167,55 +269,102 @@ export const applyFiltering = (tasks, filters) => {
     taskTypeFilter,
     dueDateFilter,
     windowCalendarSpecificDate,
+    assigneeFilter,
+    assigneeFilterName,
+    completedTodayFilter,
   } = filters;
 
   return tasks.filter((task) => {
+    // Filter by specific assignee if filter is active
+    if (assigneeFilter && assigneeFilter !== "all") {
+      const targetId = String(assigneeFilter);
+      const directAssigneeId = String(
+        task.assigneeId ||
+        task.assignedTo?._id ||
+        task.assignedTo?.id ||
+        task.assignedTo ||
+        ""
+      );
+      const matchesDirect = directAssigneeId === targetId;
+
+      const matchesDirectName =
+        assigneeFilterName &&
+        typeof task.assignee === "string" &&
+        task.assignee.toLowerCase().includes(assigneeFilterName.toLowerCase());
+
+      const matchesSubtasks =
+        Array.isArray(task.subtasks) &&
+        task.subtasks.some((st) => {
+          const subAssigneeId = String(
+            st.assigneeId ||
+            st.assignedTo?._id ||
+            st.assignedTo?.id ||
+            st.assignedTo ||
+            ""
+          );
+          if (subAssigneeId === targetId) return true;
+          if (assigneeFilterName && typeof st.assignee === "string") {
+            return st.assignee.toLowerCase().includes(assigneeFilterName.toLowerCase());
+          }
+          return false;
+        });
+
+      if (!matchesDirect && !matchesDirectName && !matchesSubtasks) {
+        return false;
+      }
+    }
+
     const matchesSearch =
       !searchTerm ||
       task.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       task.assignee?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = statusFilter === "all" || task.status === statusFilter;
+    const matchesStatus = (() => {
+      if (!statusFilter || statusFilter === "all") return true;
+      const sTask = String(task.status || "").trim().toUpperCase();
+      const sFilter = String(statusFilter || "").trim().toUpperCase();
+      if (sTask === sFilter) return true;
+      if (["DONE", "COMPLETED"].includes(sFilter) && ["DONE", "COMPLETED"].includes(sTask)) return true;
+      if (["INPROGRESS", "IN_PROGRESS", "DOING"].includes(sFilter) && ["INPROGRESS", "IN_PROGRESS", "DOING"].includes(sTask)) return true;
+      if (["CANCELLED", "CANCELED"].includes(sFilter) && ["CANCELLED", "CANCELED"].includes(sTask)) return true;
+      return false;
+    })();
+
     const matchesPriority =
       priorityFilter === "all" ||
       task.priority?.toLowerCase() === priorityFilter.toLowerCase();
     const matchesTaskType =
       taskTypeFilter === "all" || getTaskType(task) === taskTypeFilter;
 
-    const matchesDueDate = (() => {
-      if (dueDateFilter === "all") return true;
-      if (!task.dueDate) return dueDateFilter === "no_due_date";
+    const matchesDueDate = checkTaskMatchesDueDateFilter(
+      task,
+      dueDateFilter,
+      windowCalendarSpecificDate
+    );
 
-      const today = new Date();
-      const dueDate = new Date(task.dueDate);
-      const daysDiff = Math.ceil((dueDate - today) / (1000 * 3600 * 24));
-
-      switch (dueDateFilter) {
-        case "overdue": {
-  if (daysDiff >= 0) return false;
-  const s = (task.status || "").toLowerCase().replace(/[^a-z]/g, "");
-  return !["done", "completed", "cancelled", "canceled"].includes(s);
-}
-        case "due_today":
-          return daysDiff === 0;
-        case "due_tomorrow":
-          return daysDiff === 1;
-        case "due_this_week":
-          return daysDiff >= 0 && daysDiff <= 7;
-        case "due_next_week":
-          return daysDiff > 7 && daysDiff <= 14;
-        case "due_this_month":
-          return daysDiff >= 0 && daysDiff <= 30;
-        case "no_due_date":
-          return false;
-        case "specific_date":
-          return windowCalendarSpecificDate && task.dueDate === windowCalendarSpecificDate;
-        default:
-          return true;
-      }
+    const matchesCompletedToday = (() => {
+      if (!completedTodayFilter) return true;
+      const s = (task.status || "").toUpperCase();
+      if (!["DONE", "COMPLETED"].includes(s)) return false;
+      const cd = task.completedDate || task.completedAt;
+      if (!cd) return false;
+      const d = new Date(cd);
+      const now = new Date();
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate()
+      );
     })();
 
-    return matchesSearch && matchesStatus && matchesPriority && matchesTaskType && matchesDueDate;
+    return (
+      matchesSearch &&
+      matchesStatus &&
+      matchesPriority &&
+      matchesTaskType &&
+      matchesDueDate &&
+      matchesCompletedToday
+    );
   });
 };
 

@@ -11,7 +11,7 @@ import {
 import { LineChart as LineChartIcon, ChevronDown } from "lucide-react";
 import { format, subDays, startOfMonth, eachDayOfInterval, isSameDay } from "date-fns";
 
-const TaskOverviewChart = ({ tasks = [] }) => {
+const TaskOverviewChart = ({ tasks = [], overviewData = null }) => {
   const [timeRange, setTimeRange] = useState("7d"); // "7d", "30d", "month"
   const [taskFilter, setTaskFilter] = useState("all");
 
@@ -33,47 +33,107 @@ const TaskOverviewChart = ({ tasks = [] }) => {
       return (t.taskType || "").toLowerCase() === taskFilter.toLowerCase();
     });
 
+    // Map server overview data for O(1) matching if available
+    const overviewMap = new Map();
+    if (Array.isArray(overviewData)) {
+      overviewData.forEach((item) => {
+        if (item.date) overviewMap.set(String(item.date).trim(), item);
+        if (item.fullDate) overviewMap.set(String(item.fullDate).trim(), item);
+      });
+    }
+
     return days.map((day) => {
-      const dayLabel = format(day, timeRange === "30d" ? "dd MMM" : "dd MMM");
+      const dayLabel = format(day, "dd MMM");
+      const dayFull = format(day, "yyyy-MM-dd");
+
+      const serverDay =
+        taskFilter === "all" && timeRange === "7d"
+          ? overviewMap.get(dayFull) || overviewMap.get(dayLabel)
+          : null;
 
       // Created on this day
-      const created = filteredTasks.filter((t) => {
+      const taskCreated = filteredTasks.filter((t) => {
         if (!t.createdAt) return false;
-        return isSameDay(new Date(t.createdAt), day);
+        const c = new Date(t.createdAt);
+        return !isNaN(c.getTime()) && isSameDay(c, day);
       }).length;
+      const created = serverDay
+        ? Number(serverDay.Created ?? serverDay.created ?? 0)
+        : taskCreated;
 
       // Completed on this day
-      const completed = filteredTasks.filter((t) => {
+      const taskCompleted = filteredTasks.filter((t) => {
         const compDate = t.completedAt || t.completedDate;
         if (!compDate) return false;
-        return isSameDay(new Date(compDate), day);
+        const c = new Date(compDate);
+        return !isNaN(c.getTime()) && isSameDay(c, day);
       }).length;
+      const completed = serverDay
+        ? Number(serverDay.Completed ?? serverDay.completed ?? 0)
+        : taskCompleted;
 
       // Due on this day
-      const due = filteredTasks.filter((t) => {
-        if (!t.dueDate) return false;
-        return isSameDay(new Date(t.dueDate), day);
-      }).length;
-
-      // Overdue on this day (due on or before this day and not completed)
-      const overdue = filteredTasks.filter((t) => {
-        if (!t.dueDate) return false;
+      const taskDue = filteredTasks.filter((t) => {
+        if (!t.dueDate || t.dueDate === "No due date") return false;
         const d = new Date(t.dueDate);
-        return (
-          d <= day &&
-          !["completed", "done", "DONE"].includes((t.status || "").toLowerCase())
-        );
+        return !isNaN(d.getTime()) && isSameDay(d, day);
       }).length;
+      const due = serverDay
+        ? Number(serverDay.Due ?? serverDay.due ?? 0)
+        : taskDue;
+
+      // Overdue on this day (due on or before this day and not completed/cancelled)
+      const taskOverdue = filteredTasks.filter((t) => {
+        if (!t.dueDate || t.dueDate === "No due date") return false;
+        const d = new Date(t.dueDate);
+        if (isNaN(d.getTime())) return false;
+        const s = (t.status || "").toLowerCase();
+        const isDone = ["completed", "done", "DONE"].includes(s);
+        const isCancelled = ["cancelled", "canceled", "rejected"].includes(s);
+        return d <= day && !isDone && !isCancelled;
+      }).length;
+      const overdue = serverDay
+        ? Number(serverDay.Overdue ?? serverDay.overdue ?? 0)
+        : taskOverdue;
+
+      // Pending on this day (created on or before this day and not completed or cancelled)
+      const taskPending = filteredTasks.filter((t) => {
+        const c = t.createdAt ? new Date(t.createdAt) : null;
+        if (!c || isNaN(c.getTime())) return false;
+        const s = (t.status || "").toLowerCase();
+        const isDone = ["completed", "done", "DONE"].includes(s);
+        const isCancelled = ["cancelled", "canceled", "rejected"].includes(s);
+        return c <= day && !isDone && !isCancelled;
+      }).length;
+      const pending = serverDay
+        ? Number(serverDay.Pending ?? serverDay.pending ?? 0)
+        : taskPending;
+
+      // Cancelled on this day
+      const taskCancelled = filteredTasks.filter((t) => {
+        const s = (t.status || "").toLowerCase();
+        const isCancelled = ["cancelled", "canceled", "rejected"].includes(s);
+        if (!isCancelled) return false;
+        const date = t.updatedAt || t.createdAt;
+        if (!date) return false;
+        const d = new Date(date);
+        return !isNaN(d.getTime()) && isSameDay(d, day);
+      }).length;
+      const cancelled = serverDay
+        ? Number(serverDay.Cancelled ?? serverDay.cancelled ?? 0)
+        : taskCancelled;
 
       return {
         date: dayLabel,
         Created: created,
         Completed: completed,
         Due: due,
+        Pending: pending,
         Overdue: overdue,
+        Cancelled: cancelled,
       };
     });
-  }, [tasks, timeRange, taskFilter]);
+  }, [tasks, overviewData, timeRange, taskFilter]);
 
   // Custom stylish tooltip
   const CustomTooltip = ({ active, payload, label }) => {
@@ -188,9 +248,17 @@ const TaskOverviewChart = ({ tasks = [] }) => {
                 <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.25} />
                 <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.0} />
               </linearGradient>
+              <linearGradient id="colorPending" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.0} />
+              </linearGradient>
               <linearGradient id="colorOverdue" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
                 <stop offset="95%" stopColor="#ef4444" stopOpacity={0.0} />
+              </linearGradient>
+              <linearGradient id="colorCancelled" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#64748b" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="#64748b" stopOpacity={0.0} />
               </linearGradient>
             </defs>
 
@@ -241,6 +309,16 @@ const TaskOverviewChart = ({ tasks = [] }) => {
             />
             <Area
               type="monotone"
+              dataKey="Pending"
+              stroke="#8b5cf6"
+              strokeWidth={2.2}
+              fillOpacity={1}
+              fill="url(#colorPending)"
+              dot={{ r: 2.5, fill: "#8b5cf6", strokeWidth: 0 }}
+              activeDot={{ r: 5, strokeWidth: 0 }}
+            />
+            <Area
+              type="monotone"
               dataKey="Overdue"
               stroke="#ef4444"
               strokeWidth={2.2}
@@ -249,12 +327,22 @@ const TaskOverviewChart = ({ tasks = [] }) => {
               dot={{ r: 2.5, fill: "#ef4444", strokeWidth: 0 }}
               activeDot={{ r: 5, strokeWidth: 0 }}
             />
+            <Area
+              type="monotone"
+              dataKey="Cancelled"
+              stroke="#64748b"
+              strokeWidth={2.2}
+              fillOpacity={1}
+              fill="url(#colorCancelled)"
+              dot={{ r: 2.5, fill: "#64748b", strokeWidth: 0 }}
+              activeDot={{ r: 5, strokeWidth: 0 }}
+            />
           </AreaChart>
         </ResponsiveContainer>
       </div>
 
       {/* Custom Legend at Bottom */}
-      <div className="flex items-center justify-center gap-5 pt-3 mt-1 border-t border-slate-100 text-xs">
+      <div className="flex items-center justify-center gap-4 pt-3 mt-1 border-t border-slate-100 text-xs flex-wrap">
         <div className="flex items-center gap-1.5 font-medium text-slate-600">
           <span className="w-2.5 h-2.5 rounded-sm bg-blue-500 inline-block" />
           <span>Created</span>
@@ -268,8 +356,16 @@ const TaskOverviewChart = ({ tasks = [] }) => {
           <span>Due</span>
         </div>
         <div className="flex items-center gap-1.5 font-medium text-slate-600">
+          <span className="w-2.5 h-2.5 rounded-sm bg-purple-500 inline-block" />
+          <span>Pending</span>
+        </div>
+        <div className="flex items-center gap-1.5 font-medium text-slate-600">
           <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" />
           <span>Overdue</span>
+        </div>
+        <div className="flex items-center gap-1.5 font-medium text-slate-600">
+          <span className="w-2.5 h-2.5 rounded-sm bg-slate-500 inline-block" />
+          <span>Cancelled</span>
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { checkTaskMatchesDueDateFilter } from "../../utils/taskHelpers";
 import axios from "axios";
 import { taskService } from "../../services/taskService";
 import { createPortal } from "react-dom";
@@ -147,34 +148,10 @@ export default function MilestoneManager() {
     const priorityMatch =
       priorityFilter === "all" || milestone.priority === priorityFilter;
 
-    const matchesDueDate = (() => {
-      if (dueDateFilter === "all") return true;
-      if (!milestone.dueDate) return dueDateFilter === "no_due_date";
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dueDate = new Date(milestone.dueDate);
-      dueDate.setHours(0, 0, 0, 0);
-      const timeDiff = dueDate.getTime() - today.getTime();
-      const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
-      switch (dueDateFilter) {
-        case "overdue":
-          return daysDiff < 0;
-        case "due_today":
-          return daysDiff === 0;
-        case "due_tomorrow":
-          return daysDiff === 1;
-        case "due_this_week":
-          return daysDiff >= 0 && daysDiff <= 7;
-        case "due_next_week":
-          return daysDiff > 7 && daysDiff <= 14;
-        case "due_this_month":
-          return daysDiff >= 0 && daysDiff <= 30;
-        case "no_due_date":
-          return false;
-        default:
-          return true;
-      }
-    })();
+    const matchesDueDate = checkTaskMatchesDueDateFilter(
+      milestone,
+      dueDateFilter
+    );
 
     return matchesSearch && statusMatch && priorityMatch && matchesDueDate;
   });
@@ -887,7 +864,6 @@ export default function MilestoneManager() {
                 <option value="due_this_week">Due This Week</option>
                 <option value="due_next_week">Due Next Week</option>
                 <option value="due_this_month">Due This Month</option>
-                <option value="no_due_date">No Due Date</option>
               </select>
             </div>
 

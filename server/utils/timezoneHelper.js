@@ -160,10 +160,9 @@ export class TimezoneHelper {
             const tzDate = new Date(Date.UTC(tzYear, tzMonth - 1, tzDay, tzHour, tzMinute, tzSecond));
             const offset = tzDate.getTime() - utcTime; // ms offset
 
-            // Parse the original string as a local time in the given timezone
-            const localDate = new Date(dateTimeStr);
-            // We need to invert: if timezone is UTC+5:30, we subtract 5:30 from local to get UTC
-            const result = new Date(localDate.getTime() - offset);
+            // Convert wall-clock time in target timezone to UTC Date:
+            // utcTime treats dateTimeStr as UTC; subtracting offset produces the true UTC instant
+            const result = new Date(utcTime - offset);
 
             return result;
         } catch (error) {

@@ -111,6 +111,9 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [taskTypeFilter, setTaskTypeFilter] = useState("all");
   const [dueDateFilter, setDueDateFilter] = useState("all");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [assigneeFilterName, setAssigneeFilterName] = useState("");
+  const [completedTodayFilter, setCompletedTodayFilter] = useState(false);
   const [showSnooze, setShowSnooze] = useState(false);
   const [showCalendarView, setShowCalendarView] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -171,6 +174,7 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
     priorityFilter,
     taskTypeFilter,
     dueDateFilter,
+    assigneeFilter,
     showSnooze,
   ];
 
@@ -201,6 +205,7 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
     if (priorityFilter !== "all") queryParams.set("priority", priorityFilter);
     if (taskTypeFilter !== "all") queryParams.set("taskType", taskTypeFilter);
     if (dueDateFilter !== "all") queryParams.set("dueDate", dueDateFilter);
+    if (assigneeFilter && assigneeFilter !== "all") queryParams.set("assigneeId", assigneeFilter);
     if (showSnooze) queryParams.set("showSnooze", "true");
     if (activeRole) queryParams.append("activeRole", activeRole);
 
@@ -285,6 +290,7 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
     priorityFilter,
     taskTypeFilter,
     dueDateFilter,
+    assigneeFilter,
     showSnooze,
   ]);
 
@@ -303,6 +309,7 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
       priorityFilter,
       taskTypeFilter,
       dueDateFilter,
+      assigneeFilter,
       showSnooze,
     ],
     queryFn: fetchTasksFn,
@@ -503,17 +510,56 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
 
   // ── Effects ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlStatus = params.get("statusFilter");
-    const urlDueDate = params.get("dueDateFilter");
-    const urlTaskType = params.get("taskTypeFilter");
-    if (urlStatus) setStatusFilter(urlStatus);
-    if (urlDueDate) setDueDateFilter(urlDueDate);
-    if (urlTaskType) setTaskTypeFilter(urlTaskType);
-    if (urlStatus || urlDueDate || urlTaskType) {
-      window.history.replaceState({}, "", window.location.pathname);
+    const searchStr = window.location.search;
+    const params = new URLSearchParams(searchStr);
+    const urlStatus = params.get("statusFilter") || params.get("status");
+    const urlDueDate = params.get("dueDateFilter") || params.get("dueDate");
+    const urlTaskType = params.get("taskTypeFilter") || params.get("taskType");
+    const urlPriority = params.get("priorityFilter") || params.get("priority");
+    const urlCompletedToday = params.get("completedToday") === "true";
+    const urlAssigneeId = params.get("assigneeId");
+    const urlAssigneeName = params.get("assigneeName");
+
+    if (searchStr) {
+      if (urlStatus) setStatusFilter(urlStatus);
+      else setStatusFilter("all");
+
+      if (urlDueDate) setDueDateFilter(urlDueDate === "today" ? "due_today" : urlDueDate);
+      else setDueDateFilter("all");
+
+      if (urlPriority) setPriorityFilter(urlPriority.toLowerCase());
+      else setPriorityFilter("all");
+
+      setCompletedTodayFilter(urlCompletedToday);
+
+      if (urlTaskType) {
+        const tLower = urlTaskType.toLowerCase();
+        if (tLower.includes("regular")) setTaskTypeFilter("Regular Task");
+        else if (tLower.includes("milestone")) setTaskTypeFilter("Milestone Task");
+        else if (tLower.includes("recurring")) setTaskTypeFilter("Recurring Task");
+        else if (tLower.includes("approval")) setTaskTypeFilter("Approval Task");
+        else setTaskTypeFilter(urlTaskType);
+      } else {
+        setTaskTypeFilter("all");
+      }
+
+      if (urlAssigneeId) {
+        setAssigneeFilter(urlAssigneeId);
+        setAssigneeFilterName(urlAssigneeName ? decodeURIComponent(urlAssigneeName) : "");
+      } else {
+        setAssigneeFilter("all");
+        setAssigneeFilterName("");
+      }
+    } else {
+      setStatusFilter("all");
+      setDueDateFilter(initialDueDateFilter && initialDueDateFilter !== "all" ? initialDueDateFilter : "all");
+      setPriorityFilter("all");
+      setCompletedTodayFilter(false);
+      setTaskTypeFilter("all");
+      setAssigneeFilter("all");
+      setAssigneeFilterName("");
     }
-  }, []);
+  }, [location, initialDueDateFilter]);
 
   useEffect(() => {
     if (initialDueDateFilter && initialDueDateFilter !== "all") {
@@ -529,6 +575,7 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
     priorityFilter,
     taskTypeFilter,
     dueDateFilter,
+    assigneeFilter,
     showSnooze,
     statusSort,
   ]);
@@ -602,6 +649,9 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
         taskTypeFilter,
         dueDateFilter,
         windowCalendarSpecificDate: window.calendarSpecificDate,
+        assigneeFilter,
+        assigneeFilterName,
+        completedTodayFilter,
       }),
     [
       groupedTasksForDisplay,
@@ -610,6 +660,9 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
       priorityFilter,
       taskTypeFilter,
       dueDateFilter,
+      assigneeFilter,
+      assigneeFilterName,
+      completedTodayFilter,
     ],
   );
 
@@ -644,6 +697,7 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
     priorityFilter !== "all" ||
     taskTypeFilter !== "all" ||
     dueDateFilter !== "all" ||
+    (assigneeFilter && assigneeFilter !== "all") ||
     showSnooze ||
     statusSort !== "none"
   );
@@ -1023,6 +1077,9 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
     setPriorityFilter("all");
     setTaskTypeFilter("all");
     setDueDateFilter("all");
+    setAssigneeFilter("all");
+    setAssigneeFilterName("");
+    setCompletedTodayFilter(false);
     window.calendarSpecificDate = null;
   };
 
@@ -1097,6 +1154,8 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
           priorityFilter !== "all" ||
           taskTypeFilter !== "all" ||
           dueDateFilter !== "all" ||
+          (assigneeFilter && assigneeFilter !== "all") ||
+          completedTodayFilter ||
           searchTerm) && (
           <div className=" bg-blue-50 border-blue-200 mb-3">
             <div className="flex items-center justify-between p-3">
@@ -1104,6 +1163,15 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
                 <span className="text-sm font-medium text-blue-800">
                   Active Filters:
                 </span> 
+                {assigneeFilter && assigneeFilter !== "all" && (
+                  <FilterChip
+                    label={`Assignee: ${assigneeFilterName || "Selected Member"}`}
+                    onRemove={() => {
+                      setAssigneeFilter("all");
+                      setAssigneeFilterName("");
+                    }}
+                  />
+                )}
                 {searchTerm && (
                   <FilterChip
                     label={`Search: "${searchTerm}"`}
@@ -1140,6 +1208,12 @@ export default function AllTasks({ onCreateTask, initialDueDateFilter }) {
                       setDueDateFilter("all");
                       window.calendarSpecificDate = null;
                     }}
+                  />
+                )}
+                {completedTodayFilter && (
+                  <FilterChip
+                    label="Completed: Today"
+                    onRemove={() => setCompletedTodayFilter(false)}
                   />
                 )}
               </div>

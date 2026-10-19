@@ -49,7 +49,7 @@ export default function ConfirmDialog({
           <Button
             onClick={onCancel}
             variant="outline"
-            className="h-9 px-4"
+            className="h-8 px-4 rounded-sm"
             disabled={isConfirming}
           >
             {cancelLabel}
@@ -57,7 +57,7 @@ export default function ConfirmDialog({
           <Button
             onClick={onConfirm}
             variant={confirmVariant}
-            className="h-9 px-4"
+            className="h-8 px-4 rounded-sm"
             disabled={isConfirming}
           >
             {isConfirming ? "Please wait..." : confirmLabel}

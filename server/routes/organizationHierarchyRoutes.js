@@ -11,13 +11,23 @@ import {
 const router = express.Router();
 
 // Get all hierarchy entries
-router.get("/", authenticateToken, roleAuth(["org_admin"]), getAllHierarchies);
+router.get(
+  "/",
+  authenticateToken,
+  roleAuth(["org_admin", "admin", "super_admin", "manager"]),
+  getAllHierarchies,
+);
 
 // Create new hierarchy entry
 router.post("/", authenticateToken, roleAuth(["org_admin"]), createHierarchy);
 
 // Get hierarchy entry by ID
-router.get("/:id", authenticateToken, roleAuth(["org_admin"]), getHierarchyById);
+router.get(
+  "/:id",
+  authenticateToken,
+  roleAuth(["org_admin", "admin", "super_admin", "manager"]),
+  getHierarchyById,
+);
 
 // Update hierarchy entry
 router.put("/:id", authenticateToken, roleAuth(["org_admin"]), updateHierarchy);

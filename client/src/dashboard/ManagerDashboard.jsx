@@ -51,6 +51,8 @@ import {
 import TaskOverviewChart from "./components/TaskOverviewChart";
 import TaskStatusDonut from "./components/TaskStatusDonut";
 import KpiSparkline from "./components/KpiSparkline";
+import OrganizationHierarchySection from "./components/OrganizationHierarchySection";
+import { useAggregatedDashboard } from "./hooks/useAggregatedDashboard";
 
 // Helper function for stats
 function computeStatsFromTasks(tasks) {
@@ -69,23 +71,47 @@ function computeStatsFromTasks(tasks) {
     };
   const now = new Date();
   const statusOf = (s) => (s || "").toLowerCase();
-  const openCount = tasks.filter((t) =>
-    ["pending", "todo", "open"].includes(statusOf(t.status)),
-  ).length;
-  const inProgressCount = tasks.filter((t) =>
-    ["in_progress", "in-progress", "doing", "inprogress"].includes(
-      statusOf(t.status),
-    ),
-  ).length;
+
+  const getDisplayNow = () => {
+    const d = new Date();
+    return new Date(
+      Date.UTC(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        d.getHours(),
+        d.getMinutes(),
+        d.getSeconds()
+      )
+    );
+  };
+
+  const isTaskOverdue = (task) => {
+    if (!task?.dueDate || task.dueDate === "No due date") return false;
+    const s = statusOf(task.status);
+    if (["completed", "done", "cancelled"].includes(s)) return false;
+    const d = new Date(task.dueDate);
+    if (isNaN(d.getTime())) return false;
+    return d < getDisplayNow() || d < now;
+  };
+
   const completedCount = tasks.filter((t) =>
     ["completed", "done"].includes(statusOf(t.status)),
   ).length;
-  const overdueCount = tasks.filter(
-    (t) =>
-      t.dueDate &&
-      new Date(t.dueDate) < now &&
-      !["completed", "done"].includes(statusOf(t.status)),
+  const overdueCount = tasks.filter((t) => t.isPastDue || isTaskOverdue(t)).length;
+  const inProgressCount = tasks.filter((t) =>
+    ["in_progress", "in-progress", "doing", "inprogress"].includes(
+      statusOf(t.status),
+    ) && !t.isPastDue && !isTaskOverdue(t),
   ).length;
+  const openCount = Math.max(
+    0,
+    tasks.filter((t) =>
+      !["completed", "done", "in_progress", "in-progress", "doing", "inprogress"].includes(statusOf(t.status)) &&
+      !t.isPastDue &&
+      !isTaskOverdue(t),
+    ).length
+  );
   return {
     completedTasks: completedCount,
     totalTasks: tasks.length,
@@ -93,7 +119,8 @@ function computeStatsFromTasks(tasks) {
     upcomingDeadlines: tasks.filter(
       (t) =>
         t.dueDate &&
-        new Date(t.dueDate) > now &&
+        !t.isPastDue &&
+        !isTaskOverdue(t) &&
         !["completed", "done"].includes(statusOf(t.status)),
     ).length,
     overdueTasks: overdueCount,
@@ -173,84 +200,39 @@ const ManagerDashboard = () => {
   const { user } = useAuth();
   const token = localStorage.getItem("token");
 
-  // Fetch my tasks using axios
-  const { data: myTasksResponse, isLoading: tasksLoading } = useQuery({
-    queryKey: ["/api/mytasks", activeRole],
-    queryFn: async () => {
-      const queryParams = new URLSearchParams({
-        page: 1,
-        limit: 1000,
-        activeRole: activeRole,
-      });
-      const response = await axios.get(
-        `/api/mytasks?${queryParams.toString()}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-
-      console.log("API Response:", response.data);
-
-      let tasks = [];
-      if (response.data?.success && response.data?.data?.tasks) {
-        tasks = response.data.data.tasks;
-      } else if (response.data?.tasks) {
-        tasks = response.data.tasks;
-      } else if (Array.isArray(response.data)) {
-        tasks = response.data;
-      } else if (response.data?.data && Array.isArray(response.data.data)) {
-        tasks = response.data.data;
-      }
-
-      console.log("Extracted tasks:", tasks.length);
-      return tasks;
-    },
-    enabled: !!user && !!token,
-  });
-
-  // Fetch team members
-  const { data: teamMembersRaw, isLoading: membersLoading } = useQuery({
-    queryKey: ["/api/team-members"],
-    queryFn: async () => {
-      const response = await axios.get("/api/team-members", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const members = response.data?.data || response.data || [];
-      return Array.isArray(members) ? members : [];
-    },
-    enabled: !!user && !!token,
-  });
-
-  const { data: milestonesData, isLoading: milestonesLoading } = useQuery({
-    queryKey: ["/api/milestone-tasks", activeRole, user?.id],
-    enabled: !!user,
-    queryFn: async () => {
-      const response = await axios.get("/api/milestone-tasks", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      return response.data;
+  // Single consolidated aggregated dashboard query
+  const {
+    dashboardData,
+    kpis,
+    charts,
+    taskList: aggregatedTasks,
+    teamMembers: aggregatedMembers,
+    milestones: aggregatedMilestones,
+    isLoading: isAggregatedLoading,
+    invalidateDashboard,
+  } = useAggregatedDashboard({
+    activeRole: "manager",
+    timeRange: selectedTimeRange === "all" ? "7d" : selectedTimeRange,
+    filters: {
+      priority: priorityFilter,
+      search: searchQuery,
     },
   });
 
-  const { data: dashboardData, isLoading: statsLoading } = useQuery({
-    queryKey: ["/api/dashboard-stats", activeRole, user?.id],
-    queryFn: async () => {
-      const response = await axios.get("/api/dashboard-stats", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      return response.data?.data || {};
-    },
-    enabled: !!user && !!token,
-  });
+  const tasksLoading = isAggregatedLoading;
+  const membersLoading = isAggregatedLoading;
+  const milestonesLoading = isAggregatedLoading;
+  const statsLoading = isAggregatedLoading;
 
-  // Data Processing
-  const dashboardCounts = dashboardData || {};
-  const teamData = dashboardCounts?.teamData || {};
+  const dashboardCounts = kpis || {};
+  const teamData = {
+    employeeStats: aggregatedMembers || [],
+    totalEmployees: (aggregatedMembers || []).length,
+  };
 
   const teamTasksData = useMemo(() => {
-    if (!myTasksResponse) return [];
-    return Array.isArray(myTasksResponse) ? myTasksResponse : [];
-  }, [myTasksResponse]);
+    return aggregatedTasks || [];
+  }, [aggregatedTasks]);
 
   // CRITICAL FIX: Only filter out org_admin, keep all other employees
   const teamMembers = useMemo(() => {
@@ -267,7 +249,7 @@ const ManagerDashboard = () => {
       );
     };
 
-    if (teamData?.employeeStats) {
+    if (teamData?.employeeStats && Array.isArray(teamData.employeeStats)) {
       members = teamData.employeeStats
         .filter((m) => !isOrgAdmin(m.role)) // ONLY remove org_admin
         .map((m) => ({
@@ -275,69 +257,6 @@ const ManagerDashboard = () => {
           id: m.id || m._id,
           status: m.status || "online",
         }));
-    } else if (teamMembersRaw) {
-      members = teamMembersRaw
-        .filter((m) => !isOrgAdmin(m.role)) // ONLY remove org_admin
-        .map((m) => {
-          const mTasks = teamTasksData.filter((t) => {
-            let assigneeId = null;
-            if (typeof t.assignedTo === "string") assigneeId = t.assignedTo;
-            else if (t.assignedTo?._id) assigneeId = t.assignedTo._id;
-            else if (t.assignedTo?.id) assigneeId = t.assignedTo.id;
-            return assigneeId === String(m.id || m._id);
-          });
-
-          const activeTasks = mTasks.filter(
-            (t) =>
-              t.status !== "completed" &&
-              t.status !== "DONE" &&
-              t.status !== "COMPLETED",
-          ).length;
-          const overdueTasks = mTasks.filter(
-            (t) =>
-              t.status !== "completed" &&
-              t.status !== "DONE" &&
-              t.status !== "COMPLETED" &&
-              t.dueDate &&
-              new Date(t.dueDate) < new Date(),
-          ).length;
-          const completedTasks = mTasks.filter(
-            (t) =>
-              t.status === "completed" ||
-              t.status === "DONE" ||
-              t.status === "COMPLETED",
-          );
-          const onTime = completedTasks.filter(
-            (t) =>
-              t.completedDate &&
-              t.dueDate &&
-              new Date(t.completedDate) <= new Date(t.dueDate),
-          ).length;
-          const performance =
-            completedTasks.length > 0
-              ? Math.round((onTime / completedTasks.length) * 100)
-              : 100;
-
-          return {
-            id: m.id,
-            name:
-              m.fullName || `${m.firstName || ""} ${m.lastName || ""}`.trim(),
-            role: m.role || "Member",
-            avatar: (m.firstName?.[0] || "") + (m.lastName?.[0] || ""),
-            tasks: mTasks.length,
-            performance: performance,
-            productivity: performance,
-            overdueTasks: overdueTasks,
-            activeTasks: activeTasks,
-            completedOnTimeThisMonth: onTime,
-            overdueClosedThisMonth: completedTasks.length - onTime,
-            capacity: 10,
-            status: m.isActive ? "online" : "offline",
-            lastActivity: m.lastLoginAt
-              ? new Date(m.lastLoginAt).toLocaleDateString()
-              : "Never",
-          };
-        });
     }
 
     console.log(
@@ -345,87 +264,89 @@ const ManagerDashboard = () => {
       members.length,
     );
     return Array.isArray(members) ? members : [];
-  }, [teamData, teamMembersRaw, teamTasksData]);
+  }, [teamData]);
+
+  const extractVal = (val, fallback = 0) => {
+    if (val === null || val === undefined) return fallback;
+    if (React.isValidElement(val)) return val;
+    if (typeof val === "object") {
+      const v = val.value !== undefined ? val.value : fallback;
+      if (typeof v === "object" && v !== null && !React.isValidElement(v)) {
+        return extractVal(v, fallback);
+      }
+      return v;
+    }
+    return val;
+  };
+
+  const getDisplayNow = () => {
+    const now = new Date();
+    return new Date(
+      Date.UTC(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        now.getHours(),
+        now.getMinutes(),
+        now.getSeconds()
+      )
+    );
+  };
+
+  const isTaskOverdue = (task) => {
+    if (!task?.dueDate || task.dueDate === "No due date") return false;
+    const s = (task.status || "").toUpperCase();
+    if (["DONE", "COMPLETED", "CANCELLED"].includes(s)) return false;
+    const d = new Date(task.dueDate);
+    if (isNaN(d.getTime())) return false;
+    return d < getDisplayNow() || d < new Date();
+  };
 
   const teamStatsForHeader = useMemo(() => {
-    const totalTasks = teamTasksData.length;
-    const completedTasks = teamTasksData.filter(
-      (t) =>
-        t.status === "completed" ||
-        t.status === "DONE" ||
-        t.status === "COMPLETED",
-    ).length;
-    const inProgressTasks = teamTasksData.filter(
-      (t) => t.status === "in_progress" || t.status === "INPROGRESS",
-    ).length;
-    const overdueTasks = teamTasksData.filter(
-      (t) =>
-        t.dueDate &&
-        new Date(t.dueDate) < new Date() &&
-        t.status !== "completed" &&
-        t.status !== "DONE" &&
-        t.status !== "COMPLETED",
-    ).length;
+    let open = 0;
+    let inProgress = 0;
+    let completed = 0;
+    let overdue = 0;
+
+    teamTasksData.forEach((t) => {
+      const s = (t.status || "").toUpperCase();
+      const isDone = ["COMPLETED", "DONE"].includes(s);
+      const isCancelled = ["CANCELLED", "CANCELED"].includes(s);
+      const isInProg = ["IN_PROGRESS", "INPROGRESS", "DOING"].includes(s);
+      const isPastDue = t.isPastDue || isTaskOverdue(t);
+
+      if (isDone) completed++;
+      else if (isInProg) inProgress++;
+      else if (!isCancelled) open++;
+
+      if (isPastDue) overdue++;
+    });
+
+    const serverOverdue = extractVal(kpis?.pastDueDate ?? kpis?.overdueTasks, 0);
 
     return {
-      totalTasks,
-      completedTasks,
-      inProgressTasks,
-      overdueTasks,
-      openTasks: teamTasksData.filter(
-        (t) =>
-          !["completed", "done", "in_progress", "inprogress"].includes(
-            (t.status || "").toLowerCase(),
-          ),
-      ).length,
-      completionPercentage:
-        totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
+      totalTasks: teamTasksData.length > 0 ? teamTasksData.length : extractVal(kpis?.totalTasks, 0),
+      completedTasks: teamTasksData.length > 0 ? completed : extractVal(kpis?.completedTasks, 0),
+      inProgressTasks: teamTasksData.length > 0 ? inProgress : extractVal(kpis?.inProgressTasks, 0),
+      overdueTasks: Math.max(overdue, serverOverdue),
+      openTasks: teamTasksData.length > 0 ? open : extractVal(kpis?.openTasks, 0),
+      completionPercentage: extractVal(kpis?.completionRate, 0),
     };
-  }, [teamTasksData]);
+  }, [kpis, teamTasksData]);
 
   const teamStats = useMemo(() => {
-    if (!dashboardCounts) {
-      return {
-        totalTeamMembers: teamMembers.length,
-        activeTasks: 0,
-        completedTasksThisMonth: 0,
-        overdueItems: 0,
-        teamProductivity: 0,
-        avgTaskCompletionTime: "N/A",
-        upcomingDeadlines: 0,
-        teamSatisfaction: 5.0,
-      };
-    }
-
     return {
-      totalTeamMembers: teamData?.totalEmployees || teamMembers.length,
-      activeTasks: dashboardCounts.beforeDueDateCount || 0,
-      completedTasksThisMonth: dashboardCounts.completedThisMonthCount || 0,
-      overdueItems: dashboardCounts.pastDueDateCount || 0,
-      teamProductivity:
-        dashboardCounts.productivity ||
-        (teamTasksData.length > 0
-          ? Math.round(
-              ((teamTasksData.length - teamStatsForHeader.overdueTasks) /
-                teamTasksData.length) *
-                100,
-            )
-          : 100),
-      avgTaskCompletionTime:
-        dashboardCounts.efficiency?.avgTaskCompletionTime || "N/A",
-      upcomingDeadlines: dashboardCounts.beforeDueDateCount || 0,
-      teamSatisfaction: dashboardCounts.productivity
-        ? (dashboardCounts.productivity / 20).toFixed(1)
-        : 4.8,
-      isExpired: dashboardCounts.license?.isExpired || false,
+      totalTeamMembers: teamMembers.length,
+      activeTasks: kpis?.beforeDueDate ?? (kpis?.openTasks || 0) + (kpis?.inProgressTasks || 0),
+      completedTasksThisMonth: kpis?.completedTasks ?? 0,
+      overdueItems: kpis?.pastDueDate ?? kpis?.overdueTasks ?? 0,
+      teamProductivity: kpis?.teamProductivity ?? 100,
+      avgTaskCompletionTime: "N/A",
+      upcomingDeadlines: kpis?.beforeDueDate ?? 0,
+      teamSatisfaction: 5.0,
+      isExpired: false,
     };
-  }, [
-    dashboardCounts,
-    teamMembers,
-    teamData,
-    teamTasksData,
-    teamStatsForHeader,
-  ]);
+  }, [kpis, teamMembers]);
 
   // Today Focus Tasks
   const todayStr = new Date().toISOString().split("T")[0];
@@ -438,21 +359,8 @@ const ManagerDashboard = () => {
   }, [teamTasksData, todayStr]);
 
   const overdueFocusTasksData = useMemo(() => {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
     return teamTasksData
-      .filter((t) => {
-        if (!t.dueDate) return false;
-        const dueDate = new Date(t.dueDate);
-        dueDate.setHours(0, 0, 0, 0);
-        const status = (t.status || "").toUpperCase();
-        return (
-          dueDate < now &&
-          status !== "DONE" &&
-          status !== "COMPLETED" &&
-          status !== "CANCELLED"
-        );
-      })
+      .filter((t) => t.isPastDue || isTaskOverdue(t))
       .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
       .slice(0, 8);
   }, [teamTasksData]);
@@ -746,11 +654,19 @@ const ManagerDashboard = () => {
       }
 
       if (taskListFilter === "today") {
-        tasks = tasks.filter(
-          (t) =>
-            t.dueDate &&
-            new Date(t.dueDate).toDateString() === new Date().toDateString(),
-        );
+        const today = new Date();
+        const localNowIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        tasks = tasks.filter((t) => {
+          const isCreated =
+            (t.createdAt && new Date(t.createdAt).toDateString() === today.toDateString()) ||
+            String(t.createdAt || "").startsWith(localNowIso) ||
+            String(t.createdAt || "").startsWith(today.toISOString().split("T")[0]);
+          const isDue =
+            (t.dueDate && new Date(t.dueDate).toDateString() === today.toDateString()) ||
+            String(t.dueDate || "").startsWith(localNowIso) ||
+            String(t.dueDate || "").startsWith(today.toISOString().split("T")[0]);
+          return isCreated || isDue;
+        });
       } else if (taskListFilter === "overdue") {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -785,7 +701,7 @@ const ManagerDashboard = () => {
   ]);
 
   const projectStats = useMemo(() => {
-    const milestones = milestonesData?.milestones || [];
+    const milestones = aggregatedMilestones || [];
     const taskBasedMilestones = teamTasksData.filter(
       (t) => t.isMilestone || t.taskType === "milestone",
     );
@@ -844,7 +760,7 @@ const ManagerDashboard = () => {
         };
       })
       .slice(0, 4);
-  }, [milestonesData, teamTasksData]);
+  }, [aggregatedMilestones, teamTasksData]);
 
   const weeklyPerformance = useMemo(() => {
     if (teamData?.weeklyPerformance) return teamData.weeklyPerformance;
@@ -1428,7 +1344,7 @@ const ManagerDashboard = () => {
                       {label}
                     </p>
                     <h2 className="text-[30px] font-bold text-[#1f2937] tracking-tight leading-none mt-2">
-                      {value}
+                      {extractVal(value)}
                     </h2>
                   </div>
                   <div
@@ -1472,13 +1388,24 @@ const ManagerDashboard = () => {
           )}
         </div>
 
+        {/* Team Hierarchy Section */}
+        <div id="manager-team-hierarchy-section" className="mb-3">
+          <OrganizationHierarchySection
+            tasks={teamTasksData}
+            teamMembers={teamMembers}
+            currentUser={user}
+            activeRole="manager"
+          />
+        </div>
+
         {/* Task Overview and Task Status Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3">
           <div className="lg:col-span-7 h-[350px]">
-            <TaskOverviewChart tasks={teamTasksData} />
+            <TaskOverviewChart tasks={teamTasksData} overviewData={charts?.taskOverview} />
           </div>
           <div className="lg:col-span-5 h-[350px]">
             <TaskStatusDonut
+              tasks={teamTasksData}
               totalTasks={teamStatsForHeader.totalTasks}
               openCount={teamStatsForHeader.openTasks}
               inProgressCount={teamStatsForHeader.inProgressTasks}
@@ -1530,172 +1457,92 @@ const ManagerDashboard = () => {
           </div>
         </div>
 
-        {/* MAIN CONTENT GRID */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
-          {/* Team Members List */}
-          <div className="lg:col-span-2 bg-white rounded-sm shadow-sm border border-gray-100 flex flex-col h-[480px] overflow-hidden">
+        {/* MILESTONES & PERFORMANCE GRID */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+          <div className="bg-white rounded-sm shadow-sm border border-gray-100 flex flex-col h-[320px] overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
               <h2 className="text-sm font-semibold text-gray-800 flex items-center">
-                <Users className="w-4 h-4 mr-2 text-blue-500" />
-                Team Members
+                <CheckSquare className="w-4 h-4 mr-2 text-emerald-500" />
+                Milestones Progress
               </h2>
-              <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-sm">
-                {teamMembers.length} {teamMembers.length === 1 ? "member" : "members"}
-              </span>
+              {projectStats.length > 0 && (
+                <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-sm">
+                  {projectStats.length}
+                </span>
+              )}
             </div>
-            <div className="p-4 flex-1 overflow-y-auto min-h-0 pr-2 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
-              <div className="space-y-2">
-                {teamMembers.map((member) => (
-                  <button
-                    key={member.id}
-                    onClick={() => handleOpenMember(member)}
-                    className="w-full text-left flex items-center justify-between p-3 bg-gray-50 rounded-sm hover:bg-gray-100 transition-all duration-200 border border-transparent hover:border-gray-200"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="relative">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-sm flex items-center justify-center text-white font-semibold text-xs shadow-sm">
-                          {member.avatar || "U"}
-                        </div>
-                        <div
-                          className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-sm ring-2 ring-white ${getStatusColor(member.status)}`}
-                        ></div>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-800 text-sm">
-                          {member.name}
-                        </h3>
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
-                          <span className="text-xs font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-sm">
-                            {Array.isArray(member.role)
-                              ? member.role.join(", ")
-                              : member.role}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="flex items-center space-x-3 text-sm">
-                        <div>
-                          <p className="text-gray-500 text-[10px]">Active</p>
-                          <p className="font-semibold text-gray-700 text-xs">
-                            {member.activeTasks}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-rose-500 text-[10px]">Overdue</p>
-                          <p className="font-semibold text-rose-600 text-xs">
-                            {member.overdueTasks}
-                          </p>
-                        </div>
-                        <div className="pl-2 border-l border-gray-200">
-                          <p className="font-semibold text-gray-800 text-xs">
-                            {member.productivity}%
-                          </p>
-                          <p className="text-[9px] text-gray-400">
-                            Productivity
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-                {teamMembers.length === 0 && (
-                  <div className="text-center py-12 flex flex-col items-center justify-center h-full">
-                    <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-400">No team members found</p>
+            <div className="p-4 flex-1 overflow-y-auto min-h-0 space-y-3 pr-2 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
+              {projectStats.map((ms) => (
+                <div
+                  key={ms.name}
+                  className="border border-gray-100 rounded-sm p-3 bg-gray-50/30"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-sm font-semibold text-gray-800 truncate">
+                      {ms.name}
+                    </p>
+                    <span className="text-xs text-gray-500 bg-white px-1.5 py-0.5 rounded-sm shadow-sm">
+                      {ms.progress}%
+                    </span>
                   </div>
-                )}
-              </div>
+                  <div className="w-full bg-gray-200 rounded-sm h-1.5 mb-1.5">
+                    <div
+                      className="bg-blue-500 h-1.5 rounded-sm transition-all duration-300"
+                      style={{ width: `${Math.min(100, ms.progress)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-gray-500">
+                      {ms.totalTasks} tasks
+                    </span>
+                    {ms.health === "risk" ? (
+                      <span className="text-rose-600 font-medium">
+                        ⚠️ At risk
+                      </span>
+                    ) : (
+                      <span className="text-emerald-600 font-medium">
+                        On track
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {projectStats.length === 0 && (
+                <div className="text-center py-6 flex flex-col items-center justify-center h-full">
+                  <Target className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-400">No milestones yet</p>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Quick Stats Sidebar */}
-          <div className="h-[480px] flex flex-col gap-3">
-            <div className="flex-1 min-h-0 bg-white rounded-sm shadow-sm border border-gray-100 flex flex-col overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-                <h2 className="text-sm font-semibold text-gray-800 flex items-center">
-                  <CheckSquare className="w-4 h-4 mr-2 text-emerald-500" />
-                  Milestones Progress
-                </h2>
-                {projectStats.length > 0 && (
-                  <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-sm">
-                    {projectStats.length}
-                  </span>
-                )}
-              </div>
-              <div className="p-4 flex-1 overflow-y-auto min-h-0 space-y-3 pr-2 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
-                {projectStats.map((ms) => (
-                  <div
-                    key={ms.name}
-                    className="border border-gray-100 rounded-sm p-3 bg-gray-50/30"
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-sm font-semibold text-gray-800 truncate">
-                        {ms.name}
-                      </p>
-                      <span className="text-xs text-gray-500 bg-white px-1.5 py-0.5 rounded-sm shadow-sm">
-                        {ms.progress}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-sm h-1.5 mb-1.5">
+          <div className="bg-white rounded-sm shadow-sm border border-gray-100 flex flex-col h-[320px] overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+              <h3 className="text-sm font-semibold text-gray-800 flex items-center">
+                <BarChart3 className="w-4 h-4 mr-2 text-emerald-500" />
+                Weekly Performance
+              </h3>
+            </div>
+            <div className="p-4 flex-1 overflow-y-auto min-h-0 pr-2 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
+              <div className="space-y-2">
+                {weeklyPerformance.map((day, index) => (
+                  <div key={index} className="flex items-center space-x-2">
+                    <span className="text-xs font-medium text-gray-500 w-7">
+                      {day.day}
+                    </span>
+                    <div className="flex-1 bg-gray-100 rounded-sm h-1.5">
                       <div
-                        className="bg-blue-500 h-1.5 rounded-sm transition-all duration-300"
-                        style={{ width: `${Math.min(100, ms.progress)}%` }}
+                        className="bg-gradient-to-r from-blue-400 to-blue-600 h-1.5 rounded-sm transition-all duration-300"
+                        style={{
+                          width: `${Math.min(100, day.assigned > 0 ? (day.completed / day.assigned) * 100 : 0)}%`,
+                        }}
                       />
                     </div>
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-gray-500">
-                        {ms.totalTasks} tasks
-                      </span>
-                      {ms.health === "risk" ? (
-                        <span className="text-rose-600 font-medium">
-                          ⚠️ At risk
-                        </span>
-                      ) : (
-                        <span className="text-emerald-600 font-medium">
-                          On track
-                        </span>
-                      )}
-                    </div>
+                    <span className="text-xs text-gray-500">
+                      {day.completed}/{day.assigned}
+                    </span>
                   </div>
                 ))}
-                {projectStats.length === 0 && (
-                  <div className="text-center py-6 flex flex-col items-center justify-center h-full">
-                    <Target className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-400">No milestones yet</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex-1 min-h-0 bg-white rounded-sm shadow-sm border border-gray-100 flex flex-col overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-                <h3 className="text-sm font-semibold text-gray-800 flex items-center">
-                  <BarChart3 className="w-4 h-4 mr-2 text-emerald-500" />
-                  Weekly Performance
-                </h3>
-              </div>
-              <div className="p-4 flex-1 overflow-y-auto min-h-0 pr-2 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
-                <div className="space-y-2">
-                  {weeklyPerformance.map((day, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <span className="text-xs font-medium text-gray-500 w-7">
-                        {day.day}
-                      </span>
-                      <div className="flex-1 bg-gray-100 rounded-sm h-1.5">
-                        <div
-                          className="bg-gradient-to-r from-blue-400 to-blue-600 h-1.5 rounded-sm transition-all duration-300"
-                          style={{
-                            width: `${Math.min(100, day.assigned > 0 ? (day.completed / day.assigned) * 100 : 0)}%`,
-                          }}
-                        />
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {day.completed}/{day.assigned}
-                      </span>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           </div>
@@ -1723,12 +1570,19 @@ const ManagerDashboard = () => {
                   {
                     key: "today",
                     label: "Today",
-                    count: teamTasks.filter(
-                      (t) =>
-                        t.dueDate &&
-                        new Date(t.dueDate).toDateString() ===
-                          new Date().toDateString(),
-                    ).length,
+                    count: teamTasks.filter((t) => {
+                      const today = new Date();
+                      const localNowIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                      const isCreated =
+                        (t.createdAt && new Date(t.createdAt).toDateString() === today.toDateString()) ||
+                        String(t.createdAt || "").startsWith(localNowIso) ||
+                        String(t.createdAt || "").startsWith(today.toISOString().split("T")[0]);
+                      const isDue =
+                        (t.dueDate && new Date(t.dueDate).toDateString() === today.toDateString()) ||
+                        String(t.dueDate || "").startsWith(localNowIso) ||
+                        String(t.dueDate || "").startsWith(today.toISOString().split("T")[0]);
+                      return isCreated || isDue;
+                    }).length,
                   },
                   {
                     key: "overdue",

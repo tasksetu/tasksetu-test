@@ -127,7 +127,6 @@ const TaskFilters = React.memo(function TaskFilters({
             { value: "due_this_week", label: "Due This Week" },
             { value: "due_next_week", label: "Due Next Week" },
             { value: "due_this_month", label: "Due This Month" },
-            { value: "no_due_date", label: "No Due Date" },
             ...(windowCalendarSpecificDate
               ? [
                   {

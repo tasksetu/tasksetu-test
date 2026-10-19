@@ -2423,7 +2423,7 @@ export class MongoStorage {
   async getOrganizationUsersDetailed(organizationId) {
     return await User.find({ organization_id: organizationId })
       .select(
-        "firstName lastName email role roles status isActive emailVerified inviteToken inviteTokenExpiry lastLoginAt createdAt invitedBy invitedAt department designation location assignedTasks completedTasks",
+        "firstName lastName email role roles status isActive emailVerified inviteToken inviteTokenExpiry lastLoginAt createdAt invitedBy invitedAt department designation location assignedTasks completedTasks managerId subordinates avatar profileImage profileImageUrl",
       )
       .populate("invitedBy", "firstName lastName email")
       .sort({ createdAt: -1 });

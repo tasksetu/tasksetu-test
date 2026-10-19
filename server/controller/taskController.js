@@ -10936,6 +10936,7 @@ export const getMyTasks = async (req, res) => {
       search,
       role,
       activeRole,
+      assigneeId,
     } = req.query;
 
     const user = req.user;
@@ -10976,7 +10977,18 @@ export const getMyTasks = async (req, res) => {
       ],
     };
 
-    if (status) filter.status = status;
+    if (status && status !== "all") {
+      const sUpper = status.toUpperCase();
+      if (["INPROGRESS", "IN_PROGRESS", "DOING"].includes(sUpper)) {
+        filter.status = { $in: ["INPROGRESS", "IN_PROGRESS", "inprogress", "in_progress", "DOING"] };
+      } else if (["CANCELLED", "CANCELED"].includes(sUpper)) {
+        filter.status = { $in: ["CANCELLED", "CANCELED", "cancelled", "canceled"] };
+      } else if (["DONE", "COMPLETED"].includes(sUpper)) {
+        filter.status = { $in: ["DONE", "COMPLETED", "done", "completed"] };
+      } else {
+        filter.status = status;
+      }
+    }
     if (priority) filter.priority = priority;
     if (search) {
       filter.$or = [
@@ -11049,6 +11061,29 @@ export const getMyTasks = async (req, res) => {
 
     if (role) {
       filter.createdByRole = role;
+    }
+
+    if (assigneeId) {
+      const assigneeSubtaskDocs = await Task.find({
+        isDeleted: { $ne: true },
+        parentTaskId: { $exists: true, $ne: null },
+        assignedTo: assigneeId,
+      })
+        .select("parentTaskId")
+        .lean();
+      const parentTaskIdsForAssignee = assigneeSubtaskDocs
+        .map((s) => s.parentTaskId?.toString())
+        .filter(Boolean);
+
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { assignedTo: assigneeId },
+          ...(parentTaskIdsForAssignee.length > 0
+            ? [{ _id: { $in: parentTaskIdsForAssignee } }]
+            : []),
+        ],
+      });
     }
 
     const allTasksFromDB = await storage.getTasksByFilter(filter, {

@@ -902,6 +902,7 @@ export default function CreateTask({
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/quick-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/aggregated"] });
       queryClient.invalidateQueries({ queryKey: ["allTasks"] });
       queryClient.invalidateQueries({ queryKey: ["mytasks"] });
       queryClient.invalidateQueries({ queryKey: ["regularTasks"] });

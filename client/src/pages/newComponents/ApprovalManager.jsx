@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { checkTaskMatchesDueDateFilter } from "../../utils/taskHelpers";
 import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -461,42 +462,7 @@ export default function ApprovalManager() {
       task.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       task.creator?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    let matchesDueDate = true;
-    if (dueDateFilter !== "all" && task.dueDate) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dueDate = new Date(task.dueDate);
-      dueDate.setHours(0, 0, 0, 0);
-      const timeDiff = dueDate.getTime() - today.getTime();
-      const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
-      switch (dueDateFilter) {
-        case "overdue":
-          matchesDueDate = daysDiff < 0;
-          break;
-        case "due_today":
-          matchesDueDate = daysDiff === 0;
-          break;
-        case "due_tomorrow":
-          matchesDueDate = daysDiff === 1;
-          break;
-        case "due_this_week":
-          matchesDueDate = daysDiff >= 0 && daysDiff <= 7;
-          break;
-        case "due_next_week":
-          matchesDueDate = daysDiff > 7 && daysDiff <= 14;
-          break;
-        case "due_this_month":
-          matchesDueDate = daysDiff >= 0 && daysDiff <= 30;
-          break;
-        case "no_due_date":
-          matchesDueDate = false;
-          break;
-        default:
-          matchesDueDate = true;
-      }
-    } else if (dueDateFilter === "no_due_date") {
-      matchesDueDate = !task.dueDate;
-    }
+    const matchesDueDate = checkTaskMatchesDueDateFilter(task, dueDateFilter);
 
     return statusMatch && modeMatch && matchesSearch && matchesDueDate;
   });
@@ -732,7 +698,6 @@ export default function ApprovalManager() {
                   <option value="due_this_week">Due This Week</option>
                   <option value="due_next_week">Due Next Week</option>
                   <option value="due_this_month">Due This Month</option>
-                  <option value="no_due_date">No Due Date</option>
                 </select>
               </div>
             </div>

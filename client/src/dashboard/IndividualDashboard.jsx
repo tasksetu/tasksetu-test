@@ -61,6 +61,7 @@ import { useCalendar } from "../contexts/CalendarContext";
 import TaskOverviewChart from "./components/TaskOverviewChart";
 import TaskStatusDonut from "./components/TaskStatusDonut";
 import KpiSparkline from "./components/KpiSparkline";
+import { useAggregatedDashboard } from "./hooks/useAggregatedDashboard";
 
 function computeStatsFromTasks(tasks) {
   if (!tasks || !Array.isArray(tasks))
@@ -199,6 +200,7 @@ const IndividualDashboard = ({
   quickTasks = [],
   pinnedTasks = [],
   userStats = {},
+  forcedRole = null,
 }) => {
   const [, navigate] = useLocation();
   const { activeRole, setActiveRole } = useActiveRole();
@@ -221,8 +223,8 @@ const IndividualDashboard = ({
       Math.min(PLAN_TIERS.indexOf(currentPlan) + 1, PLAN_TIERS.length - 1)
     ];
 
-  // ✅ FIX: activeRole ko useEffect ka wait mat karo — seedha derive karo
-  const effectiveRole = activeRole || user?.role?.[0] || "employee";
+  // ✅ Derive role with optional forcedRole override
+  const effectiveRole = forcedRole || activeRole || user?.role?.[0] || "employee";
   const token = localStorage.getItem("token");
 
   // ✅ FIX: useEffect sirf sync ke liye
@@ -230,102 +232,51 @@ const IndividualDashboard = ({
     if (user?.role?.[0] && !activeRole) setActiveRole(user.role[0]);
   }, [user, activeRole, setActiveRole]);
 
-  // ─── ALL API CALLS ──────────────────────────────────────────────
+  // ─── CONSOLIDATED AGGREGATED DASHBOARD QUERY ────────────────────
   const {
-    data: tasksResponse,
-    isLoading: isLoadingTasks,
-    error: tasksError,
-  } = useQuery({
-    queryKey: ["/api/mytasks", effectiveRole],
-    queryFn: async () => {
-      const url = `/api/mytasks?page=1&limit=100&activeRole=${effectiveRole}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error ||
-            errorData.message ||
-            `Failed to fetch tasks: ${response.status}`,
-        );
-      }
-      const data = await response.json();
-      return data.success ? data.data : data;
-    },
-    enabled: !!token,
-    retry: 2,
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    dashboardData,
+    kpis,
+    charts,
+    taskList: aggregatedTasks,
+    focusSections: aggregatedFocusSections,
+    isLoading: isAggregatedLoading,
+    error: aggregatedError,
+    invalidateDashboard,
+  } = useAggregatedDashboard({
+    activeRole: effectiveRole,
+    timeRange: "7d",
   });
 
-  const {
-    data: quickTasksData,
-    isLoading: isLoadingQuickTasks,
-    error: quickTasksError,
-  } = useQuery({
-    queryKey: ["/api/quick-tasks", effectiveRole],
-    queryFn: async () => {
-      if (!token) throw new Error("Authorization token not found.");
-      const response = await fetch("/api/quick-tasks", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch quick tasks: ${response.status}`);
-      }
-      const data = await response.json();
-      return data;
-    },
-    enabled: !!token,
-    retry: 1,
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
-  });
-
-  const {
-    data: dashboardStats,
-    error: dashboardError,
-    isLoading: dashboardLoading,
-  } = useQuery({
-    queryKey: ["/api/dashboard-stats", effectiveRole, user?.id],
-    queryFn: async () => {
-      if (!token) throw new Error("Authorization token not found.");
-      const res = await fetch("/api/dashboard-stats", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.status === 401)
-        throw new Error("Unauthorized: Please login again.");
-      if (!res.ok)
-        throw new Error(`Failed to fetch dashboard stats: ${res.status}`);
-      const data = await res.json();
-      return data.data;
-    },
-    retry: false,
-    enabled: !!token,
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
-  });
+  const isLoadingTasks = isAggregatedLoading;
+  const isLoadingQuickTasks = false;
+  const dashboardLoading = isAggregatedLoading;
+  const tasksError = aggregatedError;
+  const quickTasksError = null;
+  const dashboardError = null;
 
   const currentRole = effectiveRole;
-  const allTasks =
-    tasksResponse?.tasks || tasksResponse?.data || tasksResponse || [];
+  const allTasks = aggregatedTasks || [];
   const [localTasks, setLocalTasks] = useState(null);
+
+  const extractVal = (val, fallback = 0) => {
+    if (val === null || val === undefined) return fallback;
+    if (React.isValidElement(val)) return val;
+    if (typeof val === "object") {
+      const v = val.value !== undefined ? val.value : fallback;
+      if (typeof v === "object" && v !== null && !React.isValidElement(v)) {
+        return extractVal(v, fallback);
+      }
+      return v;
+    }
+    return val;
+  };
 
   // Clear local override whenever fresh tasks arrive from server
   React.useEffect(() => {
-    if (tasksResponse) {
+    if (aggregatedTasks) {
       setLocalTasks(null);
     }
-  }, [tasksResponse]);
+  }, [aggregatedTasks]);
   const currentTasks = localTasks ?? (allTasks.length > 0 ? allTasks : tasks);
 
   const [quickTaskInput, setQuickTaskInput] = useState("");
@@ -351,11 +302,11 @@ const IndividualDashboard = ({
   );
 
   const allQuickTasks = useMemo(() => {
-    if (!quickTasksData?.success || !quickTasksData?.quickTasks) return [];
-    return [...quickTasksData.quickTasks].sort(
+    const list = aggregatedFocusSections?.quickTasks || [];
+    return [...list].sort(
       (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
     );
-  }, [quickTasksData]);
+  }, [aggregatedFocusSections]);
 
   const topQuickTasks = useMemo(
     () => allQuickTasks.slice(0, 3),
@@ -367,22 +318,18 @@ const IndividualDashboard = ({
     [currentTasks],
   );
 
-  const mappedDashboardStats = dashboardStats
+  const mappedDashboardStats = kpis
     ? {
-        completedTasks: dashboardStats.completedTodayCount || 0,
-        totalTasks:
-          (dashboardStats.regularTasksCount || 0) +
-          (dashboardStats.recurringTasksCount || 0) +
-          (dashboardStats.milestoneTasksCount || 0) +
-          (dashboardStats.approvalTasksCount || 0),
-        beforeDueDate: dashboardStats.beforeDueDateCount || 0,
-        milestoneCount: dashboardStats.milestoneTasksCount || 0,
-        collaboratorCount: dashboardStats.collaboratorTasksCount || 0,
-        approvalCount: dashboardStats.approvalTasksCount || 0,
-        inProgressTasks: dashboardStats.beforeDueDateCount || 0,
-        upcomingDeadlines: dashboardStats.beforeDueDateCount || 0,
-        overdueTasks: dashboardStats.pastDueDateCount || 0,
-        tasksByPriority: { urgent: dashboardStats.approvalTasksCount || 0 },
+        completedTasks: kpis.completedToday || 0,
+        totalTasks: kpis.totalTasks || 0,
+        beforeDueDate: kpis.beforeDueDate || 0,
+        milestoneCount: kpis.milestonesCount || 0,
+        collaboratorCount: kpis.collaboratorCount || 0,
+        approvalCount: kpis.approvalCount || 0,
+        inProgressTasks: kpis.inProgressTasks || 0,
+        upcomingDeadlines: kpis.beforeDueDate || 0,
+        overdueTasks: kpis.pastDueDate || 0,
+        tasksByPriority: { urgent: kpis.highPriority || 0 },
       }
     : null;
 
@@ -403,31 +350,36 @@ const IndividualDashboard = ({
   const completedCount = currentTasks.filter((t) =>
     ["completed", "done"].includes(statusOf(t.status)),
   ).length;
+  const getDisplayNow = () => {
+    const d = new Date();
+    return new Date(
+      Date.UTC(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        d.getHours(),
+        d.getMinutes(),
+        d.getSeconds()
+      )
+    );
+  };
+
+  const isTaskOverdue = (task) => {
+    if (!task?.dueDate || task.dueDate === "No due date") return false;
+    const status = (task.status || "").toUpperCase();
+    if (["DONE", "COMPLETED", "CANCELLED"].includes(status)) return false;
+    const d = new Date(task.dueDate);
+    if (isNaN(d.getTime())) return false;
+    return d < getDisplayNow() || d < new Date();
+  };
+
   const overdueCount = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    return currentTasks.filter((task) => {
-      if (!task.dueDate) return false;
-
-      const dueDate = new Date(task.dueDate);
-      dueDate.setHours(0, 0, 0, 0);
-
-      const status = (task.status || "").toUpperCase();
-
-      // Skip completed/cancelled tasks
-      if (
-        status === "DONE" ||
-        status === "COMPLETED" ||
-        status === "CANCELLED"
-      ) {
-        return false;
-      }
-
-      // Task is overdue if due date is before today
-      return dueDate < today;
-    }).length;
-  }, [currentTasks]);
+    const calculated = currentTasks.filter(
+      (task) => task.isPastDue || isTaskOverdue(task)
+    ).length;
+    const serverOverdue = extractVal(kpis?.pastDueDate ?? kpis?.overdueTasks, 0);
+    return Math.max(calculated, serverOverdue);
+  }, [currentTasks, kpis]);
 
   const last7 = useMemo(
     () =>
@@ -665,6 +617,7 @@ const IndividualDashboard = ({
       setQuickTaskSuccess("Quick task created successfully!");
       setTimeout(() => setQuickTaskSuccess(null), 3000);
       queryClient.invalidateQueries({ queryKey: ["/api/quick-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/aggregated"] });
     } catch (error) {
       if (error.response && error.response.status === 409)
         setQuickTaskError("A similar quick task exists. Continue?");
@@ -687,6 +640,7 @@ const IndividualDashboard = ({
     setLocalTasks(null);
     queryClient.invalidateQueries({ queryKey: ["/api/mytasks"] });
     queryClient.invalidateQueries({ queryKey: ["/api/dashboard-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/dashboard/aggregated"] });
   }, [queryClient]);
 
   const handleCloseCreateTask = useCallback(() => {
@@ -735,6 +689,7 @@ const IndividualDashboard = ({
         showSuccessToast("Task deleted");
         queryClient.invalidateQueries({ queryKey: ["/api/mytasks"] });
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/aggregated"] });
       } catch (err) {
         setDeleteError(err.message || "Error deleting task.");
         setDeletingTaskId(null);
@@ -1628,7 +1583,7 @@ const IndividualDashboard = ({
                             {label}
                           </p>
                           <h2 className="text-[30px] font-bold text-[#1f2937] tracking-tight leading-none mt-2">
-                            {value}
+                            {extractVal(value)}
                           </h2>
                         </div>
                         <div
@@ -1696,10 +1651,11 @@ const IndividualDashboard = ({
               {/* Task Overview and Task Status Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3">
                 <div className="lg:col-span-7 h-[350px]">
-                  <TaskOverviewChart tasks={currentTasks} />
+                  <TaskOverviewChart tasks={currentTasks} overviewData={charts?.taskOverview} />
                 </div>
                 <div className="lg:col-span-5 h-[350px]">
                   <TaskStatusDonut
+                    tasks={currentTasks}
                     totalTasks={currentTasks.length}
                     openCount={openCount}
                     inProgressCount={inProgressCount}

@@ -2,42 +2,152 @@ import React, { useState, useMemo } from "react";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { PieChart as PieChartIcon, ChevronDown } from "lucide-react";
 
+const getDisplayNow = () => {
+  const now = new Date();
+  return new Date(
+    Date.UTC(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      now.getHours(),
+      now.getMinutes(),
+      now.getSeconds()
+    )
+  );
+};
+
+const checkIsTaskOverdue = (task) => {
+  if (task?.isPastDue !== undefined) return Boolean(task.isPastDue);
+  if (!task?.dueDate || task.dueDate === "No due date") return false;
+  const s = (task.status || "").toUpperCase();
+  if (["DONE", "COMPLETED", "CANCELLED"].includes(s)) return false;
+  const d = new Date(task.dueDate);
+  if (isNaN(d.getTime())) return false;
+  return d < getDisplayNow() || d < new Date();
+};
+
 const TaskStatusDonut = ({
   totalTasks = 0,
   openCount = 0,
   inProgressCount = 0,
   completedCount = 0,
   overdueCount = 0,
+  tasks = [],
 }) => {
   const [timeFilter, setTimeFilter] = useState("month");
 
+  // Dynamically compute counts from tasks if provided, otherwise fallback to props
+  const counts = useMemo(() => {
+    if (!tasks || tasks.length === 0) {
+      return {
+        total: totalTasks,
+        open: openCount,
+        inProgress: inProgressCount,
+        completed: completedCount,
+        overdue: overdueCount,
+      };
+    }
+
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+    const filtered = tasks.filter((t) => {
+      if (timeFilter === "all") return true;
+
+      const s = (t.status || "").toUpperCase();
+      const isDone = ["COMPLETED", "DONE"].includes(s);
+      const isCancelled = ["CANCELLED", "CANCELED"].includes(s);
+      const isActive = !isDone && !isCancelled;
+
+      // Active tasks (Open, In Progress, Overdue) represent the organization's ongoing workflow
+      if (isActive) return true;
+
+      // For completed / closed tasks, check if they were completed, created, or due within the timeframe
+      const datesToCheck = [];
+      if (t.completedDate || t.completedAt) datesToCheck.push(new Date(t.completedDate || t.completedAt));
+      if (t.dueDate && t.dueDate !== "No due date") datesToCheck.push(new Date(t.dueDate));
+      if (t.createdAt) datesToCheck.push(new Date(t.createdAt));
+
+      const validDates = datesToCheck.filter((d) => !isNaN(d.getTime()));
+      if (validDates.length === 0) return true;
+
+      const filterStart = timeFilter === "week" ? startOfWeek : startOfMonth;
+      return validDates.some((d) => d >= filterStart);
+    });
+
+    let open = 0;
+    let inProgress = 0;
+    let completed = 0;
+    let overdue = 0;
+
+    filtered.forEach((t) => {
+      const s = (t.status || "").toUpperCase();
+      const isDone = ["COMPLETED", "DONE"].includes(s);
+      const isCancelled = ["CANCELLED", "CANCELED"].includes(s);
+      const isInProg = ["IN_PROGRESS", "INPROGRESS", "DOING"].includes(s);
+      const isPastDue = checkIsTaskOverdue(t);
+
+      if (isDone) {
+        completed++;
+      } else if (isInProg) {
+        inProgress++;
+      } else if (!isCancelled) {
+        open++;
+      }
+
+      if (isPastDue) {
+        overdue++;
+      }
+    });
+
+    const resolvedTotal = filtered.length > 0 ? filtered.length : totalTasks;
+    const resolvedOpen = filtered.length > 0 ? open : openCount;
+    const resolvedInProgress = filtered.length > 0 ? inProgress : inProgressCount;
+    const resolvedCompleted = filtered.length > 0 ? completed : completedCount;
+    const resolvedOverdue = filtered.length > 0 ? Math.max(overdue, overdueCount) : overdueCount;
+
+    return {
+      total: resolvedTotal,
+      open: resolvedOpen,
+      inProgress: resolvedInProgress,
+      completed: resolvedCompleted,
+      overdue: resolvedOverdue,
+    };
+  }, [tasks, timeFilter, totalTasks, openCount, inProgressCount, completedCount, overdueCount]);
+
+  const activeTotal = counts.total > 0 ? counts.total : Math.max(counts.open + counts.inProgress + counts.completed, 1);
+
   const data = useMemo(() => {
-    const total = Math.max(totalTasks, openCount + inProgressCount + completedCount + overdueCount, 1);
+    const total = Math.max(activeTotal, 1);
 
     const items = [
       {
         name: "Open",
-        value: openCount,
+        value: counts.open,
         color: "#3b82f6",
-        percentage: Math.round((openCount / total) * 100),
+        percentage: Math.round((counts.open / total) * 100),
       },
       {
         name: "In Progress",
-        value: inProgressCount,
+        value: counts.inProgress,
         color: "#f59e0b",
-        percentage: Math.round((inProgressCount / total) * 100),
+        percentage: Math.round((counts.inProgress / total) * 100),
       },
       {
         name: "Completed",
-        value: completedCount,
+        value: counts.completed,
         color: "#10b981",
-        percentage: Math.round((completedCount / total) * 100),
+        percentage: Math.round((counts.completed / total) * 100),
       },
       {
         name: "Overdue",
-        value: overdueCount,
+        value: counts.overdue,
         color: "#ef4444",
-        percentage: Math.round((overdueCount / total) * 100),
+        percentage: Math.round((counts.overdue / total) * 100),
       },
     ];
 
@@ -47,9 +157,7 @@ const TaskStatusDonut = ({
     }
 
     return items;
-  }, [totalTasks, openCount, inProgressCount, completedCount, overdueCount]);
-
-  const activeTotal = totalTasks > 0 ? totalTasks : openCount + inProgressCount + completedCount + overdueCount;
+  }, [counts, activeTotal]);
 
   return (
     <div className="bg-white border border-slate-200/80 rounded-sm p-5 shadow-sm flex flex-col justify-between h-full">

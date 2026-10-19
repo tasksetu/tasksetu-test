@@ -302,7 +302,7 @@ export function OrganizationHierarchy() {
           </div>
           <Button
             variant="outline"
-            className="h-8 rounded-md text-xs"
+            className="h-8 rounded-sm text-xs"
             onClick={() => setLocation("/dashboard")}
           >
             <ChevronDown size={14} className="mr-1 rotate-270" />
@@ -311,9 +311,9 @@ export function OrganizationHierarchy() {
         </div>
 
         {/* FORM SECTION */}
-        <div className="bg-white border border-gray-200 shadow-sm rounded-md mb-3">
+        <div className="bg-white border border-gray-200 shadow-sm rounded-sm mb-3">
           <div
-            className="py-2.5 px-4 border-b border-gray-200 rounded-t-lg"
+            className="py-2.5 px-4 border-b border-gray-200 rounded-t-sm"
             style={{ backgroundColor: "#f9f9f9" }}
           >
             <h5
@@ -343,7 +343,7 @@ export function OrganizationHierarchy() {
                   onChange={(e) =>
                     setFormData({ ...formData, managerId: e.target.value })
                   }
-                  className="w-full h-8 border border-gray-300 rounded px-2 text-xs"
+                  className="w-full h-8 border border-gray-300 rounded-sm px-2 text-xs"
                   style={{ color: "#676a6c" }}
                   required
                 >
@@ -371,7 +371,7 @@ export function OrganizationHierarchy() {
                   onChange={(e) =>
                     setFormData({ ...formData, reportyId: e.target.value })
                   }
-                  className="w-full h-8 border border-gray-300 rounded px-2 text-xs"
+                  className="w-full h-8 border border-gray-300 rounded-sm px-2 text-xs"
                   style={{ color: "#676a6c" }}
                   required
                 >
@@ -389,7 +389,7 @@ export function OrganizationHierarchy() {
             <div className="flex gap-2">
               <Button
                 type="submit"
-                className="h-8 rounded-md text-xs"
+                className="h-8 rounded-sm text-xs"
                 disabled={
                   createHierarchyMutation.isPending ||
                   updateHierarchyMutation.isPending
@@ -402,7 +402,7 @@ export function OrganizationHierarchy() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-8 rounded-md text-xs"
+                  className="h-8 rounded-sm text-xs"
                   onClick={cancelEdit}
                 >
                   <X size={14} className="mr-1" />
@@ -414,9 +414,9 @@ export function OrganizationHierarchy() {
         </div>
 
         {/* HIERARCHY TABLE */}
-        <div className="bg-white border border-gray-200 shadow-sm rounded-md">
+        <div className="bg-white border border-gray-200 shadow-sm rounded-sm">
           <div
-            className="py-2.5 px-4 border-b border-gray-200 rounded-t-lg"
+            className="py-2.5 px-4 border-b border-gray-200 rounded-t-sm"
             style={{ backgroundColor: "#f9f9f9" }}
           >
             <h5
@@ -509,19 +509,19 @@ export function OrganizationHierarchy() {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-6 px-2 text-xs"
+                            className="h-8 px-2.5 text-xs rounded-sm"
                             onClick={() => handleEdit(entry)}
                           >
-                            <Edit size={10} className="mr-1" />
+                            <Edit size={12} className="mr-1" />
                             Edit
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-6 px-2 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                            className="h-8 px-2.5 text-xs text-red-600 border-red-200 hover:bg-red-50 rounded-sm"
                             onClick={() => handleDelete(entry._id)}
                           >
-                            <Trash2 size={10} className="mr-1" />
+                            <Trash2 size={12} className="mr-1" />
                             Delete
                           </Button>
                         </div>

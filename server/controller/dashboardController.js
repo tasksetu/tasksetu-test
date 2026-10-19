@@ -2,6 +2,25 @@ import Task from "../modals/taskModal.js";
 import { User } from "../modals/userModal.js";
 import TimezoneHelper from "../utils/timezoneHelper.js";
 import { getManagerSubordinateIds } from "./taskController.js";
+import { getAggregatedDashboardData } from "../services/dashboardAggregationService.js";
+
+export const getAggregatedDashboard = async (req, res) => {
+    try {
+        const data = await getAggregatedDashboardData(req.user, req.query);
+        return res.status(200).json({
+            success: true,
+            message: "Aggregated dashboard data fetched successfully",
+            data
+        });
+    } catch (error) {
+        console.error("❌ [DASHBOARD AGGREGATED] Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch aggregated dashboard data",
+            error: error.message
+        });
+    }
+};
 
 export const getTaskCounts = async (req, res) => {
     try {

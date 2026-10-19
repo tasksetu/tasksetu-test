@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   TooltipProvider,
@@ -41,6 +41,9 @@ import {
   X,
   Filter,
   CalendarClock,
+  RefreshCw,
+  Layers,
+  ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/features/shared/hooks/useAuth";
 import {
@@ -53,6 +56,11 @@ import {
 import TaskOverviewChart from "./components/TaskOverviewChart";
 import TaskStatusDonut from "./components/TaskStatusDonut";
 import KpiSparkline from "./components/KpiSparkline";
+import OrganizationHierarchySection from "./components/OrganizationHierarchySection";
+import { useAggregatedDashboard } from "./hooks/useAggregatedDashboard";
+import { getTaskType, checkTaskMatchesDueDateFilter } from "../utils/taskHelpers";
+import { useProcessInstances } from "@/hooks/useProcessBuilder";
+import { useLicense } from "@/hooks/useLicense";
 
 const TASK_DISPLAY_LIMIT = 15;
 
@@ -60,6 +68,8 @@ const OrganizationDashboard = () => {
   const [location, setLocation] = useLocation();
   const { activeRole } = useActiveRole();
   const { showSuccessToast } = useShowToast();
+  const { data: processInstances = [] } = useProcessInstances();
+  const { license: licenseInfo } = useLicense();
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({
     frequency: "weekly",
@@ -67,6 +77,16 @@ const OrganizationDashboard = () => {
     time: "09:00",
     email: "",
   });
+
+  const handleScheduleSave = (e) => {
+    e?.preventDefault?.();
+    showSuccessToast(`Report scheduled (${scheduleForm.frequency}) to ${scheduleForm.email || user?.email || "team"}`);
+    setScheduleOpen(false);
+  };
+  const hierarchyRef = useRef(null);
+  const scrollToHierarchy = () => {
+    hierarchyRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
   const [calendarView, setCalendarView] = useState("month");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [taskFilters, setTaskFilters] = useState({
@@ -78,96 +98,94 @@ const OrganizationDashboard = () => {
   const [selectedTasks, setSelectedTasks] = useState([]);
   const [showAllTasks, setShowAllTasks] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [activeTaskTab, setActiveTaskTab] = useState("today"); // "today" (Created Today) | "all" | "due_today" | "overdue"
   const { data: taskStatuses = [] } = useTaskStatuses();
   const { data: taskPriorities = [] } = useTaskPriorities();
   const { user } = useAuth();
 
-  const { data: dashboardStats, isLoading: isLoadingStats } = useQuery({
-    queryKey: ["/api/dashboard-stats", activeRole, user?.id],
-    queryFn: async () => {
-      const res = await fetch("/api/dashboard-stats", {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(
-          errorData.error ||
-            errorData.message ||
-            "Failed to fetch dashboard stats",
-        );
-      }
-      const data = await res.json();
-      return data.data;
-    },
-    enabled: !!user,
-    staleTime: 60000,
-  });
-
+  // Fetch consolidated dashboard data in 1 request
   const {
-    data: tasksResponse,
-    isLoading: isLoadingTasks,
-    error: tasksError,
-  } = useQuery({
-    queryKey: [
-      "/api/mytasks",
-      activeRole,
-      taskFilters.status,
-      taskFilters.priority,
-      taskFilters.dueDate,
-    ],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      params.append("page", "1");
-      params.append("limit", "50");
-      if (activeRole) params.append("activeRole", activeRole);
-      if (taskFilters.status !== "all")
-        params.append("status", taskFilters.status);
-      if (taskFilters.priority !== "all")
-        params.append("priority", taskFilters.priority);
-      if (taskFilters.dueDate !== "all")
-        params.append("dueDate", taskFilters.dueDate);
-
-      const response = await fetch(`/api/mytasks?${params.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error ||
-            errorData.message ||
-            `Failed to fetch tasks: ${response.status}`,
-        );
-      }
-      return response.json();
-    },
-    enabled: !!localStorage.getItem("token") && !!activeRole,
-    retry: 1,
-    staleTime: 0,
+    dashboardData,
+    kpis,
+    charts,
+    taskList: aggregatedTasks,
+    calendarEvents: aggregatedCalendarEvents,
+    teamMembers: aggregatedTeamMembers,
+    moduleUsage: aggregatedModuleUsage,
+    systemHealth: aggregatedSystemHealth,
+    isLoading: isLoadingAggregated,
+    error: aggregatedError,
+    invalidateDashboard,
+  } = useAggregatedDashboard({
+    activeRole: "org_admin",
+    timeRange: "7d",
+    filters: taskFilters,
   });
+
+  const isLoadingStats = isLoadingAggregated;
+  const isLoadingTasks = isLoadingAggregated;
+  const tasksError = aggregatedError;
 
   const pct = (a, b) => (b === 0 ? 0 : Math.round((a / b) * 100));
 
-  const currentStats = {
-    completedTasks: dashboardStats?.completedTodayCount || 0,
-    beforeDueDate: dashboardStats?.beforeDueDateCount || 0,
-    milestoneCount: dashboardStats?.milestoneTasksCount || 0,
-    collaboratorCount: dashboardStats?.collaboratorTasksCount || 0,
-    overdueTasks: dashboardStats?.pastDueDateCount || 0,
-    approvalCount: dashboardStats?.approvalTasksCount || 0,
-    teamActivity: dashboardStats?.productivity || 0,
+  const extractVal = (val, fallback = 0) => {
+    if (val === null || val === undefined) return fallback;
+    if (React.isValidElement(val)) return val;
+    if (typeof val === "object") {
+      const v = val.value !== undefined ? val.value : fallback;
+      if (typeof v === "object" && v !== null && !React.isValidElement(v)) {
+        return extractVal(v, fallback);
+      }
+      return v;
+    }
+    return val;
   };
 
   const allTasks = useMemo(() => {
-    return (
-      tasksResponse?.data?.tasks ||
-      tasksResponse?.tasks ||
-      tasksResponse?.data ||
-      []
+    return aggregatedTasks || [];
+  }, [aggregatedTasks]);
+
+  const getDisplayNow = () => {
+    const now = new Date();
+    return new Date(
+      Date.UTC(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        now.getHours(),
+        now.getMinutes(),
+        now.getSeconds()
+      )
     );
-  }, [tasksResponse]);
+  };
+
+  const isTaskOverdue = (task) => {
+    if (!task?.dueDate || task.dueDate === "No due date") return false;
+    const s = (task.status || "").toUpperCase();
+    if (["DONE", "COMPLETED", "CANCELLED"].includes(s)) return false;
+    const d = new Date(task.dueDate);
+    if (isNaN(d.getTime())) return false;
+    const displayNow = getDisplayNow();
+    const now = new Date();
+    return d < displayNow || d < now;
+  };
+
+  const calculatedOverdueCount = useMemo(() => {
+    return allTasks.filter((t) => t.isPastDue || isTaskOverdue(t)).length;
+  }, [allTasks]);
+
+  const currentStats = {
+    completedTasks: extractVal(kpis?.completedToday),
+    beforeDueDate: extractVal(kpis?.beforeDueDate),
+    milestoneCount: extractVal(kpis?.milestonesCount),
+    collaboratorCount: extractVal(kpis?.collaboratorCount),
+    overdueTasks: Math.max(
+      calculatedOverdueCount,
+      extractVal(kpis?.pastDueDate ?? kpis?.overdueTasks, 0),
+    ),
+    approvalCount: extractVal(kpis?.approvalCount),
+    teamActivity: extractVal(kpis?.completionRate),
+  };
 
   const taskGridData = useMemo(() => {
     const today = new Date();
@@ -175,19 +193,38 @@ const OrganizationDashboard = () => {
 
     return allTasks.map((task) => {
       const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+      const resolvedAssignee =
+        task.assignee ||
+        task.assigneeName ||
+        (task.assignedTo && typeof task.assignedTo === "object"
+          ? (task.assignedTo.firstName
+              ? `${task.assignedTo.firstName} ${task.assignedTo.lastName || ""}`.trim()
+              : task.assignedTo.name || task.assignedTo.username || task.assignedTo.email)
+          : (typeof task.assignedTo === "string" ? task.assignedTo : null)) ||
+        "Unassigned";
+
       return {
         id: task._id || task.id,
         title: task.title,
-        assignee:
-          task.assignedTo?.firstName ||
-          task.assignedTo?.username ||
-          "Unassigned",
+        assignee: resolvedAssignee,
+        assignedTo: task.assignedTo || {
+          firstName: resolvedAssignee,
+          name: resolvedAssignee,
+        },
         dueDate: dueDate ? dueDate.toISOString().split("T")[0] : "No due date",
+        createdAt: task.createdAt,
+        completedDate: task.completedDate,
+        completedAt: task.completedAt || task.completedDate,
         status: task.status,
         priority: task.priority || "medium",
         hasSubtasks: task.subtasks && task.subtasks.length > 0,
-        isPastDue: dueDate && dueDate < today && task.status !== "DONE",
-        isDueToday: dueDate && dueDate.toDateString() === today.toDateString(),
+        isPastDue: task.isPastDue !== undefined ? task.isPastDue : isTaskOverdue(task),
+        isDueToday: task.isDueToday !== undefined ? task.isDueToday : Boolean(
+          dueDate && (
+            dueDate.toDateString() === today.toDateString() ||
+            (task.dueDate && String(task.dueDate).startsWith(new Date().toISOString().split("T")[0]))
+          )
+        ),
         taskType: task.taskType,
         isSubtask: task.isSubtask,
         tags: task.tags || [],
@@ -219,6 +256,9 @@ const OrganizationDashboard = () => {
   };
 
   const calendarTasks = useMemo(() => {
+    if (aggregatedCalendarEvents && aggregatedCalendarEvents.length > 0) {
+      return aggregatedCalendarEvents;
+    }
     const { start: viewStart, end: viewEnd } = getCalendarDateRange();
     return allTasks
       .filter((task) => {
@@ -239,7 +279,7 @@ const OrganizationDashboard = () => {
         type: task.taskType || "regular",
         status: task.status,
       }));
-  }, [allTasks, currentDate, calendarView]);
+  }, [allTasks, currentDate, calendarView, aggregatedCalendarEvents]);
 
   const completedTasksFilter = useMemo(
     () => allTasks.filter((t) => t.status === "DONE"),
@@ -263,95 +303,106 @@ const OrganizationDashboard = () => {
     return { onTime, overdueClosed };
   }, [completedTasksFilter]);
 
-  const orgOnTimeRate = pct(
-    orgCompletion.onTime,
-    orgCompletion.onTime + orgCompletion.overdueClosed,
+  const orgOnTimeRate = extractVal(
+    kpis?.onTimeRate,
+    pct(orgCompletion.onTime, orgCompletion.onTime + orgCompletion.overdueClosed)
   );
 
-  const openTasks = useMemo(
-    () =>
-      allTasks.filter((t) => t.status === "OPEN" || t.status === "INPROGRESS")
-        .length,
-    [allTasks],
+  const openTasks = extractVal(
+    kpis?.openTasks,
+    allTasks.filter((t) => {
+      const s = (t.status || "").toUpperCase();
+      return ["OPEN", "PENDING", "TODO"].includes(s);
+    }).length
   );
 
-  const dueTodayTasks = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return allTasks.filter((t) => {
+  const dueTodayTasks = extractVal(
+    kpis?.dueToday,
+    allTasks.filter((t) => {
       const d = t.dueDate ? new Date(t.dueDate) : null;
+      const today = new Date();
       return (
         d && d.toDateString() === today.toDateString() && t.status !== "DONE"
       );
-    }).length;
-  }, [allTasks]);
-
-  const totalCompletedCount = useMemo(
-    () => allTasks.filter((t) => t.status === "DONE").length,
-    [allTasks],
+    }).length
   );
-  const completionRate = pct(totalCompletedCount, allTasks.length);
 
-  const highPriorityOpen = useMemo(
-    () =>
-      allTasks.filter(
-        (t) =>
-          (t.priority === "high" ||
-            t.priority === "urgent" ||
-            t.priority === "critical") &&
-          t.status !== "DONE",
-      ).length,
-    [allTasks],
+  const totalCompletedCount = extractVal(
+    kpis?.completedTasks,
+    allTasks.filter((t) => t.status === "DONE").length
+  );
+  const completionRate = extractVal(
+    kpis?.completionRate,
+    pct(totalCompletedCount, allTasks.length)
+  );
+
+  const highPriorityOpen = extractVal(
+    kpis?.highPriority,
+    allTasks.filter(
+      (t) =>
+        (t.priority === "high" ||
+          t.priority === "urgent" ||
+          t.priority === "critical") &&
+        t.status !== "DONE",
+    ).length
   );
 
   const taskStatusBreakdown = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     let completed = 0;
     let inProgress = 0;
     let open = 0;
     let overdue = 0;
 
     allTasks.forEach((t) => {
-      const s = (t.status || "").toLowerCase();
-      const isDone =
-        ["completed", "done", "DONE"].includes(t.status) ||
-        s === "completed" ||
-        s === "done";
+      const s = (t.status || "").toUpperCase();
+      const isDone = ["COMPLETED", "DONE"].includes(s);
+      const isCancelled = ["CANCELLED", "CANCELED"].includes(s);
+      const isInProg = ["IN_PROGRESS", "INPROGRESS", "DOING"].includes(s);
+      const isPastDue = t.isPastDue || isTaskOverdue(t);
 
       if (isDone) {
         completed++;
-      } else if (
-        ["in_progress", "in-progress", "inprogress", "doing"].includes(s)
-      ) {
+      } else if (isInProg) {
         inProgress++;
-      } else {
+      } else if (!isCancelled) {
         open++;
       }
 
-      if (t.dueDate) {
-        const d = new Date(t.dueDate);
-        if (d < today && !isDone) {
-          overdue++;
-        }
+      if (isPastDue) {
+        overdue++;
       }
     });
 
+    const serverOverdue = extractVal(kpis?.pastDueDate ?? kpis?.overdueTasks, 0);
+    const finalOverdue = Math.max(overdue, serverOverdue);
+
+    const totalCalculated = allTasks.length;
+    const serverTotal = extractVal(kpis?.totalTasks, 0);
+    const finalTotal = totalCalculated > 0 ? totalCalculated : serverTotal;
+
+    const serverOpen = extractVal(kpis?.openTasks, 0);
+    const finalOpen = totalCalculated > 0 ? open : serverOpen;
+
+    const serverInProgress = extractVal(kpis?.inProgressTasks, 0);
+    const finalInProgress = totalCalculated > 0 ? inProgress : serverInProgress;
+
+    const serverCompleted = extractVal(kpis?.completedTasks, 0);
+    const finalCompleted = totalCalculated > 0 ? completed : serverCompleted;
+
     return {
-      open,
-      inProgress,
-      completed,
-      overdue,
-      total: allTasks.length,
+      open: finalOpen,
+      inProgress: finalInProgress,
+      completed: finalCompleted,
+      overdue: finalOverdue,
+      total: finalTotal,
     };
-  }, [allTasks]);
+  }, [allTasks, kpis]);
 
   const moduleUsage = useMemo(() => {
-    const quick = dashboardStats?.quickTasksCount || 0;
-    const full = (dashboardStats?.regularTasksCount || 0) - quick;
+    const quick = aggregatedModuleUsage?.quickTasks || 0;
+    const full = Math.max(0, (aggregatedModuleUsage?.fullTasks || 0) - quick);
     return { quick, full };
-  }, [dashboardStats]);
+  }, [aggregatedModuleUsage]);
 
   const totalModule = moduleUsage.quick + moduleUsage.full;
   const quickPct = pct(moduleUsage.quick, totalModule);
@@ -408,6 +459,38 @@ const OrganizationDashboard = () => {
     console.log("Bulk action:", action, "on tasks:", selectedTasks);
   };
 
+  const isCreatedToday = (task) => {
+    if (!task?.createdAt) return false;
+    const created = new Date(task.createdAt);
+    if (isNaN(created.getTime())) return false;
+    const now = new Date();
+
+    const isSameDay =
+      created.getFullYear() === now.getFullYear() &&
+      created.getMonth() === now.getMonth() &&
+      created.getDate() === now.getDate();
+
+    const localNowIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const taskCreatedAtStr = String(task.createdAt);
+    const isSameIso =
+      taskCreatedAtStr.startsWith(localNowIso) ||
+      taskCreatedAtStr.startsWith(now.toISOString().split("T")[0]);
+
+    return isSameDay || isSameIso;
+  };
+
+  const todayCreatedCount = useMemo(() => {
+    return taskGridData.filter((t) => isCreatedToday(t)).length;
+  }, [taskGridData]);
+
+  const dueTodayCount = useMemo(() => {
+    return taskGridData.filter((t) => t.isDueToday).length;
+  }, [taskGridData]);
+
+  const overdueTasksCount = useMemo(() => {
+    return taskGridData.filter((t) => t.isPastDue || isTaskOverdue(t)).length;
+  }, [taskGridData]);
+
   const filteredTasks = useMemo(() => {
     return taskGridData.filter((task) => {
       if (
@@ -422,20 +505,28 @@ const OrganizationDashboard = () => {
         task.priority !== taskFilters.priority
       )
         return false;
-      if (taskFilters.dueDate !== "all") {
+
+      // Filter by active tab (Created Today by default)
+      if (activeTaskTab === "today") {
+        if (!isCreatedToday(task)) return false;
+      } else if (activeTaskTab === "due_today") {
+        if (!task.isDueToday) return false;
+      } else if (activeTaskTab === "overdue") {
+        if (!task.isPastDue && !isTaskOverdue(task)) return false;
+      }
+
+      // Filter by dropdown dueDate when viewing "all"
+      if (activeTaskTab === "all" && taskFilters.dueDate !== "all") {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const taskDueDate =
           task.dueDate !== "No due date" ? new Date(task.dueDate) : null;
-        if (taskFilters.dueDate === "today") {
-          if (
-            !taskDueDate ||
-            taskDueDate.toDateString() !== today.toDateString()
-          )
-            return false;
+        if (taskFilters.dueDate === "created_today") {
+          if (!isCreatedToday(task)) return false;
+        } else if (taskFilters.dueDate === "today") {
+          if (!task.isDueToday) return false;
         } else if (taskFilters.dueDate === "overdue") {
-          if (!taskDueDate || taskDueDate >= today || task.status === "DONE")
-            return false;
+          if (!task.isPastDue && !isTaskOverdue(task)) return false;
         } else if (taskFilters.dueDate === "upcoming") {
           const nextWeek = new Date(today);
           nextWeek.setDate(nextWeek.getDate() + 7);
@@ -445,7 +536,7 @@ const OrganizationDashboard = () => {
       }
       return true;
     });
-  }, [taskGridData, taskFilters]);
+  }, [taskGridData, taskFilters, activeTaskTab]);
 
   const visibleTasks = showAllTasks
     ? filteredTasks
@@ -569,78 +660,58 @@ const OrganizationDashboard = () => {
       d1.getMonth() === d2.getMonth() &&
       d1.getDate() === d2.getDate();
 
-    // 1. Completed Today / completed over last 7 days
-    const completedTrend = days.map(
+    // 1. Regular Tasks
+    const regularTrend = days.map(
       (day) =>
         allTasks.filter((t) => {
-          const cd = t.completedDate || t.completedAt;
-          return cd && isSameDate(new Date(cd), day);
+          if (getTaskType(t) !== "Regular Task") return false;
+          const cr = t.createdAt ? new Date(t.createdAt) : null;
+          return cr ? cr <= day : true;
         }).length,
     );
 
-    // 2. Before Due Date (completed on or before due date)
-    const beforeDueTrend = days.map(
-      (day) =>
-        allTasks.filter((t) => {
-          const cd = t.completedDate || t.completedAt;
-          if (!cd || !isSameDate(new Date(cd), day)) return false;
-          if (!t.dueDate) return true;
-          return new Date(cd) <= new Date(t.dueDate);
-        }).length,
-    );
-
-    // 3. Milestones
+    // 2. Milestone Tasks
     const milestonesTrend = days.map(
       (day) =>
         allTasks.filter((t) => {
-          const isMs = (t.taskType || "").toLowerCase() === "milestone";
-          if (!isMs) return false;
+          if (getTaskType(t) !== "Milestone Task") return false;
           const cr = t.createdAt ? new Date(t.createdAt) : null;
           return cr ? cr <= day : true;
         }).length,
     );
 
-    // 4. Collaborator
-    const collaboratorTrend = days.map(
+    // 3. Recurring Tasks
+    const recurringTrend = days.map(
       (day) =>
         allTasks.filter((t) => {
-          const hasCollab =
-            (t.collaborators && t.collaborators.length > 0) ||
-            (t.collaboratorIds && t.collaboratorIds.length > 0);
-          if (!hasCollab) return false;
+          if (getTaskType(t) !== "Recurring Task") return false;
           const cr = t.createdAt ? new Date(t.createdAt) : null;
           return cr ? cr <= day : true;
         }).length,
     );
 
-    // 5. Past Due
-    const pastDueTrend = days.map(
+    // 4. Approval Tasks
+    const approvalsTrend = days.map(
       (day) =>
         allTasks.filter((t) => {
-          if (!t.dueDate) return false;
-          const dd = new Date(t.dueDate);
-          const isDone =
-            ["completed", "done", "DONE"].includes(t.status) ||
-            (t.status || "").toLowerCase() === "completed";
-          return dd <= day && !isDone;
-        }).length,
-    );
-
-    // 6. Open Tasks
-    const openTasksTrend = days.map(
-      (day) =>
-        allTasks.filter((t) => {
-          const s = (t.status || "").toLowerCase();
-          const isDone =
-            ["completed", "done", "DONE"].includes(t.status) ||
-            s === "completed";
-          if (isDone) return false;
+          if (getTaskType(t) !== "Approval Task") return false;
           const cr = t.createdAt ? new Date(t.createdAt) : null;
           return cr ? cr <= day : true;
         }).length,
     );
 
-    // 7. Due Today / due dates across 7 days
+    // 5. In Progress Tasks
+    const inProgressTrend = days.map(
+      (day) =>
+        allTasks.filter((t) => {
+          const s = (t.status || "").toUpperCase();
+          if (!["INPROGRESS", "IN_PROGRESS", "DOING"].includes(s)) return false;
+          const cr = t.createdAt ? new Date(t.createdAt) : null;
+          return cr ? cr <= day : true;
+        }).length,
+    );
+
+    // 6. Due Today / due dates across 7 days
     const dueTodayTrend = days.map(
       (day) =>
         allTasks.filter((t) => {
@@ -649,159 +720,245 @@ const OrganizationDashboard = () => {
         }).length,
     );
 
-    // 8. High Priority
+    // 7. High Priority
     const highPriorityTrend = days.map(
       (day) =>
         allTasks.filter((t) => {
           const p = (t.priority || "").toLowerCase();
           const isHigh = p === "high" || p === "urgent" || p === "critical";
           if (!isHigh) return false;
-          const s = (t.status || "").toLowerCase();
-          return (
-            !["completed", "done", "DONE"].includes(t.status) &&
-            s !== "completed"
-          );
+          const cr = t.createdAt ? new Date(t.createdAt) : null;
+          return cr ? cr <= day : true;
         }).length,
     );
 
-    // 9. Approvals
-    const approvalsTrend = days.map(
+    // 8. Completed Today / completed over last 7 days
+    const completedTrend = days.map(
       (day) =>
         allTasks.filter((t) => {
-          const isApp = (t.taskType || "").toLowerCase() === "approval";
-          if (!isApp) return false;
+          const cd = t.completedDate || t.completedAt;
+          return cd && isSameDate(new Date(cd), day);
+        }).length,
+    );
+
+    // 9. Cancelled Tasks
+    const cancelledTrend = days.map(
+      (day) =>
+        allTasks.filter((t) => {
+          const s = (t.status || "").toUpperCase();
+          if (!["CANCELLED", "CANCELED"].includes(s)) return false;
+          const cr = t.createdAt ? new Date(t.createdAt) : null;
+          return cr ? cr <= day : true;
+        }).length,
+    );
+
+    // 10 & 11. Process Builder Instances & Launches
+    const pbTrend = days.map(
+      (day) =>
+        allTasks.filter((t) => {
+          const isPB =
+            t.isProcessBuilderTask === true ||
+            t.source === "process-builder" ||
+            Boolean(t.processTemplateId);
+          if (!isPB) return false;
+          const cr = t.createdAt ? new Date(t.createdAt) : null;
+          return cr ? cr <= day : true;
+        }).length,
+    );
+
+    // 12. Total Tasks
+    const totalTrend = days.map(
+      (day) =>
+        allTasks.filter((t) => {
           const cr = t.createdAt ? new Date(t.createdAt) : null;
           return cr ? cr <= day : true;
         }).length,
     );
 
     return {
-      completed: completedTrend,
-      beforeDue: beforeDueTrend,
+      regular: regularTrend,
       milestones: milestonesTrend,
-      collaborator: collaboratorTrend,
-      pastDue: pastDueTrend,
-      open: openTasksTrend,
+      recurring: recurringTrend,
+      approvals: approvalsTrend,
+      inProgress: inProgressTrend,
       due: dueTodayTrend,
       highPriority: highPriorityTrend,
-      approvals: approvalsTrend,
+      completed: completedTrend,
+      cancelled: cancelledTrend,
+      processInstances: pbTrend,
+      total: totalTrend,
     };
   }, [allTasks]);
 
-  // KPI Cards - 10 cards displayed in rows of 5
+  // Counts calculated directly for the 12 requested metric cards
+  const taskCounts = useMemo(() => {
+    let regular = 0;
+    let milestone = 0;
+    let recurring = 0;
+    let approval = 0;
+    let inProgress = 0;
+    let cancelled = 0;
+    let highPriority = 0;
+    let dueToday = 0;
+    let completedToday = 0;
+
+    const today = new Date();
+    const isSameDate = (d1, d2) =>
+      d1.getFullYear() === d2.getFullYear() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getDate() === d2.getDate();
+
+    allTasks.forEach((t) => {
+      const type = getTaskType(t);
+      if (type === "Regular Task") regular++;
+      else if (type === "Milestone Task") milestone++;
+      else if (type === "Recurring Task") recurring++;
+      else if (type === "Approval Task") approval++;
+
+      const s = (t.status || "").toUpperCase();
+      if (["INPROGRESS", "IN_PROGRESS", "DOING"].includes(s)) {
+        inProgress++;
+      } else if (["CANCELLED", "CANCELED"].includes(s)) {
+        cancelled++;
+      }
+
+      const p = (t.priority || "").toLowerCase();
+      if (p === "high" || p === "urgent" || p === "critical") {
+        highPriority++;
+      }
+
+      if (checkTaskMatchesDueDateFilter(t, "due_today")) {
+        dueToday++;
+      }
+
+      if (["DONE", "COMPLETED"].includes(s)) {
+        const cd = t.completedDate || t.completedAt;
+        if (cd && isSameDate(new Date(cd), today)) {
+          completedToday++;
+        }
+      }
+    });
+
+    const pbTasks = allTasks.filter(
+      (t) =>
+        t.isProcessBuilderTask === true ||
+        t.source === "process-builder" ||
+        Boolean(t.processTemplateId)
+    );
+    const pbInstancesCount =
+      Array.isArray(processInstances) && processInstances.length > 0
+        ? processInstances.length
+        : pbTasks.length;
+
+    const pbLaunchCount =
+      licenseInfo?.usage?.PROC_LAUNCH?.used ??
+      (pbInstancesCount > 0 ? pbInstancesCount : 0);
+
+    return {
+      regular,
+      milestone,
+      recurring,
+      approval,
+      inProgress,
+      cancelled,
+      highPriority,
+      dueToday,
+      total: allTasks.length,
+      completedToday,
+      processInstances: pbInstancesCount,
+      processLaunches: pbLaunchCount,
+    };
+  }, [allTasks, processInstances, licenseInfo]);
+
+  // KPI Cards - 12 cards displayed in 3 rows of 4
   const kpiCards = [
-    // Row 1
+    // Row 1: 4 Core Task Types
     {
-      label: "Completed Today",
-      value: currentStats.completedTasks,
-      linkLabel: "Show all completed",
+      label: "Regular Tasks",
+      value: taskCounts.regular,
+      linkLabel: "Show regular tasks",
       icon: CheckSquare,
-      iconColor: "text-green-600",
-      iconBg: "bg-green-50",
-      testId: "card-completed-today",
-      onClick: () => setLocation("/tasks?statusFilter=DONE"),
-      sparklineType: "line",
-      sparklineColor: "#10b981",
-      sparklineData: kpiTrends.completed,
-    },
-    {
-      label: "Before Due Date",
-      value: currentStats.beforeDueDate || 0,
-      linkLabel: "Show all on-time",
-      icon: Clock,
       iconColor: "text-blue-600",
       iconBg: "bg-blue-50",
-      testId: "card-completed-before-due",
-      onClick: () => setLocation("/tasks?dueDateFilter=upcoming"),
+      testId: "card-regular-tasks",
+      onClick: () => setLocation("/tasks?taskTypeFilter=Regular+Task"),
       sparklineType: "line",
       sparklineColor: "#3b82f6",
-      sparklineData: kpiTrends.beforeDue,
+      sparklineData: kpiTrends.regular,
     },
     {
-      label: "Milestones",
-      value: currentStats.milestoneCount || 0,
-      linkLabel: "Show all milestones",
+      label: "Milestone Tasks",
+      value: taskCounts.milestone,
+      linkLabel: "Show milestone tasks",
       icon: Target,
       iconColor: "text-purple-600",
       iconBg: "bg-purple-50",
       testId: "card-milestones",
-      onClick: () => setLocation("/tasks?taskTypeFilter=Milestone"),
+      onClick: () => setLocation("/tasks?taskTypeFilter=Milestone+Task"),
       sparklineType: "bars",
       sparklineColor: "#a855f7",
       sparklineData: kpiTrends.milestones,
     },
     {
-      label: "Collaborator",
-      value: currentStats.collaboratorCount || 0,
-      linkLabel: "Show collaborator tasks",
-      icon: UserCheck,
-      iconColor: "text-indigo-600",
-      iconBg: "bg-indigo-50",
-      testId: "card-collaborator-tasks",
-      onClick: () => setLocation("/tasks"),
-      sparklineType: "bars",
-      sparklineColor: "#6366f1",
-      sparklineData: kpiTrends.collaborator,
+      label: "Recurring Tasks",
+      value: taskCounts.recurring,
+      linkLabel: "Show recurring tasks",
+      icon: RefreshCw,
+      iconColor: "text-emerald-600",
+      iconBg: "bg-emerald-50",
+      testId: "card-recurring-tasks",
+      onClick: () => setLocation("/tasks?taskTypeFilter=Recurring+Task"),
+      sparklineType: "line",
+      sparklineColor: "#10b981",
+      sparklineData: kpiTrends.recurring,
     },
     {
-      label: "Past Due",
-      value: currentStats.overdueTasks,
-      linkLabel: "Show all overdue",
-      icon: AlertTriangle,
-      iconColor: "text-red-600",
-      iconBg: "bg-red-50",
-      testId: "card-past-due",
-      onClick: () => setLocation("/tasks?dueDateFilter=overdue"),
+      label: "Approval Tasks",
+      value: taskCounts.approval,
+      linkLabel: "Show approval tasks",
+      icon: ShieldCheck,
+      iconColor: "text-amber-600",
+      iconBg: "bg-amber-50",
+      testId: "card-approvals",
+      onClick: () => setLocation("/tasks?taskTypeFilter=Approval+Task"),
       sparklineType: "bars",
-      sparklineColor: "#ef4444",
-      sparklineData: kpiTrends.pastDue,
+      sparklineColor: "#f59e0b",
+      sparklineData: kpiTrends.approvals,
     },
-    // Row 2
+    // Row 2: Status & Due Focus
     {
-      label: "Open Tasks",
-      value: openTasks,
-      icon: ListChecks,
+      label: "In Progress Tasks",
+      value: taskCounts.inProgress,
+      linkLabel: "Show in progress tasks",
+      icon: Clock,
       iconColor: "text-cyan-600",
       iconBg: "bg-cyan-50",
-      linkLabel: "View open tasks",
-      testId: "card-open-tasks",
-      onClick: () => setLocation("/tasks?statusFilter=OPEN"),
+      testId: "card-inprogress-tasks",
+      onClick: () => setLocation("/tasks?statusFilter=INPROGRESS"),
       sparklineType: "bars",
       sparklineColor: "#06b6d4",
-      sparklineData: kpiTrends.open,
+      sparklineData: kpiTrends.inProgress,
     },
     {
       label: "Due Today",
-      value: dueTodayTasks,
+      value: taskCounts.dueToday,
+      linkLabel: "Show due today",
       icon: Flame,
       iconColor: "text-orange-500",
       iconBg: "bg-orange-50",
-      linkLabel: "Show due today",
       testId: "card-due-today",
-      onClick: () => setLocation("/tasks?dueDateFilter=today"),
+      onClick: () => setLocation("/tasks?dueDateFilter=due_today"),
       sparklineType: "bars",
       sparklineColor: "#f97316",
       sparklineData: kpiTrends.due,
     },
     {
-      label: "Completion Rate",
-      value: `${completionRate}%`,
-      icon: Trophy,
-      iconColor: "text-amber-500",
-      iconBg: "bg-amber-50",
-      linkLabel: "View completed",
-      testId: "card-completion-rate",
-      onClick: () => setLocation("/tasks?statusFilter=DONE"),
-      isProgressCard: true,
-      percentage: completionRate,
-    },
-    {
       label: "High Priority",
-      value: highPriorityOpen,
+      value: taskCounts.highPriority,
+      linkLabel: "Show high priority",
       icon: AlertTriangle,
       iconColor: "text-rose-600",
       iconBg: "bg-rose-50",
-      linkLabel: "Show high priority",
       testId: "card-high-priority",
       onClick: () => setLocation("/tasks?priorityFilter=high"),
       sparklineType: "bars",
@@ -809,17 +966,70 @@ const OrganizationDashboard = () => {
       sparklineData: kpiTrends.highPriority,
     },
     {
-      label: "Approvals",
-      value: currentStats.approvalCount || 0,
-      linkLabel: "Show all approvals",
-      icon: Bell,
-      iconColor: "text-yellow-600",
-      iconBg: "bg-yellow-50",
-      testId: "card-approvals",
-      onClick: () => setLocation("/tasks?taskTypeFilter=Approval"),
+      label: "Completed Today",
+      value: taskCounts.completedToday,
+      linkLabel: "Show completed today",
+      icon: Trophy,
+      iconColor: "text-teal-600",
+      iconBg: "bg-teal-50",
+      testId: "card-completed-today",
+      onClick: () => setLocation("/tasks?statusFilter=DONE&completedToday=true"),
+      sparklineType: "line",
+      sparklineColor: "#14b8a6",
+      sparklineData: kpiTrends.completed,
+    },
+    // Row 3: Cancellations, Process Builder & Overview
+    {
+      label: "Cancelled Tasks",
+      value: taskCounts.cancelled,
+      linkLabel: "Show cancelled tasks",
+      icon: X,
+      iconColor: "text-slate-600",
+      iconBg: "bg-slate-100",
+      testId: "card-cancelled-tasks",
+      onClick: () => setLocation("/tasks?statusFilter=CANCELLED"),
       sparklineType: "bars",
-      sparklineColor: "#eab308",
-      sparklineData: kpiTrends.approvals,
+      sparklineColor: "#64748b",
+      sparklineData: kpiTrends.cancelled,
+    },
+    {
+      label: "Process Builder Instances",
+      value: taskCounts.processInstances,
+      linkLabel: "View process instances",
+      icon: FolderTree,
+      iconColor: "text-violet-600",
+      iconBg: "bg-violet-50",
+      testId: "card-process-instances",
+      onClick: () => setLocation("/process-builder"),
+      sparklineType: "line",
+      sparklineColor: "#8b5cf6",
+      sparklineData: kpiTrends.processInstances,
+    },
+    {
+      label: "Process Builder Launches",
+      value: taskCounts.processLaunches,
+      linkLabel: "View process builder",
+      icon: Zap,
+      iconColor: "text-fuchsia-600",
+      iconBg: "bg-fuchsia-50",
+      testId: "card-process-launches",
+      onClick: () => setLocation("/process-builder"),
+      sparklineType: "bars",
+      sparklineColor: "#d946ef",
+      sparklineData: kpiTrends.processInstances,
+    },
+    {
+      label: "Total Tasks",
+      value: taskCounts.total,
+      linkLabel: "Show all tasks",
+      icon: Layers,
+      iconColor: "text-indigo-600",
+      iconBg: "bg-indigo-50",
+      testId: "card-total-tasks",
+      onClick: () => setLocation("/tasks"),
+      sparklineType: "line",
+      sparklineColor: "#6366f1",
+      sparklineData: kpiTrends.total,
     },
   ];
 
@@ -959,8 +1169,8 @@ const OrganizationDashboard = () => {
           })()}
         </div>
 
-        {/* KPI CARDS: 10 cards displayed 5 per row */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 gap-2.5 mb-3">
+        {/* KPI CARDS: 8 cards displayed 4 per row */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-2.5 mb-3">
           {kpiCards.map(
             ({
               label,
@@ -988,7 +1198,7 @@ const OrganizationDashboard = () => {
                       {label}
                     </p>
                     <h2 className="text-[30px] font-bold text-[#1f2937] tracking-tight leading-none mt-2">
-                      {value}
+                      {extractVal(value)}
                     </h2>
                   </div>
                   <div
@@ -1032,13 +1242,24 @@ const OrganizationDashboard = () => {
           )}
         </div>
 
+        {/* Organization Hierarchy Section */}
+        <div ref={hierarchyRef} id="organization-hierarchy-section">
+          <OrganizationHierarchySection
+            tasks={allTasks}
+            teamMembers={aggregatedTeamMembers}
+            currentUser={user}
+            activeRole="org_admin"
+          />
+        </div>
+
         {/* Task Overview and Task Status Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3">
           <div className="lg:col-span-7 h-[350px]">
-            <TaskOverviewChart tasks={allTasks} />
+            <TaskOverviewChart tasks={allTasks} overviewData={charts?.taskOverview} />
           </div>
           <div className="lg:col-span-5 h-[350px]">
             <TaskStatusDonut
+              tasks={allTasks}
               totalTasks={taskStatusBreakdown.total}
               openCount={taskStatusBreakdown.open}
               inProgressCount={taskStatusBreakdown.inProgress}
@@ -1101,10 +1322,10 @@ const OrganizationDashboard = () => {
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                className="h-8 rounded-sm text-xs"
-                onClick={() => setLocation("/organization-hierarchy")}
+                className="h-8 rounded-sm text-xs bg-blue-50/50 border-blue-200 text-blue-700 hover:bg-blue-100/60"
+                onClick={scrollToHierarchy}
               >
-                <Users size={14} className="mr-1" />
+                <FolderTree size={14} className="mr-1 text-blue-600" />
                 Hierarchy
               </Button>
               <Button
@@ -1168,6 +1389,7 @@ const OrganizationDashboard = () => {
                 style={{ color: "#676a6c" }}
               >
                 <option value="all">All Dates</option>
+                <option value="created_today">Created Today</option>
                 <option value="today">Due Today</option>
                 <option value="overdue">Overdue</option>
                 <option value="upcoming">Upcoming</option>
@@ -1183,38 +1405,131 @@ const OrganizationDashboard = () => {
             <div className="bg-white border border-gray-200 shadow-sm rounded-sm flex flex-col h-full overflow-hidden">
               {/* Header */}
               <div
-                className="py-2.5 px-4 border-b border-gray-200 flex-shrink-0 rounded-t-sm flex items-center justify-between"
+                className="py-2.5 px-4 border-b border-gray-200 flex-shrink-0 rounded-t-sm flex flex-wrap items-center justify-between gap-2"
                 style={{ backgroundColor: "#f9f9f9" }}
               >
-                <h5
-                  className="text-xs font-semibold uppercase tracking-wider m-0 flex items-center gap-1.5"
-                  style={{ color: "#676a6c" }}
-                >
-                  <ListChecks size={12} className="text-blue-600" />
-                  Organization Task Grid
-                  <span className="ml-1 text-[10px] font-normal normal-case text-gray-400">
-                    (showing {filteredTasks.length} of {allTasks.length})
-                  </span>
-                </h5>
-                {(taskFilters.status !== "all" ||
-                  taskFilters.priority !== "all" ||
-                  taskFilters.dueDate !== "all" ||
-                  Boolean(taskFilters.search)) && (
-                  <button
-                    onClick={() => {
-                      setShowAllTasks(false);
-                      setTaskFilters({
-                        search: "",
-                        status: "all",
-                        priority: "all",
-                        dueDate: "all",
-                      });
-                    }}
-                    className="text-[10px] text-blue-600 hover:underline font-medium"
+                <div className="flex items-center gap-2">
+                  <h5
+                    className="text-xs font-semibold uppercase tracking-wider m-0 flex items-center gap-1.5"
+                    style={{ color: "#676a6c" }}
                   >
-                    Clear filters
+                    <ListChecks size={13} className="text-blue-600" />
+                    Organization Task Grid
+                  </h5>
+                  <span className="text-[10px] font-normal normal-case text-gray-400">
+                    {activeTaskTab === "today"
+                      ? `(${filteredTasks.length} created today)`
+                      : activeTaskTab === "due_today"
+                        ? `(${filteredTasks.length} due today)`
+                        : activeTaskTab === "overdue"
+                          ? `(${filteredTasks.length} overdue)`
+                          : `(showing ${filteredTasks.length} of ${allTasks.length})`}
+                  </span>
+                </div>
+
+                {/* Filter Tabs */}
+                <div className="flex flex-wrap items-center gap-1">
+                  <button
+                    onClick={() => setActiveTaskTab("today")}
+                    className={`px-2.5 py-0.5 text-xs font-medium border rounded-sm transition-colors flex items-center gap-1.5 ${
+                      activeTaskTab === "today"
+                        ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                        : "border-gray-300 bg-white hover:bg-gray-50 text-gray-600"
+                    }`}
+                  >
+                    <span>Created Today</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                        activeTaskTab === "today"
+                          ? "bg-blue-700 text-white"
+                          : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {todayCreatedCount}
+                    </span>
                   </button>
-                )}
+
+                  <button
+                    onClick={() => setActiveTaskTab("all")}
+                    className={`px-2.5 py-0.5 text-xs font-medium border rounded-sm transition-colors flex items-center gap-1.5 ${
+                      activeTaskTab === "all"
+                        ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                        : "border-gray-300 bg-white hover:bg-gray-50 text-gray-600"
+                    }`}
+                  >
+                    <span>All Tasks</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                        activeTaskTab === "all"
+                          ? "bg-blue-700 text-white"
+                          : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {taskGridData.length}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTaskTab("due_today")}
+                    className={`px-2.5 py-0.5 text-xs font-medium border rounded-sm transition-colors flex items-center gap-1.5 ${
+                      activeTaskTab === "due_today"
+                        ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                        : "border-gray-300 bg-white hover:bg-gray-50 text-gray-600"
+                    }`}
+                  >
+                    <span>Due Today</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                        activeTaskTab === "due_today"
+                          ? "bg-blue-700 text-white"
+                          : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {dueTodayCount}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTaskTab("overdue")}
+                    className={`px-2.5 py-0.5 text-xs font-medium border rounded-sm transition-colors flex items-center gap-1.5 ${
+                      activeTaskTab === "overdue"
+                        ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                        : "border-gray-300 bg-white hover:bg-gray-50 text-gray-600"
+                    }`}
+                  >
+                    <span>Overdue</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                        activeTaskTab === "overdue"
+                          ? "bg-blue-700 text-white"
+                          : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {overdueTasksCount}
+                    </span>
+                  </button>
+
+                  {(taskFilters.status !== "all" ||
+                    taskFilters.priority !== "all" ||
+                    taskFilters.dueDate !== "all" ||
+                    Boolean(taskFilters.search)) && (
+                    <button
+                      onClick={() => {
+                        setShowAllTasks(false);
+                        setTaskFilters({
+                          search: "",
+                          status: "all",
+                          priority: "all",
+                          dueDate: "all",
+                        });
+                        setActiveTaskTab("today");
+                      }}
+                      className="ml-1 text-[10px] text-blue-600 hover:underline font-medium"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Scrollable Table Area */}
@@ -1271,21 +1586,42 @@ const OrganizationDashboard = () => {
                           >
                             <div className="flex flex-col items-center justify-center gap-2">
                               <ListChecks size={28} className="text-gray-300" />
-                              <p className="text-sm">No tasks found matching filters.</p>
-                              <button
-                                className="text-xs text-blue-600 hover:underline font-medium"
-                                onClick={() => {
-                                  setShowAllTasks(false);
-                                  setTaskFilters({
-                                    search: "",
-                                    status: "all",
-                                    priority: "all",
-                                    dueDate: "all",
-                                  });
-                                }}
-                              >
-                                Reset filters
-                              </button>
+                              <p className="text-sm font-medium text-gray-600">
+                                {activeTaskTab === "today"
+                                  ? `No tasks created today (${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })})`
+                                  : activeTaskTab === "due_today"
+                                    ? "No tasks due today"
+                                    : activeTaskTab === "overdue"
+                                      ? "No overdue tasks"
+                                      : "No tasks found matching filters."}
+                              </p>
+                              {activeTaskTab !== "all" && allTasks.length > 0 && (
+                                <button
+                                  className="text-xs text-blue-600 hover:underline font-medium"
+                                  onClick={() => setActiveTaskTab("all")}
+                                >
+                                  View all organization tasks ({allTasks.length})
+                                </button>
+                              )}
+                              {(taskFilters.status !== "all" ||
+                                taskFilters.priority !== "all" ||
+                                taskFilters.dueDate !== "all" ||
+                                taskFilters.search) && (
+                                <button
+                                  className="text-xs text-blue-600 hover:underline font-medium"
+                                  onClick={() => {
+                                    setShowAllTasks(false);
+                                    setTaskFilters({
+                                      search: "",
+                                      status: "all",
+                                      priority: "all",
+                                      dueDate: "all",
+                                    });
+                                  }}
+                                >
+                                  Reset filters
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
