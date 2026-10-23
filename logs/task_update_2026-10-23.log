@@ -1,0 +1,5 @@
+{"timestamp":"2026-10-23T06:14:12.255Z","eventType":"task_update","step":"USING_ENHANCED_HELPER","status":"START","data":{"taskId":"6adafaf55c880852ce501492","updateKeys":["dueDate","updatedAt"]},"processId":22776}
+{"timestamp":"2026-10-23T06:14:12.257Z","eventType":"task_update","step":"NOTIFICATION_START","status":"START","data":{"taskId":"6adafaf55c880852ce501492","taskTitle":"team task","updatedBy":"6a676566479a5e77a638c843","changedFields":["dueDate"]},"processId":22776}
+{"timestamp":"2026-10-23T06:14:14.797Z","eventType":"task_update","step":"NOTIFY_USER_SUCCESS","status":"SUCCESS","data":{"userId":"6a9654655b09ba1c61e062cf","notificationId":"6adafb365c880852ce50168b"},"processId":22776}
+{"timestamp":"2026-10-23T06:14:14.799Z","eventType":"task_update","step":"NOTIFICATION_COMPLETE","status":"SUCCESS","data":{"taskId":"6adafaf55c880852ce501492","usersNotified":1},"processId":22776}
+{"timestamp":"2026-10-23T06:14:14.799Z","eventType":"task_update","step":"ENHANCED_NOTIFICATIONS_SENT","status":"SUCCESS","data":{"taskId":"6adafaf55c880852ce501492","usersNotified":1},"processId":22776}

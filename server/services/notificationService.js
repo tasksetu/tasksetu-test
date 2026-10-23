@@ -186,36 +186,36 @@ export class NotificationService {
       console.log(`[NotificationService] Checking channels:`, licenseFilteredChannels);
 
       const enabledChannels = licenseFilteredChannels.filter(channelType => {
-        console.log(`[NotificationService]   Checking channel: ${channelType}`);
+        console.log(`[NotificationService] Checking channel: ${channelType}`);
 
         if (!settings.isChannelEnabled(channelType)) {
-          console.log(`[NotificationService]     ❌ Channel ${channelType} not enabled in settings`);
+          console.log(`[NotificationService] Channel ${channelType} not enabled in settings`);
           return false;
         }
 
         // Check if user should receive notification on this channel considering quiet hours
         if (!settings.shouldSendNotification(eventSettingKey, channelType)) {
-          console.log(`[NotificationService]     ❌ Notification suppressed (quiet hours or other rules) for ${channelType}`);
+          console.log(`[NotificationService] Notification suppressed (quiet hours or other rules) for ${channelType}`);
           return false;
         }
 
         // For digest frequencies, queue for later processing
         const frequency = settings.getChannelFrequency(channelType);
-        console.log(`[NotificationService]     Channel frequency: ${frequency}`);
+        console.log(`[NotificationService] Channel frequency: ${frequency}`);
 
         if (frequency === NotificationFrequency.DIGEST_DAILY || frequency === NotificationFrequency.DIGEST_WEEKLY) {
           // Allow email through — sendEmailNotification() will handle digest queuing
           // Only block non-email channels in digest mode (in_app always goes through, others blocked)
           if (channelType === ChannelType.IN_APP || channelType === ChannelType.EMAIL) {
-            console.log(`[NotificationService]     ✅ Digest mode, allowing ${channelType} (will queue if email)`);
+            console.log(`[NotificationService]✅ Digest mode, allowing ${channelType} (will queue if email)`);
             return true;
           }
-          console.log(`[NotificationService]     ❌ Digest mode, blocking ${channelType}`);
+          console.log(`[NotificationService] Digest mode, blocking ${channelType}`);
           return false;
         }
 
         const isNotOff = frequency !== NotificationFrequency.OFF;
-        console.log(`[NotificationService]     ${isNotOff ? '✅' : '❌'} Channel ${channelType} ${isNotOff ? 'enabled' : 'OFF'}`);
+        console.log(`[NotificationService] ${isNotOff ? '✅' : '❌'} Channel ${channelType} ${isNotOff ? 'enabled' : 'OFF'}`);
         return isNotOff;
       });
 
@@ -236,7 +236,7 @@ export class NotificationService {
           is_read: true, // Mark as read so it doesn't pollute unread count
           expires_at: expires_at || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         });
-        await suppressedNotification.save();
+        await suppressedNotification.save();   
         return suppressedNotification;
       }
 

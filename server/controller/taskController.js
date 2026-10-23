@@ -420,8 +420,8 @@ const DEFAULT_TASK_STATUS_CONFIGS = [
     isDefault: true,
     isFinal: false,
     systemStatus: "OPEN",
-    // From OPEN, can transition to: IN PROGRESS, ON HOLD, or CANCELLED
-    allowedTransitions: ["INPROGRESS", "ONHOLD", "CANCELLED"],
+    // From OPEN, can transition to: IN PROGRESS, DONE, ON HOLD, or CANCELLED
+    allowedTransitions: ["INPROGRESS", "DONE", "ONHOLD", "CANCELLED"],
   },
   {
     code: "INPROGRESS",
@@ -7554,7 +7554,9 @@ export const updateTask = async (req, res) => {
 
     // ✅ If status is being updated, validate against organization status configs
     if (updates.status !== undefined && updates.status !== null) {
-      const normalized = String(updates.status).trim().toUpperCase();
+      let rawNormalized = String(updates.status).trim().toUpperCase();
+      if (rawNormalized === "COMPLETED") rawNormalized = "DONE";
+      const normalized = rawNormalized;
 
       // ❌ LINKED TASK DEPENDENCY VALIDATION: Prevent status change if prerequisite linked task is not completed or cancelled
       if (task.linkedTaskId && normalized !== String(task.status || "").trim().toUpperCase()) {
@@ -7663,7 +7665,8 @@ export const updateTask = async (req, res) => {
               currentStatusConfig.allowedTransitions.length > 0
             ) {
               const isTransitionAllowed =
-                currentStatusConfig.allowedTransitions.includes(normalized);
+                currentStatusConfig.allowedTransitions.includes(normalized) ||
+                (currentStatusCode === "OPEN" && normalized === "DONE");
 
 
               if (!isTransitionAllowed) {
@@ -8079,7 +8082,9 @@ export const updateTaskStatus = async (req, res) => {
     }
 
     // Normalize to uppercase status CODE (DB-driven list per organization)
-    const normalizedStatus = String(status).trim().toUpperCase();
+    let rawStatus = String(status).trim().toUpperCase();
+    if (rawStatus === "COMPLETED") rawStatus = "DONE";
+    const normalizedStatus = rawStatus;
     if (!normalizedStatus) {
       return res.status(400).json({
         success: false,
@@ -8096,7 +8101,7 @@ export const updateTaskStatus = async (req, res) => {
       });
     }
 
-    // ❌ LINKED TASK DEPENDENCY VALIDATION: Prevent status change if prerequisite linked task is not completed or cancelled
+    // LINKED TASK DEPENDENCY VALIDATION(Prevent status change if prerequisite linked task is not completed or cancelled)
     if (task.linkedTaskId && normalizedStatus !== String(task.status || "").trim().toUpperCase()) {
       try {
         await LinkedTaskService.validateLinkedTaskCompletion(task, normalizedStatus);
@@ -8299,7 +8304,8 @@ export const updateTaskStatus = async (req, res) => {
             currentStatusConfig.allowedTransitions.length > 0
           ) {
             const isTransitionAllowed =
-              currentStatusConfig.allowedTransitions.includes(normalizedStatus);
+              currentStatusConfig.allowedTransitions.includes(normalizedStatus) ||
+              (currentStatusCode === "OPEN" && normalizedStatus === "DONE");
 
 
             if (!isTransitionAllowed) {

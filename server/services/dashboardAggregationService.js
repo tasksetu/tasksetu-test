@@ -230,7 +230,7 @@ export async function getAggregatedDashboardData(user, query = {}) {
                       ],
                     },
                     1,
-                    0,
+                    0, 
                   ],
                 },
               },
@@ -254,7 +254,7 @@ export async function getAggregatedDashboardData(user, query = {}) {
                     1,
                     0,
                   ],
-                },
+                },  
               },
               beforeDueDate: {
                 $sum: {
@@ -270,7 +270,7 @@ export async function getAggregatedDashboardData(user, query = {}) {
                               ["DONE", "COMPLETED", "CANCELLED"],
                             ],
                           },
-                        },
+                        }, 
                       ],
                     },
                     1,
@@ -894,7 +894,7 @@ export async function getAggregatedDashboardData(user, query = {}) {
     ["INPROGRESS", "IN_PROGRESS"].includes(t.status)
   ).slice(0, 5);
 
-  const atRiskTasks = formattedTasks.filter((t) => t.isRisk).slice(0, 5);
+  const atRiskTasks = formattedTasks.filter((t) => t.isRisk || t.isPastDue).slice(0, 5);
   const recentlyCompleted = formattedTasks.filter((t) =>
     ["DONE", "COMPLETED"].includes(t.status)
   ).slice(0, 5);
@@ -963,7 +963,9 @@ export async function getAggregatedDashboardData(user, query = {}) {
       teamProductivity,
       // Employee / Individual specific
       thisWeekProgress: completionRate,
-      taskStreak: totalCompleted > 0 ? 1 : 0,
+      weeklyCompleted: totalCompleted,
+      weeklyTotal: totalTasks,
+      taskStreak: totalCompleted > 0 ? Math.min(totalCompleted, 7) : 0,
     },
     charts: {
       taskOverview: trendDays,

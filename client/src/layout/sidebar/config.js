@@ -39,7 +39,6 @@ import {
   CreditCard,
   FileSpreadsheet,
   Trash2,
-  FolderTree,
 } from "lucide-react";
 import {
   ApprovalTaskIcon,
@@ -328,13 +327,6 @@ export const sidebarMenus = {
           icon: Users,
           path: "/admin/team-members",
         },
-        {
-          id: "organization-hierarchy",
-          label: "Hierarchy",
-          icon: FolderTree,
-          path: "/organization-hierarchy",
-          badge: "New",
-        },
         // {
         //   id: "company-profile",
         //   label: "Company Profile",
@@ -393,13 +385,6 @@ export const sidebarMenus = {
           label: "Team Members",
           icon: Users,
           path: "/admin/team-members",
-        },
-        {
-          id: "organization-hierarchy",
-          label: "Hierarchy",
-          icon: FolderTree,
-          path: "/organization-hierarchy",
-          badge: "New",
         },
         // {
         //   id: "company-profile",

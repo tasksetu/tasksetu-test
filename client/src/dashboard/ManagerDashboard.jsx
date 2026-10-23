@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useMemo, useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useActiveRole } from "@/components/RoleSwitcher";
 import { useAuth } from "@/features/shared/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,16 @@ import {
   Activity,
   Crown,
   Loader,
+  MoreHorizontal,
+  Edit,
+  XCircle,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import ReactECharts from "echarts-for-react";
 import ExportButton from "@/components/ExportButton";
 import { useShowToast } from "@/utils/ToastMessage";
@@ -178,6 +187,7 @@ function getStatusBadge(status) {
 }
 
 const ManagerDashboard = () => {
+  const queryClient = useQueryClient();
   const { showSuccessToast, showErrorToast } = useShowToast();
   const { activeRole } = useActiveRole();
   const [location, setLocation] = useLocation();
@@ -195,6 +205,12 @@ const ManagerDashboard = () => {
     email: "",
   });
   const [focusTab, setFocusTab] = useState("today");
+  const [focusScope, setFocusScope] = useState("all"); // "all" | "my" | "team"
+  const [updatingTaskId, setUpdatingTaskId] = useState(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelTaskId, setCancelTaskId] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
   const [taskListFilter, setTaskListFilter] = useState("all");
 
   const { user } = useAuth();
@@ -293,14 +309,17 @@ const ManagerDashboard = () => {
     );
   };
 
-  const isTaskOverdue = (task) => {
-    if (!task?.dueDate || task.dueDate === "No due date") return false;
-    const s = (task.status || "").toUpperCase();
-    if (["DONE", "COMPLETED", "CANCELLED"].includes(s)) return false;
-    const d = new Date(task.dueDate);
+  const normalizeStatus = useCallback((status) => (status || "OPEN").toUpperCase(), []);
+
+  const isTaskOverdue = useCallback((t) => {
+    if (t?.isPastDue !== undefined) return Boolean(t.isPastDue);
+    if (!t?.dueDate || t.dueDate === "No due date") return false;
+    const s = normalizeStatus(t.status);
+    if (["DONE", "COMPLETED", "CANCELLED", "REJECTED", "ONHOLD", "ON_HOLD", "HOLD"].includes(s)) return false;
+    const d = new Date(t.dueDate);
     if (isNaN(d.getTime())) return false;
-    return d < getDisplayNow() || d < new Date();
-  };
+    return d < new Date();
+  }, [normalizeStatus]);
 
   const teamStatsForHeader = useMemo(() => {
     let open = 0;
@@ -348,44 +367,362 @@ const ManagerDashboard = () => {
     };
   }, [kpis, teamMembers]);
 
-  // Today Focus Tasks
-  const todayStr = new Date().toISOString().split("T")[0];
+  // Helper functions for Today Focus section
 
-  const todayFocusTasksData = useMemo(() => {
-    return teamTasksData
-      .filter((t) => t.dueDate && t.dueDate.slice(0, 10) === todayStr)
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-      .slice(0, 8);
-  }, [teamTasksData, todayStr]);
+  const isTaskDueToday = useCallback((t) => {
+    if (t.isDueToday !== undefined && t.isDueToday) return true;
+    if (!t.dueDate || t.dueDate === "No due date") return false;
+    const d = new Date(t.dueDate);
+    if (isNaN(d.getTime())) return false;
+    const now = new Date();
+    return (
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear()
+    );
+  }, []);
 
-  const overdueFocusTasksData = useMemo(() => {
-    return teamTasksData
-      .filter((t) => t.isPastDue || isTaskOverdue(t))
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-      .slice(0, 8);
-  }, [teamTasksData]);
+  const getTaskAssigneeInfo = useCallback((t) => {
+    const currentUserId = String(user?.id || user?._id || "");
+    const aId = String(
+      t.assignedTo?._id ||
+      t.assignedTo?.id ||
+      (typeof t.assignedTo === "string" ? t.assignedTo : "") ||
+      t.assigneeId ||
+      ""
+    );
+    const uId = String(t.userId || t.createdBy?._id || t.createdBy || "");
+    const isMyTask = (aId && aId === currentUserId) || (!aId && uId === currentUserId);
+    const assigneeName =
+      t.assignedTo?.fullName ||
+      (t.assignedTo?.firstName
+        ? `${t.assignedTo.firstName} ${t.assignedTo.lastName || ""}`.trim()
+        : null) ||
+      t.assigneeName ||
+      t.assignee ||
+      (isMyTask ? "You" : "Team Member");
 
-  const approvalFocusTasksData = useMemo(() => {
-    return teamTasksData
-      .filter(
-        (t) =>
-          t.taskType === "approval" &&
-          t.status !== "DONE" &&
-          t.status !== "COMPLETED",
-      )
-      .slice(0, 8);
-  }, [teamTasksData]);
+    return { isMyTask, assigneeName, aId, uId };
+  }, [user]);
 
-  const focusTabTasks = useMemo(() => {
-    if (focusTab === "today") return todayFocusTasksData;
-    if (focusTab === "overdue") return overdueFocusTasksData;
-    return approvalFocusTasksData;
-  }, [
-    focusTab,
-    todayFocusTasksData,
-    overdueFocusTasksData,
-    approvalFocusTasksData,
-  ]);
+  // Categorize ALL tasks in teamTasksData into Today Focus buckets
+  const allCategorizedFocusTasks = useMemo(() => {
+    const todayList = [];
+    const overdueList = [];
+    const upcomingList = [];
+    const waitingList = [];
+
+    const now = new Date();
+
+    teamTasksData.forEach((t) => {
+      const s = normalizeStatus(t.status);
+      const isDone = ["DONE", "COMPLETED", "CANCELLED", "REJECTED"].includes(s);
+      const isOnHold =
+        ["ONHOLD", "ON_HOLD", "HOLD", "WAITING", "PENDING", "APPROVAL", "UNDER_REVIEW"].includes(s) ||
+        t.taskType === "approval" ||
+        t.isApprovalTask;
+      const overdue = isTaskOverdue(t);
+      const dueToday = isTaskDueToday(t);
+
+      // Waiting: Tasks that are On Hold, Pending, or Waiting for approval/action
+      if (!isDone && isOnHold) {
+        waitingList.push(t);
+      }
+
+      // Overdue: Only active tasks (not done, not on hold)
+      if (overdue && !isDone && !isOnHold) {
+        overdueList.push(t);
+      }
+
+      // Today Focus: Strictly active tasks due today (not done, not on hold)
+      if (!isDone && !isOnHold && dueToday) {
+        todayList.push(t);
+      }
+
+      // Upcoming: Future due date and active (not done, not on hold)
+      if (!isDone && !isOnHold && !overdue && !dueToday && t.dueDate && t.dueDate !== "No due date") {
+        const d = new Date(t.dueDate);
+        if (!isNaN(d.getTime()) && d > now) {
+          upcomingList.push(t);
+        }
+      }
+    });
+
+    return { todayList, overdueList, upcomingList, waitingList };
+  }, [teamTasksData, isTaskOverdue, isTaskDueToday, normalizeStatus]);
+
+  // Tasks belonging to the currently active focus tab across all scopes (to determine scope counts)
+  const activeTabAllTasks = useMemo(() => {
+    switch (focusTab) {
+      case "overdue":
+        return allCategorizedFocusTasks.overdueList;
+      case "upcoming":
+        return allCategorizedFocusTasks.upcomingList;
+      case "waiting":
+        return allCategorizedFocusTasks.waitingList;
+      case "today":
+      default:
+        return allCategorizedFocusTasks.todayList;
+    }
+  }, [focusTab, allCategorizedFocusTasks]);
+
+  // Scope counts (All, My Tasks, Team Tasks) for the active focus category
+  const focusScopeCounts = useMemo(() => {
+    let my = 0;
+    let team = 0;
+    activeTabAllTasks.forEach((t) => {
+      if (getTaskAssigneeInfo(t).isMyTask) {
+        my++;
+      } else {
+        team++;
+      }
+    });
+    return {
+      all: activeTabAllTasks.length,
+      my,
+      team,
+    };
+  }, [activeTabAllTasks, getTaskAssigneeInfo]);
+
+  // Dynamic Today Focus lists filtered by the active scope (All / My / Team)
+  const todayFocusLists = useMemo(() => {
+    const filterByScope = (list) => {
+      if (focusScope === "my") {
+        return list.filter((t) => getTaskAssigneeInfo(t).isMyTask);
+      }
+      if (focusScope === "team") {
+        return list.filter((t) => !getTaskAssigneeInfo(t).isMyTask);
+      }
+      return list;
+    };
+
+    return {
+      todayList: filterByScope(allCategorizedFocusTasks.todayList),
+      overdueList: filterByScope(allCategorizedFocusTasks.overdueList),
+      upcomingList: filterByScope(allCategorizedFocusTasks.upcomingList),
+      waitingList: filterByScope(allCategorizedFocusTasks.waitingList),
+    };
+  }, [allCategorizedFocusTasks, focusScope, getTaskAssigneeInfo]);
+
+  const activeFocusTasks = useMemo(() => {
+    switch (focusTab) {
+      case "overdue":
+        return todayFocusLists.overdueList;
+      case "upcoming":
+        return todayFocusLists.upcomingList;
+      case "waiting":
+        return todayFocusLists.waitingList;
+      case "today":
+      default:
+        return todayFocusLists.todayList;
+    }
+  }, [focusTab, todayFocusLists]);
+
+  const handleToggleTaskStatus = async (task) => {
+    const taskId = task._id || task.id;
+    const isDone = ["DONE", "COMPLETED"].includes(normalizeStatus(task.status));
+
+    if (isDone) {
+      showErrorToast("Completed tasks cannot be reopened.");
+      return;
+    }
+
+    setUpdatingTaskId(taskId);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/tasks/${taskId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: "DONE" }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        showSuccessToast(
+          data.requiresApproval
+            ? "Status change submitted for approval"
+            : "Task marked as completed! 🎉"
+        );
+        invalidateDashboard();
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/mytasks"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/aggregated"] });
+      } else {
+        showErrorToast(data.message || "Failed to update task status");
+      }
+    } catch (err) {
+      showErrorToast(err.message || "Network error updating task status");
+    } finally {
+      setUpdatingTaskId(null);
+    }
+  };
+
+  const handleStartTask = async (task) => {
+    const taskId = task._id || task.id;
+    setUpdatingTaskId(taskId);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/tasks/${taskId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: "INPROGRESS" }),
+      });
+      if (res.ok) {
+        showSuccessToast("Task started!");
+        invalidateDashboard();
+        setLocation(`/tasks/${taskId}?activeRole=${activeRole}`);
+      } else {
+        setLocation(`/tasks/${taskId}?activeRole=${activeRole}`);
+      }
+    } catch {
+      setLocation(`/tasks/${taskId}?activeRole=${activeRole}`);
+    } finally {
+      setUpdatingTaskId(null);
+    }
+  };
+
+  const handleConfirmCancelTask = async () => {
+    if (!cancelTaskId || !cancelReason.trim()) return;
+    setIsCancelling(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/tasks/${cancelTaskId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status: "CANCELLED",
+          reason: cancelReason.trim(),
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        showSuccessToast("Task cancelled successfully");
+        setShowCancelModal(false);
+        setCancelReason("");
+        setCancelTaskId(null);
+        invalidateDashboard();
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/mytasks"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/aggregated"] });
+      } else {
+        showErrorToast(data.message || "Failed to cancel task");
+      }
+    } catch (err) {
+      showErrorToast(err.message || "Network error cancelling task");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const renderPriorityBadge = (priority) => {
+    const p = String(priority || "low").toLowerCase();
+    if (p === "urgent" || p === "critical") {
+      return (
+        <span className="inline-flex items-center text-rose-600 bg-rose-50 border border-rose-200 text-[11px] font-semibold px-2 py-0.5 rounded-sm">
+          Urgent
+        </span>
+      );
+    }
+    if (p === "high") {
+      return (
+        <span className="inline-flex items-center text-red-600 bg-red-50 border border-red-200 text-[11px] font-semibold px-2 py-0.5 rounded-sm">
+          High
+        </span>
+      );
+    }
+    if (p === "medium") {
+      return (
+        <span className="inline-flex items-center text-amber-600 bg-amber-50 border border-amber-200 text-[11px] font-semibold px-2 py-0.5 rounded-sm">
+          Medium
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center text-blue-600 bg-blue-50 border border-blue-200 text-[11px] font-semibold px-2 py-0.5 rounded-sm">
+        Low
+      </span>
+    );
+  };
+
+  const renderStatusBadge = (status) => {
+    const raw = status || "OPEN";
+    const s = normalizeStatus(raw);
+
+    if (["DONE", "COMPLETED"].includes(s)) {
+      return (
+        <span className="inline-flex items-center bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold px-2.5 py-0.5 rounded-sm uppercase tracking-wider">
+          {s === "DONE" ? "Done" : "Completed"}
+        </span>
+      );
+    }
+    if (["INPROGRESS", "IN_PROGRESS"].includes(s)) {
+      return (
+        <span className="inline-flex items-center bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-semibold px-2.5 py-0.5 rounded-sm uppercase tracking-wider">
+          In Progress
+        </span>
+      );
+    }
+    if (["ONHOLD", "ON_HOLD", "HOLD"].includes(s)) {
+      return (
+        <span className="inline-flex items-center bg-orange-50 text-orange-700 border border-orange-200 text-[11px] font-semibold px-2.5 py-0.5 rounded-sm uppercase tracking-wider">
+          On Hold
+        </span>
+      );
+    }
+    if (["CANCELLED", "CANCELED", "REJECTED"].includes(s)) {
+      return (
+        <span className="inline-flex items-center bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-semibold px-2.5 py-0.5 rounded-sm uppercase tracking-wider">
+          {s === "REJECTED" ? "Rejected" : "Cancelled"}
+        </span>
+      );
+    }
+    if (["PENDING", "WAITING", "APPROVAL", "UNDER_REVIEW"].includes(s)) {
+      return (
+        <span className="inline-flex items-center bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-semibold px-2.5 py-0.5 rounded-sm uppercase tracking-wider">
+          {s === "WAITING" ? "Waiting" : s === "APPROVAL" ? "Approval" : "Pending"}
+        </span>
+      );
+    }
+    if (s === "OPEN") {
+      return (
+        <span className="inline-flex items-center bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-semibold px-2.5 py-0.5 rounded-sm uppercase tracking-wider">
+          Open
+        </span>
+      );
+    }
+
+    const displayLabel = String(raw).replace(/_/g, " ");
+    return (
+      <span className="inline-flex items-center bg-gray-100 text-gray-700 border border-gray-200 text-[11px] font-semibold px-2.5 py-0.5 rounded-sm uppercase tracking-wider">
+        {displayLabel}
+      </span>
+    );
+  };
+
+  const formatDueDateTime = (dateString) => {
+    if (!dateString || dateString === "No due date") return "No due date";
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return "No due date";
+    return d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
 
   // Helper to compute 7-day trend array for dynamic KPI sparklines
   const kpiTrends = useMemo(() => {
@@ -1184,135 +1521,326 @@ const ManagerDashboard = () => {
         </div>
 
         {/* TODAY FOCUS */}
-        <div className="bg-white border border-gray-200 shadow-sm rounded-sm mb-3">
-          <div
-            className="py-2.5 px-4 border-b border-gray-200 flex items-center justify-between rounded-sm"
-            style={{ backgroundColor: "#f9f9f9" }}
-          >
-            <h5
-              className="text-xs font-semibold uppercase tracking-wider m-0 flex items-center gap-1.5"
-              style={{ color: "#676a6c" }}
-            >
-              <Star size={12} className="text-yellow-500" /> Today Focus - Team
-              Tasks
-            </h5>
-            <div className="flex gap-1">
-              {["today", "overdue", "approvals"].map((tab) => (
+        <div className="bg-white rounded-sm border border-gray-200/80 shadow-sm p-4 md:p-5 mb-4">
+          {/* Header row with Scope Filter & Tab Pills */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-gray-100">
+            {/* Left: Star + Title + Count + Scope Switcher */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Star size={16} className="text-amber-500 fill-amber-400 flex-shrink-0" />
+                <h2 className="text-xs md:text-sm font-bold uppercase tracking-wider text-gray-800 m-0">
+                  TODAY FOCUS
+                </h2>
+                <span className="text-xs font-medium text-gray-400">
+                  ({activeFocusTasks.length} {activeFocusTasks.length === 1 ? "task" : "tasks"})
+                </span>
+              </div>
+
+              {/* Scope Switcher: All | My Tasks | Team Tasks */}
+              <div className="inline-flex items-center bg-gray-100 p-0.5 rounded-sm border border-gray-200">
                 <button
-                  key={tab}
-                  className={`py-0.5 px-2.5 text-xs font-medium transition-colors border rounded-sm ${
-                    focusTab === tab
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white border-gray-300 hover:bg-gray-50"
+                  type="button"
+                  onClick={() => setFocusScope("all")}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-sm transition-colors cursor-pointer ${
+                    focusScope === "all"
+                      ? "bg-white text-gray-900 shadow-xs"
+                      : "text-gray-500 hover:text-gray-800"
                   }`}
-                  style={focusTab !== tab ? { color: "#676a6c" } : {}}
-                  onClick={() => setFocusTab(tab)}
+                  title={`Show all ${focusTab} tasks (${focusScopeCounts.all})`}
                 >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  All ({focusScopeCounts.all})
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setFocusScope("my")}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-sm transition-colors cursor-pointer ${
+                    focusScope === "my"
+                      ? "bg-white text-blue-600 shadow-xs"
+                      : "text-gray-500 hover:text-gray-800"
+                  }`}
+                  title={`Show only your ${focusTab} tasks (${focusScopeCounts.my})`}
+                >
+                  My Tasks ({focusScopeCounts.my})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFocusScope("team")}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-sm transition-colors cursor-pointer ${
+                    focusScope === "team"
+                      ? "bg-white text-purple-600 shadow-xs"
+                      : "text-gray-500 hover:text-gray-800"
+                  }`}
+                  title={`Show team member ${focusTab} tasks (${focusScopeCounts.team})`}
+                >
+                  Team Tasks ({focusScopeCounts.team})
+                </button>
+              </div>
+            </div>
+
+            {/* Right: Filter tabs (Today, Overdue, Upcoming, Waiting) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setFocusTab("today")}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-sm border transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+                  focusTab === "today"
+                    ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                    : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+              >
+                Today ({todayFocusLists.todayList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFocusTab("overdue")}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-sm border transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+                  focusTab === "overdue"
+                    ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                    : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+              >
+                Overdue ({todayFocusLists.overdueList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFocusTab("upcoming")}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-sm border transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+                  focusTab === "upcoming"
+                    ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                    : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+              >
+                Upcoming ({todayFocusLists.upcomingList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFocusTab("waiting")}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-sm border transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+                  focusTab === "waiting"
+                    ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                    : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+              >
+                Waiting ({todayFocusLists.waitingList.length})
+              </button>
             </div>
           </div>
 
-          {focusTabTasks.length > 0 ? (
-            <div className="relative">
-              <div
-                className="overflow-x-auto scrollbar-thin"
-                style={{ scrollbarWidth: "thin" }}
-              >
-                <div
-                  className="flex gap-2.5 p-3"
-                  style={{ minWidth: "max-content" }}
-                >
-                  {focusTabTasks.map((task) => (
-                    <div
-                      className="relative bg-white border border-gray-200 rounded-sm p-4 hover:shadow-md transition-all duration-300 cursor-pointer"
-                      key={task._id || task.id}
-                      style={{ width: "260px", flexShrink: 0 }}
-                      onClick={() =>
-                        setLocation(
-                          `/tasks/${task._id}?activeRole=${activeRole}`,
-                        )
-                      }
-                    >
-                      <div
-                        className={`absolute left-0 top-0 h-full w-1 rounded-sm ${
-                          task.priority === "high"
-                            ? "bg-red-500"
-                            : task.priority === "medium"
-                              ? "bg-yellow-500"
-                              : "bg-green-500"
+          {/* Task Rows List */}
+          {activeFocusTasks.length > 0 ? (
+            <div className="divide-y divide-gray-100 mt-1">
+              {activeFocusTasks.slice(0, 8).map((task) => {
+                const taskId = task._id || task.id;
+                const isDone = ["DONE", "COMPLETED"].includes(normalizeStatus(task.status));
+                const isCancelled = ["CANCELLED", "REJECTED"].includes(normalizeStatus(task.status));
+                const isFinalStatus = isDone || isCancelled;
+                const isInProg = ["INPROGRESS", "IN_PROGRESS"].includes(normalizeStatus(task.status));
+                const isOverdue = isTaskOverdue(task);
+                const tag =
+                  task.tags?.[0] || task.category || task.taskType || "task";
+                const { isMyTask, assigneeName } = getTaskAssigneeInfo(task);
+
+                return (
+                  <div
+                    key={taskId}
+                    className="py-3 px-2 hover:bg-slate-50/70 rounded-sm transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3 text-sm group"
+                  >
+                    {/* Left: Checkbox, Priority, Title, Assignee, Tag */}
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                      <input
+                        type="checkbox"
+                        checked={isDone}
+                        disabled={isDone || updatingTaskId === taskId}
+                        onChange={() => !isDone && handleToggleTaskStatus(task)}
+                        className={`w-4 h-4 rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0 ${
+                          isDone ? "cursor-not-allowed opacity-80" : "cursor-pointer"
                         }`}
                       />
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-2 min-w-0">
-                          {getTaskTypeIcon(task, 14)}
-                          <div className="min-w-0">
-                            <h4 className="text-sm font-semibold text-gray-800 truncate">
-                              {task.title}
-                            </h4>
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              Assigned to: {task.assignee || "Unassigned"}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="w-8 h-8 rounded-sm bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-700 flex-shrink-0">
-                          {task.assignee?.[0] || "T"}
-                        </div>
+
+                      {/* Priority badge */}
+                      <div className="flex-shrink-0">
+                        {renderPriorityBadge(task.priority)}
                       </div>
-                      <div className="mt-3 flex items-center justify-between">
-                        <div>
-                          <p
-                            className={`text-xs font-semibold ${
-                              task.priority === "high"
-                                ? "text-red-500"
-                                : task.priority === "medium"
-                                  ? "text-yellow-600"
-                                  : "text-blue-500"
-                            }`}
-                          >
-                            {task.dueDate
-                              ? (() => {
-                                  const diff = Math.round(
-                                    (new Date(task.dueDate) - new Date()) /
-                                      60000,
-                                  );
-                                  if (diff > 0 && diff < 1440) {
-                                    return `Due in ${Math.floor(diff / 60)}h ${diff % 60}m`;
-                                  }
-                                  return `Due ${new Date(task.dueDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}`;
-                                })()
-                              : "No due date"}
-                          </p>
-                        </div>
-                        <div
-                          className={`text-xs font-semibold flex items-center gap-1 ${
-                            task.priority === "high"
-                              ? "text-red-500"
-                              : task.priority === "medium"
-                                ? "text-yellow-600"
-                                : "text-blue-500"
-                          }`}
-                        >
-                          <span>⚑</span>
-                          <span className="capitalize">
-                            {task.priority || "Low"}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mt-3">{getStatusBadge(task.status)}</div>
+
+                      {/* Title */}
+                      <span
+                        onClick={() => setLocation(`/tasks/${taskId}?activeRole=${activeRole}`)}
+                        className={`font-semibold text-gray-800 text-sm hover:text-blue-600 cursor-pointer truncate ${
+                          isDone ? "line-through text-gray-400" : ""
+                        }`}
+                        title={task.title}
+                      >
+                        {task.title}
+                      </span>
+
+                      {/* Assignee Pill */}
+                      <span
+                        className={`hidden sm:inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-sm whitespace-nowrap flex-shrink-0 border ${
+                          isMyTask
+                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                            : "bg-purple-50 text-purple-700 border-purple-200"
+                        }`}
+                        title={isMyTask ? "Assigned to You" : `Assigned to: ${assigneeName}`}
+                      >
+                        <Users size={11} /> {isMyTask ? "You" : assigneeName}
+                      </span>
+
+                      {/* Tag badge */}
+                      {tag && (
+                        <span className="hidden md:inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-sm font-normal whitespace-nowrap flex-shrink-0">
+                          {tag}
+                        </span>
+                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
+
+                    {/* Middle: Due Time, Status Badge, Progress */}
+                    <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0 justify-between sm:justify-start">
+                      {/* Due Time */}
+                      <span
+                        className={`flex items-center gap-1.5 text-xs font-medium whitespace-nowrap ${
+                          isOverdue || isTaskDueToday(task)
+                            ? "text-rose-500"
+                            : "text-gray-500"
+                        }`}
+                      >
+                        <Clock size={13} /> {formatDueDateTime(task.dueDate)}
+                      </span>
+
+                      {/* Status badge */}
+                      <div className="flex-shrink-0">
+                        {renderStatusBadge(task.status)}
+                      </div>
+
+                      {/* Progress bar */}
+                      <div className="hidden lg:flex items-center gap-2 w-24 flex-shrink-0">
+                        <div className="w-full bg-gray-100 rounded-sm h-1.5 overflow-hidden">
+                          <div
+                            className="bg-blue-600 h-1.5 rounded-sm transition-all duration-300"
+                            style={{ width: `${Math.min(task.progress || 0, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-medium text-gray-500 w-8 text-right">
+                          {task.progress || 0}%
+                        </span>
+                      </div>
+
+                      {/* Contextual Action Button */}
+                      <div className="flex items-center gap-1.5">
+                        {isInProg ? (
+                          <button
+                            type="button"
+                            onClick={() => setLocation(`/tasks/${taskId}?activeRole=${activeRole}`)}
+                            className="border border-blue-600 text-blue-600 hover:bg-blue-50 text-xs font-semibold px-3 py-1 rounded-sm transition-colors cursor-pointer"
+                          >
+                            Continue
+                          </button>
+                        ) : normalizeStatus(task.status) === "PENDING" ? (
+                          <button
+                            type="button"
+                            onClick={() => setLocation(`/tasks/${taskId}?activeRole=${activeRole}`)}
+                            className="border border-blue-600 text-blue-600 hover:bg-blue-50 text-xs font-semibold px-3 py-1 rounded-sm transition-colors cursor-pointer"
+                          >
+                            Update
+                          </button>
+                        ) : !isDone ? (
+                          <button
+                            type="button"
+                            onClick={() => handleStartTask(task)}
+                            className="border border-blue-600 text-blue-600 hover:bg-blue-50 text-xs font-semibold px-3 py-1 rounded-sm transition-colors cursor-pointer"
+                          >
+                            Start
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setLocation(`/tasks/${taskId}?activeRole=${activeRole}`)}
+                            className="border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-semibold px-3 py-1 rounded-sm transition-colors cursor-pointer"
+                          >
+                            View
+                          </button>
+                        )}
+
+                        {/* Dropdown Menu */}
+                        <DropdownMenu modal={false}>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="p-1 rounded-sm hover:bg-gray-100 text-gray-400 hover:text-gray-600 cursor-pointer"
+                            >
+                              <MoreHorizontal size={16} />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40 bg-white rounded-sm shadow-md border border-gray-100">
+                            <DropdownMenuItem
+                              onClick={() => setLocation(`/tasks/${taskId}?activeRole=${activeRole}`)}
+                              className="cursor-pointer text-xs"
+                            >
+                              <ArrowUpRight size={14} className="mr-2" /> View Details
+                            </DropdownMenuItem>
+                            {!isFinalStatus && (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => handleToggleTaskStatus(task)}
+                                  className="cursor-pointer text-xs"
+                                >
+                                  <CheckSquare size={14} className="mr-2" /> Mark Complete
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setLocation(`/tasks/${taskId}?activeRole=${activeRole}`)}
+                                  className="cursor-pointer text-xs"
+                                >
+                                  <Edit size={14} className="mr-2" /> Edit Task
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setCancelTaskId(taskId);
+                                    setCancelReason("");
+                                    setShowCancelModal(true);
+                                  }}
+                                  className="cursor-pointer text-xs text-rose-600 focus:text-rose-600"
+                                >
+                                  <XCircle size={14} className="mr-2" /> Cancel Task
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
-            <div className="p-3">
-              <div className="bg-green-50 border border-green-200 text-green-700 py-2 px-3 text-sm flex items-center gap-2 rounded-sm">
-                <CheckSquare size={14} /> No team tasks found for this tab.
+            <div className="py-8 text-center">
+              <div className="w-10 h-10 rounded-sm bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2">
+                <CheckCircle2 size={20} />
               </div>
+              <p className="text-sm font-semibold text-gray-700">
+                All clear! No tasks for this view.
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Great job! You can create a new task or review upcoming deadlines.
+              </p>
             </div>
           )}
+
+          {/* Footer Link */}
+          <div className="pt-2 border-t border-gray-100 mt-2 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById("manager-team-tasks-table");
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              + View all team tasks
+            </button>
+            <span className="text-xs text-gray-400">
+              Showing priority tasks
+            </span>
+          </div>
         </div>
 
         {/* KPI CARDS */}
@@ -1622,7 +2150,7 @@ const ManagerDashboard = () => {
               </div>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div id="manager-team-tasks-table" className="overflow-x-auto">
             {filteredTasks.length > 0 ? (
               <table className="w-full">
                 <thead style={{ backgroundColor: "#f9f9f9" }}>
@@ -1877,6 +2405,83 @@ const ManagerDashboard = () => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Cancel Task Confirmation Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-sm shadow-xl overflow-hidden max-w-md w-full border border-gray-200 animate-in fade-in zoom-in-95 duration-200 flex flex-col font-sans">
+            {/* Header */}
+            <div className="px-6 pt-3.5 pb-2.5 border-b border-gray-200 bg-gray-50/80 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <XCircle className="w-5 h-5 text-red-500 shrink-0" />
+                <span
+                  className="text-xl font-normal"
+                  style={{ color: "#676a6c" }}
+                >
+                  Cancel Task
+                </span>
+              </div>
+              <button
+                type="button"
+                className="text-gray-400 hover:text-gray-600 transition-colors w-6 h-6 flex items-center justify-center text-base cursor-pointer"
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setCancelReason("");
+                  setCancelTaskId(null);
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-3.5 bg-white">
+              <p className="text-xs text-gray-500 font-normal">
+                Are you sure you want to cancel this task? Please provide a
+                reason below.
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider block">
+                  Reason for cancellation{" "}
+                  <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Provide cancellation reason..."
+                  className="w-full p-2.5 border border-gray-300 rounded-sm text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 min-h-[90px] resize-none bg-white text-gray-900 placeholder:text-gray-400"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-2.5">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setCancelReason("");
+                  setCancelTaskId(null);
+                }}
+                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium h-8 px-4 rounded-sm !h-8 cursor-pointer"
+                style={{ height: "32px", minHeight: "32px" }}
+              >
+                Go Back
+              </Button>
+              <Button
+                type="button"
+                onClick={handleConfirmCancelTask}
+                disabled={!cancelReason.trim() || isCancelling}
+                className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium h-8 px-4 rounded-sm shadow-sm disabled:opacity-50 !h-8 cursor-pointer"
+                style={{ height: "32px", minHeight: "32px" }}
+              >
+                {isCancelling ? "Cancelling..." : "Confirm Cancel"}
+              </Button>
             </div>
           </div>
         </div>

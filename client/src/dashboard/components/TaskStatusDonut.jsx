@@ -38,121 +38,125 @@ const TaskStatusDonut = ({
 
   // Dynamically compute counts from tasks if provided, otherwise fallback to props
   const counts = useMemo(() => {
-    if (!tasks || tasks.length === 0) {
+    if (Array.isArray(tasks)) {
+      if (tasks.length === 0) {
+        return {
+          total: 0,
+          open: 0,
+          inProgress: 0,
+          completed: 0,
+          overdue: 0,
+        };
+      }
+
+      const now = new Date();
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+      const filtered = tasks.filter((t) => {
+        if (timeFilter === "all") return true;
+
+        const s = (t.status || "").toUpperCase();
+        const isDone = ["COMPLETED", "DONE"].includes(s);
+        const isCancelled = ["CANCELLED", "CANCELED"].includes(s);
+        const isActive = !isDone && !isCancelled;
+
+        // Active tasks (Open, In Progress, Overdue) represent ongoing workflow
+        if (isActive) return true;
+
+        // For completed / closed tasks, check if they were completed, created, or due within the timeframe
+        const datesToCheck = [];
+        if (t.completedDate || t.completedAt) datesToCheck.push(new Date(t.completedDate || t.completedAt));
+        if (t.dueDate && t.dueDate !== "No due date") datesToCheck.push(new Date(t.dueDate));
+        if (t.createdAt) datesToCheck.push(new Date(t.createdAt));
+
+        const validDates = datesToCheck.filter((d) => !isNaN(d.getTime()));
+        if (validDates.length === 0) return true;
+
+        const filterStart = timeFilter === "week" ? startOfWeek : startOfMonth;
+        return validDates.some((d) => d >= filterStart);
+      });
+
+      let open = 0;
+      let inProgress = 0;
+      let completed = 0;
+      let overdue = 0;
+
+      filtered.forEach((t) => {
+        const s = (t.status || "").toUpperCase();
+        const isDone = ["COMPLETED", "DONE"].includes(s);
+        const isCancelled = ["CANCELLED", "CANCELED"].includes(s);
+        const isInProg = ["IN_PROGRESS", "INPROGRESS", "DOING"].includes(s);
+        const isPastDue = checkIsTaskOverdue(t);
+
+        if (isDone) {
+          completed++;
+        } else if (isInProg) {
+          inProgress++;
+        } else if (!isCancelled) {
+          open++;
+        }
+
+        if (isPastDue) {
+          overdue++;
+        }
+      });
+
       return {
-        total: totalTasks,
-        open: openCount,
-        inProgress: inProgressCount,
-        completed: completedCount,
-        overdue: overdueCount,
+        total: filtered.length,
+        open,
+        inProgress,
+        completed,
+        overdue,
       };
     }
 
-    const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
-
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-
-    const filtered = tasks.filter((t) => {
-      if (timeFilter === "all") return true;
-
-      const s = (t.status || "").toUpperCase();
-      const isDone = ["COMPLETED", "DONE"].includes(s);
-      const isCancelled = ["CANCELLED", "CANCELED"].includes(s);
-      const isActive = !isDone && !isCancelled;
-
-      // Active tasks (Open, In Progress, Overdue) represent the organization's ongoing workflow
-      if (isActive) return true;
-
-      // For completed / closed tasks, check if they were completed, created, or due within the timeframe
-      const datesToCheck = [];
-      if (t.completedDate || t.completedAt) datesToCheck.push(new Date(t.completedDate || t.completedAt));
-      if (t.dueDate && t.dueDate !== "No due date") datesToCheck.push(new Date(t.dueDate));
-      if (t.createdAt) datesToCheck.push(new Date(t.createdAt));
-
-      const validDates = datesToCheck.filter((d) => !isNaN(d.getTime()));
-      if (validDates.length === 0) return true;
-
-      const filterStart = timeFilter === "week" ? startOfWeek : startOfMonth;
-      return validDates.some((d) => d >= filterStart);
-    });
-
-    let open = 0;
-    let inProgress = 0;
-    let completed = 0;
-    let overdue = 0;
-
-    filtered.forEach((t) => {
-      const s = (t.status || "").toUpperCase();
-      const isDone = ["COMPLETED", "DONE"].includes(s);
-      const isCancelled = ["CANCELLED", "CANCELED"].includes(s);
-      const isInProg = ["IN_PROGRESS", "INPROGRESS", "DOING"].includes(s);
-      const isPastDue = checkIsTaskOverdue(t);
-
-      if (isDone) {
-        completed++;
-      } else if (isInProg) {
-        inProgress++;
-      } else if (!isCancelled) {
-        open++;
-      }
-
-      if (isPastDue) {
-        overdue++;
-      }
-    });
-
-    const resolvedTotal = filtered.length > 0 ? filtered.length : totalTasks;
-    const resolvedOpen = filtered.length > 0 ? open : openCount;
-    const resolvedInProgress = filtered.length > 0 ? inProgress : inProgressCount;
-    const resolvedCompleted = filtered.length > 0 ? completed : completedCount;
-    const resolvedOverdue = filtered.length > 0 ? Math.max(overdue, overdueCount) : overdueCount;
-
     return {
-      total: resolvedTotal,
-      open: resolvedOpen,
-      inProgress: resolvedInProgress,
-      completed: resolvedCompleted,
-      overdue: resolvedOverdue,
+      total: totalTasks || 0,
+      open: openCount || 0,
+      inProgress: inProgressCount || 0,
+      completed: completedCount || 0,
+      overdue: overdueCount || 0,
     };
   }, [tasks, timeFilter, totalTasks, openCount, inProgressCount, completedCount, overdueCount]);
 
-  const activeTotal = counts.total > 0 ? counts.total : Math.max(counts.open + counts.inProgress + counts.completed, 1);
+  const activeTotal = counts.total !== undefined ? counts.total : (counts.open + counts.inProgress + counts.completed);
 
   const data = useMemo(() => {
-    const total = Math.max(activeTotal, 1);
+    const divisor = activeTotal > 0 ? activeTotal : 1;
 
     const items = [
       {
         name: "Open",
         value: counts.open,
         color: "#3b82f6",
-        percentage: Math.round((counts.open / total) * 100),
+        percentage: activeTotal > 0 ? Math.round((counts.open / divisor) * 100) : 0,
       },
       {
         name: "In Progress",
         value: counts.inProgress,
         color: "#f59e0b",
-        percentage: Math.round((counts.inProgress / total) * 100),
+        percentage: activeTotal > 0 ? Math.round((counts.inProgress / divisor) * 100) : 0,
       },
       {
         name: "Completed",
         value: counts.completed,
         color: "#10b981",
-        percentage: Math.round((counts.completed / total) * 100),
+        percentage: activeTotal > 0 ? Math.round((counts.completed / divisor) * 100) : 0,
       },
       {
         name: "Overdue",
         value: counts.overdue,
         color: "#ef4444",
-        percentage: Math.round((counts.overdue / total) * 100),
+        percentage: activeTotal > 0 ? Math.round((counts.overdue / divisor) * 100) : 0,
       },
     ];
 
     // If total is 0, provide placeholder slice for clean visual
-    if (items.every((item) => item.value === 0)) {
+    if (activeTotal === 0 || items.every((item) => item.value === 0)) {
       return [{ name: "No Tasks", value: 1, color: "#e2e8f0", percentage: 100 }];
     }
 
@@ -230,28 +234,53 @@ const TaskStatusDonut = ({
 
         {/* Legend on the right */}
         <div className="flex-1 w-full sm:w-auto space-y-2.5 pl-2 sm:pl-0">
-          {data
-            .filter((item) => item.name !== "No Tasks")
-            .map((item) => (
-              <div
-                key={item.name}
-                className="flex items-center justify-between text-xs gap-3"
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className="w-2.5 h-2.5 rounded-[3px] inline-block flex-shrink-0"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-slate-600 font-medium">{item.name}</span>
+          {activeTotal > 0 ? (
+            data
+              .filter((item) => item.name !== "No Tasks")
+              .map((item) => (
+                <div
+                  key={item.name}
+                  className="flex items-center justify-between text-xs gap-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-2.5 h-2.5 rounded-[3px] inline-block flex-shrink-0"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="text-slate-600 font-medium">{item.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 font-semibold">
+                    <span className="text-slate-800">{item.value}</span>
+                    <span className="text-slate-400 text-[11px] min-w-[28px] text-right">
+                      {item.percentage}%
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 font-semibold">
-                  <span className="text-slate-800">{item.value}</span>
-                  <span className="text-slate-400 text-[11px] min-w-[28px] text-right">
-                    {item.percentage}%
-                  </span>
+              ))
+          ) : (
+            <div className="space-y-2.5 text-xs text-slate-400">
+              {[
+                { name: "Open", color: "#3b82f6" },
+                { name: "In Progress", color: "#f59e0b" },
+                { name: "Completed", color: "#10b981" },
+                { name: "Overdue", color: "#ef4444" },
+              ].map(({ name, color }) => (
+                <div key={name} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-2.5 h-2.5 rounded-[3px] inline-block flex-shrink-0 opacity-40"
+                      style={{ backgroundColor: color }}
+                    />
+                    <span className="text-slate-400">{name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 font-semibold">
+                    <span className="text-slate-400">0</span>
+                    <span className="text-slate-300 text-[11px] min-w-[28px] text-right">0%</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

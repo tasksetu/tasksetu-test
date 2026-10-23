@@ -112,12 +112,12 @@ const Dashboard = () => {
       case "member":
       case "employee":
         console.log("✅ Rendering EmployeeDashboard");
-        return <EmployeeDashboard />;
+        return <EmployeeDashboard activeRole="employee" />;
 
       case "individual":
       default:
-        console.log("✅ Rendering IndividualDashboard");
-        return <IndividualDashboard forcedRole="individual" />;
+        console.log("✅ Rendering EmployeeDashboard for individual role");
+        return <EmployeeDashboard activeRole="individual" />;
     }
   };
 
