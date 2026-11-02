@@ -40,6 +40,14 @@ export const createHierarchy = async (req, res) => {
       });
     }
 
+    // Prevent self-reporting
+    if (managerId.toString() === reportyId.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: "A user cannot be their own manager",
+      });
+    }
+
     // Check if manager exists and is actually a manager
     const manager = await User.findOne({
       _id: managerId,
@@ -54,17 +62,32 @@ export const createHierarchy = async (req, res) => {
       });
     }
 
-    // Check if reporty exists and is an employee
+    // Check if reporty exists and has employee or manager role (supporting dual-role users)
     const reporty = await User.findOne({
       _id: reportyId,
       organization_id: req.user.organizationId,
-      role: { $in: ["employee"] },
+      role: { $in: ["employee", "manager"] },
     });
 
     if (!reporty) {
       return res.status(400).json({
         success: false,
         message: "Invalid reporty selected",
+      });
+    }
+
+    // Prevent direct circular hierarchy (if reporty is already managing this manager)
+    const reverseHierarchy = await OrganizationHierarchy.findOne({
+      manager: reportyId,
+      reporty: managerId,
+      organization_id: req.user.organizationId,
+      status: "active",
+    });
+
+    if (reverseHierarchy) {
+      return res.status(400).json({
+        success: false,
+        message: "Circular reporting is not allowed. The selected reporty is already managing this manager.",
       });
     }
 
@@ -178,6 +201,17 @@ export const updateHierarchy = async (req, res) => {
       });
     }
 
+    const newManager = (managerId || hierarchy.manager)?.toString();
+    const newReporty = (reportyId || hierarchy.reporty)?.toString();
+
+    // Prevent self-reporting
+    if (newManager && newReporty && newManager === newReporty) {
+      return res.status(400).json({
+        success: false,
+        message: "A user cannot be their own manager",
+      });
+    }
+
     // Validate new manager if provided
     if (managerId) {
       const manager = await User.findOne({
@@ -199,13 +233,31 @@ export const updateHierarchy = async (req, res) => {
       const reporty = await User.findOne({
         _id: reportyId,
         organization_id: req.user.organizationId,
-        role: { $in: ["employee"] },
+        role: { $in: ["employee", "manager"] },
       });
 
       if (!reporty) {
         return res.status(400).json({
           success: false,
           message: "Invalid reporty selected",
+        });
+      }
+    }
+
+    // Prevent direct circular hierarchy if manager or reporty changed
+    if (newManager && newReporty) {
+      const reverseHierarchy = await OrganizationHierarchy.findOne({
+        _id: { $ne: req.params.id },
+        manager: newReporty,
+        reporty: newManager,
+        organization_id: req.user.organizationId,
+        status: "active",
+      });
+
+      if (reverseHierarchy) {
+        return res.status(400).json({
+          success: false,
+          message: "Circular reporting is not allowed. The selected reporty is already managing this manager.",
         });
       }
     }
@@ -230,8 +282,6 @@ export const updateHierarchy = async (req, res) => {
 
     const oldManager = hierarchy.manager?.toString();
     const oldReporty = hierarchy.reporty?.toString();
-    const newManager = (managerId || hierarchy.manager)?.toString();
-    const newReporty = (reportyId || hierarchy.reporty)?.toString();
 
     // Update hierarchy
     const updatedHierarchy = await OrganizationHierarchy.findByIdAndUpdate(

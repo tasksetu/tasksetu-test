@@ -5,30 +5,37 @@ export default function ConfirmDialog({
   isOpen,
   title = "Are you sure?",
   description,
-  confirmLabel = "Delete",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
+  confirmText = "Delete",
+  cancelText = "Cancel",
   onConfirm,
   onCancel,
+  onClose,
   confirmVariant = "destructive",
   isConfirming = false,
 }) {
+  const handleCancel = onCancel || onClose;
+  const resolvedConfirmLabel = confirmLabel || confirmText;
+  const resolvedCancelLabel = cancelLabel || cancelText;
+
   useEffect(() => {
     if (!isOpen) return;
 
     const onKey = (e) => {
-      if (e.key === "Escape") onCancel?.();
+      if (e.key === "Escape") handleCancel?.();
       if (e.key === "Enter") onConfirm?.();
     };
 
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [isOpen, onCancel, onConfirm]);
+  }, [isOpen, handleCancel, onConfirm]);
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
+      <div className="absolute inset-0 bg-black/40" onClick={handleCancel} />
       <div
         role="dialog"
         aria-modal="true"
@@ -47,12 +54,12 @@ export default function ConfirmDialog({
 
         <div className="p-5 flex items-center justify-between gap-3">
           <Button
-            onClick={onCancel}
+            onClick={handleCancel}
             variant="outline"
             className="h-8 px-4 rounded-sm"
             disabled={isConfirming}
           >
-            {cancelLabel}
+            {resolvedCancelLabel}
           </Button>
           <Button
             onClick={onConfirm}
@@ -60,7 +67,7 @@ export default function ConfirmDialog({
             className="h-8 px-4 rounded-sm"
             disabled={isConfirming}
           >
-            {isConfirming ? "Please wait..." : confirmLabel}
+            {isConfirming ? "Please wait..." : resolvedConfirmLabel}
           </Button>
         </div>
       </div>

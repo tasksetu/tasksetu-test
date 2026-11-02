@@ -29,8 +29,122 @@ import {
   getActivityEngagementReport,
   getTaskCompletionStatusReport
 } from "../controller/reportsController.js";
+import {
+  getPerformanceOverview,
+  getTeamPerformance,
+  getEmployeePerformanceDetail,
+  getOverdueTaskAnalysis,
+  getTaskAuditTimeline,
+  getPerformanceReviews,
+  createPerformanceReview,
+  acknowledgePerformanceReview,
+  exportPerformanceReport,
+  getAccessibleEmployees,
+} from "../controller/performanceReportController.js";
 
 const router = express.Router();
+
+// =============================================================================
+// 🚀 PRODUCTION EMPLOYEE PERFORMANCE & TASK REPORTING SYSTEM
+// Access: Visible and accessible to Manager and Org Admin only
+// =============================================================================
+
+const performanceRoles = ["manager", "org_admin", "admin", "super_admin"];
+
+/**
+ * 0. Accessible Employees (Scoped to organization for admin, reporties + self for manager)
+ */
+router.get(
+  "/performance/accessible-employees",
+  authenticateToken,
+  roleAuth(performanceRoles),
+  getAccessibleEmployees
+);
+
+/**
+ * 1. Performance Overview (Org & Team summary KPIs, period comparison, trends)
+ */
+router.get(
+  "/performance/overview",
+  authenticateToken,
+  roleAuth(performanceRoles),
+  getPerformanceOverview
+);
+
+/**
+ * 2. Team Performance (Leaderboard, department comparison, member metrics)
+ */
+router.get(
+  "/performance/team",
+  authenticateToken,
+  roleAuth(performanceRoles),
+  getTeamPerformance
+);
+
+/**
+ * 3. Individual Employee Performance Detail (Profile, drill-down, task history table)
+ */
+router.get(
+  "/performance/employee/:employeeId",
+  authenticateToken,
+  roleAuth(performanceRoles),
+  getEmployeePerformanceDetail
+);
+
+/**
+ * 4. Overdue Task Analysis (6-bucket distribution + clickable task list)
+ */
+router.get(
+  "/performance/overdue",
+  authenticateToken,
+  roleAuth(performanceRoles),
+  getOverdueTaskAnalysis
+);
+
+/**
+ * 5. Task Audit Timeline (Unified chronological event history)
+ */
+router.get(
+  "/performance/task-audit/:taskId",
+  authenticateToken,
+  roleAuth(performanceRoles),
+  getTaskAuditTimeline
+);
+
+/**
+ * 6. Performance Reviews, Rewards & Notices
+ */
+router.get(
+  "/performance/reviews",
+  authenticateToken,
+  roleAuth(performanceRoles),
+  getPerformanceReviews
+);
+
+router.post(
+  "/performance/reviews",
+  authenticateToken,
+  roleAuth(performanceRoles),
+  createPerformanceReview
+);
+
+router.patch(
+  "/performance/reviews/:id/acknowledge",
+  authenticateToken,
+  roleAuth(performanceRoles),
+  acknowledgePerformanceReview
+);
+
+/**
+ * 7. Performance Data Export (CSV / Excel)
+ */
+router.get(
+  "/performance/export",
+  authenticateToken,
+  roleAuth(performanceRoles),
+  exportPerformanceReport
+);
+
 
 // =============================================================================
 // 📊 INDIVIDUAL REPORTS - All users can access (own data)

@@ -737,6 +737,67 @@ const taskSchema = new mongoose.Schema(
       sendCount: { type: Number, default: 0 },
       lastSentAt: { type: Date, default: null },
     },
+
+    // ─── Performance & Reporting Audit Trail Fields ─────────────────────────
+    originalDueDate: {
+      type: Date,
+      default: null,
+    },
+    dueDateHistory: [
+      {
+        oldDueDate: { type: Date, default: null },
+        newDueDate: { type: Date, default: null },
+        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        changedAt: { type: Date, default: Date.now },
+        reason: { type: String, default: "" },
+        isApprovedExtension: { type: Boolean, default: false },
+        changeRequestId: { type: mongoose.Schema.Types.ObjectId, ref: "TaskChangeRequest", default: null },
+      },
+    ],
+    statusHistory: [
+      {
+        oldStatus: { type: String, default: "" },
+        newStatus: { type: String, default: "" },
+        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        changedAt: { type: Date, default: Date.now },
+        reason: { type: String, default: "" },
+      },
+    ],
+    assignmentHistory: [
+      {
+        oldAssignee: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        newAssignee: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        changedAt: { type: Date, default: Date.now },
+        reason: { type: String, default: "" },
+      },
+    ],
+    priorityHistory: [
+      {
+        oldPriority: { type: String, default: "" },
+        newPriority: { type: String, default: "" },
+        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        changedAt: { type: Date, default: Date.now },
+        reason: { type: String, default: "" },
+      },
+    ],
+    reworkHistory: [
+      {
+        returnedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        returnedAt: { type: Date, default: Date.now },
+        previousStatus: { type: String, default: "completed" },
+        reason: { type: String, default: "" },
+        defectsFound: { type: String, default: "" },
+      },
+    ],
+    blockedPeriods: [
+      {
+        blockedAt: { type: Date, default: Date.now },
+        unblockedAt: { type: Date, default: null },
+        reason: { type: String, default: "" },
+        markedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      },
+    ],
   },
   {
     timestamps: true,
@@ -1662,4 +1723,5 @@ export const OrganizationHierarchy = mongoose.model(
 
 export { TaskChangeRequest } from "./modals/taskChangeRequestModal.js";
 export { ApprovalActionToken } from "./modals/approvalActionTokenModal.js";
+export { PerformanceReview } from "./modals/performanceReviewModal.js";
 

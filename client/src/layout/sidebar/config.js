@@ -39,6 +39,7 @@ import {
   CreditCard,
   FileSpreadsheet,
   Trash2,
+  Award,
 } from "lucide-react";
 import {
   ApprovalTaskIcon,
@@ -215,6 +216,31 @@ const baseItems = {
       },
     ],
   },
+  reportsBasic: {
+    id: "reports",
+    label: "Reporting & Analytics",
+    icon: BarChart3,
+    path: "/reports",
+  },
+  reportsManagerAdmin: {
+    id: "reports",
+    label: "Reporting & Analytics",
+    icon: BarChart3,
+    children: [
+      {
+        id: "performance-reports",
+        label: "Employee Performance",
+        icon: Award,
+        path: "/reports/performance",
+      },
+      {
+        id: "operational-reports",
+        label: "Operational Analytics",
+        icon: BarChart3,
+        path: "/reports",
+      },
+    ],
+  },
   help: {
     id: "help",
     label: "Help & Support",
@@ -239,12 +265,7 @@ export const sidebarMenus = {
     baseItems.quickTasks,
     baseItems.approvals,
     baseItems.trashTasks,
-    {
-      id: "reports",
-      label: "Reporting & Analytics",
-      icon: BarChart3,
-      path: "/reports",
-    },
+    baseItems.reportsBasic,
     baseItems.form,
     baseItems.processBuilder,
     baseItems.settingsViewOnly,
@@ -260,12 +281,7 @@ export const sidebarMenus = {
     baseItems.createTask,
     baseItems.quickTasks,
     baseItems.trashTasks,
-    {
-      id: "reports",
-      label: "Reporting & Analytics",
-      icon: BarChart3,
-      path: "/reports",
-    },
+    baseItems.reportsBasic,
     baseItems.form,
     baseItems.processBuilder,
     baseItems.settingsManagement, // Individual users manage their own subscription
@@ -282,12 +298,7 @@ export const sidebarMenus = {
     baseItems.quickTasks,
     baseItems.approvals,
     baseItems.trashTasks,
-    {
-      id: "reports",
-      label: "Reporting & Analytics",
-      icon: BarChart3,
-      path: "/reports",
-    },
+    baseItems.reportsManagerAdmin,
     baseItems.form,
     baseItems.processBuilder,
     baseItems.settingsViewOnly,
@@ -304,12 +315,7 @@ export const sidebarMenus = {
     baseItems.quickTasks,
     baseItems.approvals,
     baseItems.trashTasks,
-    {
-      id: "reports",
-      label: "Reporting & Analytics",
-      icon: BarChart3,
-      path: "/reports",
-    },
+    baseItems.reportsManagerAdmin,
     {
       id: "admin",
       label: "Administration",
@@ -363,12 +369,7 @@ export const sidebarMenus = {
     baseItems.quickTasks,
     baseItems.approvals,
     baseItems.trashTasks,
-    {
-      id: "reports",
-      label: "Reporting & Analytics",
-      icon: BarChart3,
-      path: "/reports",
-    },
+    baseItems.reportsManagerAdmin,
     {
       id: "admin",
       label: "Administration",

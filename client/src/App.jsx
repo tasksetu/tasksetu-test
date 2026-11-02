@@ -118,6 +118,7 @@ import {
   ManagerTeamAnalyticsPage,
   OrganizationAnalyticsPage,
   ReportsDashboard,
+  PerformanceReportsDashboard,
 } from "./features/reports";
 import MilestoneManager from "./pages/newComponents/MilestoneManager";
 import StatusManager from "./pages/newComponents/StatusManager";
@@ -1119,6 +1120,19 @@ function App() {
                       "manager",
                       "org_admin",
                       "admin",
+                    ]}
+                  />
+                </AdminLayout>
+              </Route>
+              <Route path="/reports/performance">
+                <AdminLayout>
+                  <ProtectedRoute
+                    component={PerformanceReportsDashboard}
+                    allowedRoles={[
+                      "manager",
+                      "org_admin",
+                      "admin",
+                      "super_admin",
                     ]}
                   />
                 </AdminLayout>

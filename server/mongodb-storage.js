@@ -789,24 +789,111 @@ export class MongoStorage {
       if (!oldTask) {
         throw new Error("Task not found");
       }
+
+      // ─── Historical Accuracy & Audit Tracking ────────────────────────────
+      const pushes = {};
+      const sets = { ...taskData };
+
+      // 1. Preserve originalDueDate if not yet initialized
+      if (!oldTask.originalDueDate && oldTask.dueDate) {
+        sets.originalDueDate = oldTask.dueDate;
+      }
+
+      // 2. Track deadline changes
+      const oldDueDateMs = oldTask.dueDate ? new Date(oldTask.dueDate).getTime() : null;
+      const newDueDateMs = taskData.dueDate ? new Date(taskData.dueDate).getTime() : null;
+      const dueDateChanged = Boolean(taskData.dueDate && oldDueDateMs !== newDueDateMs);
+
+      if (dueDateChanged) {
+        pushes.dueDateHistory = {
+          oldDueDate: oldTask.dueDate,
+          newDueDate: taskData.dueDate,
+          changedBy: userId || null,
+          changedAt: new Date(),
+          reason: taskData.dueDateReason || taskData.reason || (taskData.isApprovedExtension ? "Approved extension" : "Deadline updated"),
+          isApprovedExtension: Boolean(taskData.isApprovedExtension),
+          changeRequestId: taskData.changeRequestId || null,
+        };
+      }
+
+      // 3. Track status transitions
+      const statusChanged = Boolean(taskData.status && oldTask.status !== taskData.status);
+      if (statusChanged) {
+        pushes.statusHistory = {
+          oldStatus: oldTask.status || "",
+          newStatus: taskData.status,
+          changedBy: userId || null,
+          changedAt: new Date(),
+          reason: taskData.statusReason || taskData.notes || taskData.reason || "",
+        };
+
+        // Track blocked / on-hold periods
+        if (taskData.status === "ONHOLD") {
+          pushes.blockedPeriods = {
+            blockedAt: new Date(),
+            reason: taskData.onHoldReason || taskData.notes || "Marked on hold",
+            markedBy: userId || null,
+          };
+        } else if (oldTask.status === "ONHOLD") {
+          const blockedPeriods = oldTask.blockedPeriods || [];
+          if (blockedPeriods.length > 0 && !blockedPeriods[blockedPeriods.length - 1].unblockedAt) {
+            blockedPeriods[blockedPeriods.length - 1].unblockedAt = new Date();
+            sets.blockedPeriods = blockedPeriods;
+          }
+        }
+
+        // Track rework / reopening
+        if (["DONE", "COMPLETED"].includes(oldTask.status) && !["DONE", "COMPLETED"].includes(taskData.status)) {
+          pushes.reworkHistory = {
+            returnedAt: new Date(),
+            returnedBy: userId || null,
+            reason: taskData.reworkReason || taskData.reason || "Task reopened",
+            previousStatus: oldTask.status,
+          };
+        }
+      }
+
+      // 4. Track reassignments
+      const assigneeChanged = Boolean(
+        taskData.assignedTo !== undefined &&
+        String(oldTask.assignedTo || "") !== String(taskData.assignedTo || "")
+      );
+      if (assigneeChanged) {
+        pushes.assignmentHistory = {
+          oldAssignee: oldTask.assignedTo || null,
+          newAssignee: taskData.assignedTo,
+          changedBy: userId || null,
+          changedAt: new Date(),
+          reason: taskData.assigneeReason || taskData.reason || "Reassigned",
+        };
+      }
+
+      // 5. Track priority changes
+      const priorityChanged = Boolean(taskData.priority && oldTask.priority !== taskData.priority);
+      if (priorityChanged) {
+        pushes.priorityHistory = {
+          oldPriority: oldTask.priority || "",
+          newPriority: taskData.priority,
+          changedBy: userId || null,
+          changedAt: new Date(),
+          reason: taskData.priorityReason || taskData.reason || "Priority updated",
+        };
+      }
+
+      // Assemble update operations
+      const updateOps = { $set: sets };
+      if (Object.keys(pushes).length > 0) {
+        updateOps.$push = pushes;
+      }
+
       const task = await Task.findByIdAndUpdate(
         id,
-        { $set: taskData },
+        updateOps,
         { new: true, strict: false, runValidators: false },
       );
 
       if (userId && oldTask) {
-        // Check if any meaningful changes were made (ignore updatedAt, __v, etc.)
         const oldObj = oldTask.toObject();
-
-        // Track specific changes that have dedicated activity types
-        const statusChanged =
-          oldTask.status !== taskData.status && taskData.status;
-        const priorityChanged =
-          oldTask.priority !== taskData.priority && taskData.priority;
-        const oldDueDateMs = oldTask.dueDate ? new Date(oldTask.dueDate).getTime() : null;
-        const newDueDateMs = taskData.dueDate ? new Date(taskData.dueDate).getTime() : null;
-        const dueDateChanged = Boolean(taskData.dueDate && oldDueDateMs !== newDueDateMs);
 
         // Check for other meaningful changes (excluding specific tracked fields)
         const hasOtherChanges = Object.keys(taskData).some((key) => {
@@ -921,9 +1008,6 @@ export class MongoStorage {
 
         // Create notifications for significant changes
         // Only notify if assignedTo actually changed (check if it exists in taskData updates)
-        const assigneeChanged =
-          taskData.assignedTo !== undefined &&
-          oldTask.assignedTo?.toString() !== taskData.assignedTo?.toString();
         if (assigneeChanged && task.assignedTo) {
           // Task reassigned
           await this.createNotificationForTask(

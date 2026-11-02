@@ -12,6 +12,7 @@ import {
   UserCheck,
   Calendar,
   Loader,
+  Award,
 } from "lucide-react";
 import {
   KPICard,
@@ -2331,15 +2332,26 @@ const OrganizationAnalyticsPage = () => {
           {/* Remove fixed left margin */}
           {/* Header */}
           <div className="mb-3">
-            <h1
-              className="text-2xl md:text-2xl font-normal m-0"
-              style={{ color: "#676a6c" }}
-            >
-              Analytics And Reports
-            </h1>
-            <p className="mt-0 text-sm text-blue-600">
-              Comprehensive task management insights across all 8 key reports
-            </p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <h1
+                  className="text-2xl md:text-2xl font-normal m-0"
+                  style={{ color: "#676a6c" }}
+                >
+                  Analytics And Reports
+                </h1>
+                <p className="mt-0 text-sm text-blue-600">
+                  Comprehensive task management insights across all 8 key reports
+                </p>
+              </div>
+              <button
+                onClick={() => navigate("/reports/performance")}
+                className="inline-flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-semibold rounded-sm shadow-sm transition-all self-start md:self-auto cursor-pointer"
+              >
+                <Award className="w-4 h-4" />
+                <span>Employee Performance &amp; Task Auditing</span>
+              </button>
+            </div>
 
             {/* Real Data Verification Badge */}
             {data && (

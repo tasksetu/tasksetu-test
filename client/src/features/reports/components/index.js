@@ -5,3 +5,6 @@ export { default as TaskDonutChart } from './TaskDonutChart';
 export { default as TaskBarChart } from './TaskBarChart';
 export { default as TaskHeatmap } from './TaskHeatmap';
 export { default as ReportsFilterBar } from './ReportsFilterBar';
+export { default as TaskAuditDrawer } from './TaskAuditDrawer';
+export { default as PerformanceReviewModal } from './PerformanceReviewModal';
+export { default as EmployeeAcknowledgeModal } from './EmployeeAcknowledgeModal';

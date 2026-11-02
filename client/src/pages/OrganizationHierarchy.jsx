@@ -77,29 +77,112 @@ export function OrganizationHierarchy() {
     },
   );
 
-  // Filter users by role
-  const managerUsers = users.filter((u) => u.role.includes("manager"));
+  // Role checking helper to support array, string, and multiple role fields
+  const userHasRole = (u, targetRole) => {
+    if (!u) return false;
+    const roles = [];
+    if (Array.isArray(u.role)) roles.push(...u.role);
+    else if (typeof u.role === "string" && u.role.trim()) roles.push(u.role.trim());
+    if (Array.isArray(u.roles)) roles.push(...u.roles);
+    else if (typeof u.roles === "string" && u.roles.trim()) roles.push(u.roles.trim());
+    return roles.some(
+      (r) => String(r).toLowerCase().trim() === targetRole.toLowerCase().trim()
+    );
+  };
+
+  // User display name helper
+  const getUserDisplayName = (u) => {
+    if (!u) return "";
+    const fullName = `${u.firstName || ""} ${u.lastName || ""}`.trim();
+    return fullName || u.username || u.email || "User";
+  };
+
+  // Helper for role tag in dropdowns
+  const getUserRoleLabel = (u) => {
+    const isMgr = userHasRole(u, "manager");
+    const isEmp = userHasRole(u, "employee");
+    if (isMgr && isEmp) return " (Manager & Employee)";
+    if (isMgr) return " (Manager)";
+    if (isEmp) return " (Employee)";
+    return "";
+  };
+
+  // Filter users who have manager role (including dual-role manager & employee)
+  const managerUsers = users.filter((u) => userHasRole(u, "manager"));
 
   const getAvailableReportyUsers = () => {
-    const selectedManagerId = formData.managerId || editingEntry?.managerId;
-    const selectedAdminIds = hierarchyEntries.map((entry) => entry.managerId);
-    const selectedManagerIds = hierarchyEntries.map((entry) => entry.managerId);
+    const selectedManagerId =
+      formData.managerId ||
+      editingEntry?.manager?._id ||
+      editingEntry?.managerId;
+
+    const currentEditingReportyId =
+      editingEntry?.reporty?._id ||
+      editingEntry?.reportyId;
 
     return users.filter((u) => {
-      // Exclude current user if they're being edited
-      if (editingEntry && u._id === editingEntry.reportyId) return false;
-      // Exclude users already selected as admin or manager
+      // Must have "employee" role (users with both "manager" and "employee" qualify!)
+      if (!userHasRole(u, "employee")) return false;
+
+      // When editing this entry, allow the currently assigned reporty
       if (
-        selectedAdminIds.includes(u._id) ||
-        selectedManagerIds.includes(u._id)
-      )
+        editingEntry &&
+        currentEditingReportyId &&
+        String(u._id) === String(currentEditingReportyId)
+      ) {
+        return true;
+      }
+
+      // Exclude the selected manager from being their own reporty
+      if (selectedManagerId && String(u._id) === String(selectedManagerId)) {
         return false;
-      // Exclude the selected manager from reporty dropdown
-      if (selectedManagerId && u._id === selectedManagerId) return false;
-      // Exclude managers from reporting to other managers
-      if (u.role.includes("manager")) return false;
-      // Only show employees
-      return u.role.includes("employee");
+      }
+
+      // Exclude if already reporting to this exact manager in an active entry
+      const alreadyReportsToThisManager = hierarchyEntries.some((entry) => {
+        if (editingEntry && String(entry._id) === String(editingEntry._id)) {
+          return false;
+        }
+        const entryManagerId =
+          entry.manager?._id ||
+          entry.managerId ||
+          (typeof entry.manager === "string" ? entry.manager : null);
+        const entryReportyId =
+          entry.reporty?._id ||
+          entry.reportyId ||
+          (typeof entry.reporty === "string" ? entry.reporty : null);
+        return (
+          String(entryManagerId) === String(selectedManagerId) &&
+          String(entryReportyId) === String(u._id)
+        );
+      });
+      if (alreadyReportsToThisManager) return false;
+
+      // Direct circular prevention:
+      // If user 'u' is ALREADY managing the selectedManager in an active hierarchy entry,
+      // then selectedManager cannot also manage 'u' (prevents direct circular loops).
+      if (selectedManagerId) {
+        const reverseLinkExists = hierarchyEntries.some((entry) => {
+          if (editingEntry && String(entry._id) === String(editingEntry._id)) {
+            return false;
+          }
+          const entryManagerId =
+            entry.manager?._id ||
+            entry.managerId ||
+            (typeof entry.manager === "string" ? entry.manager : null);
+          const entryReportyId =
+            entry.reporty?._id ||
+            entry.reportyId ||
+            (typeof entry.reporty === "string" ? entry.reporty : null);
+          return (
+            String(entryManagerId) === String(u._id) &&
+            String(entryReportyId) === String(selectedManagerId)
+          );
+        });
+        if (reverseLinkExists) return false;
+      }
+
+      return true;
     });
   };
 
@@ -228,6 +311,15 @@ export function OrganizationHierarchy() {
       return;
     }
 
+    if (formData.managerId === formData.reportyId) {
+      toast({
+        title: "Validation Error",
+        description: "A user cannot be their own manager",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (editingEntry) {
       updateHierarchyMutation.mutate({ id: editingEntry._id, ...formData });
     } else {
@@ -350,8 +442,8 @@ export function OrganizationHierarchy() {
                   <option value="">Choose a manager...</option>
                   {managerUsers.map((manager) => (
                     <option key={manager._id} value={manager._id}>
-                      {manager.firstName || manager.username}{" "}
-                      {manager.lastName || ""}
+                      {getUserDisplayName(manager)}
+                      {getUserRoleLabel(manager)}
                     </option>
                   ))}
                 </select>
@@ -378,8 +470,8 @@ export function OrganizationHierarchy() {
                   <option value="">Choose a reporty...</option>
                   {getAvailableReportyUsers().map((reporty) => (
                     <option key={reporty._id} value={reporty._id}>
-                      {reporty.firstName || reporty.username}{" "}
-                      {reporty.lastName || ""}
+                      {getUserDisplayName(reporty)}
+                      {getUserRoleLabel(reporty)}
                     </option>
                   ))}
                 </select>
@@ -485,23 +577,37 @@ export function OrganizationHierarchy() {
                       <td className="py-2 px-3">
                         <div className="flex items-center gap-2">
                           <UserCheck size={14} className="text-blue-600" />
-                          <span
-                            className="text-xs"
-                            style={{ color: "#676a6c" }}
-                          >
-                            {entry?.manager?.firstName}
-                          </span>
+                          <div>
+                            <span
+                              className="text-xs font-medium"
+                              style={{ color: "#676a6c" }}
+                            >
+                              {getUserDisplayName(entry?.manager)}
+                            </span>
+                            {entry?.manager?.email && (
+                              <span className="block text-[10px] text-gray-400">
+                                {entry.manager.email}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-2 px-3">
                         <div className="flex items-center gap-2">
                           <Users size={14} className="text-green-600" />
-                          <span
-                            className="text-xs"
-                            style={{ color: "#676a6c" }}
-                          >
-                            {entry?.reporty?.firstName}
-                          </span>
+                          <div>
+                            <span
+                              className="text-xs font-medium"
+                              style={{ color: "#676a6c" }}
+                            >
+                              {getUserDisplayName(entry?.reporty)}
+                            </span>
+                            {entry?.reporty?.email && (
+                              <span className="block text-[10px] text-gray-400">
+                                {entry.reporty.email}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-2 px-3">
@@ -537,12 +643,15 @@ export function OrganizationHierarchy() {
         {/* DELETE CONFIRM DIALOG */}
         <ConfirmDialog
           isOpen={deleteConfirm.isOpen}
+          onCancel={() => setDeleteConfirm({ isOpen: false, entryId: null })}
           onClose={() => setDeleteConfirm({ isOpen: false, entryId: null })}
           onConfirm={confirmDelete}
           title="Delete Hierarchy Entry"
           description="Are you sure you want to delete this hierarchy entry? This action cannot be undone."
-          confirmText="Delete"
-          cancelText="Cancel"
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          confirmVariant="destructive"
+          isConfirming={deleteHierarchyMutation.isPending}
         />
       </div>
     </div>

@@ -3,6 +3,7 @@ export { default as ManagerProductivityPage } from './ManagerProductivityPage';
 export { default as ManagerTeamAnalyticsPage } from './ManagerTeamAnalyticsPage';
 export { default as OrganizationAnalyticsPage } from './OrganizationAnalyticsPage';
 export { default as ReportsDashboard } from './ReportsDashboard';
+export { default as PerformanceReportsDashboard } from './PerformanceReportsDashboard';
 
 // Individual Report Components
 export { default as TaskStatusReport } from './TaskStatusReport';

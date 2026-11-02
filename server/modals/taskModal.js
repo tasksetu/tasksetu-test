@@ -536,6 +536,74 @@ const TaskSchema = mongoose.Schema(
       default: null,
     },
 
+    // ─── Historical Accuracy & Audit Tracking ──────────────────────────────
+    // Preserves original deadline for accurate historical on-time calculations
+    originalDueDate: {
+      type: Date,
+      default: null,
+      description: "Initial deadline set at task creation; preserved for historical accuracy",
+    },
+    // Complete audit history of deadline changes (direct edits or approved change requests)
+    dueDateHistory: [
+      {
+        oldDueDate: { type: Date, default: null },
+        newDueDate: { type: Date, default: null },
+        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        changedAt: { type: Date, default: Date.now },
+        reason: { type: String, default: "" },
+        isApprovedExtension: { type: Boolean, default: false },
+        changeRequestId: { type: mongoose.Schema.Types.ObjectId, ref: "TaskChangeRequest", default: null },
+      },
+    ],
+    // Complete status transition audit history
+    statusHistory: [
+      {
+        oldStatus: { type: String, default: "" },
+        newStatus: { type: String, default: "" },
+        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        changedAt: { type: Date, default: Date.now },
+        reason: { type: String, default: "" },
+      },
+    ],
+    // Assignment and reassignment history
+    assignmentHistory: [
+      {
+        oldAssignee: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        newAssignee: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        changedAt: { type: Date, default: Date.now },
+        reason: { type: String, default: "" },
+      },
+    ],
+    // Priority change history
+    priorityHistory: [
+      {
+        oldPriority: { type: String, default: "" },
+        newPriority: { type: String, default: "" },
+        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        changedAt: { type: Date, default: Date.now },
+        reason: { type: String, default: "" },
+      },
+    ],
+    // Rework / returned-for-changes history
+    reworkHistory: [
+      {
+        returnedAt: { type: Date, default: Date.now },
+        returnedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        reason: { type: String, default: "" },
+        previousStatus: { type: String, default: "" },
+      },
+    ],
+    // Blocked / on-hold periods for external dependency tracking
+    blockedPeriods: [
+      {
+        blockedAt: { type: Date, default: Date.now },
+        unblockedAt: { type: Date, default: null },
+        reason: { type: String, default: "" },
+        markedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      },
+    ],
+
     // Form Attachment Fields (Phase I - Form-Subtask Linkage)
     attached_form_version_id: {
       type: mongoose.Schema.Types.ObjectId,
@@ -626,6 +694,40 @@ const TaskSchema = mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Pre-save hook: initialize originalDueDate from dueDate upon creation
+TaskSchema.pre("save", function (next) {
+  if (this.isNew) {
+    if (this.dueDate && !this.originalDueDate) {
+      this.originalDueDate = this.dueDate;
+    }
+    // Initialize initial status in statusHistory if empty
+    if ((!this.statusHistory || this.statusHistory.length === 0) && this.status) {
+      this.statusHistory = [
+        {
+          oldStatus: "",
+          newStatus: this.status,
+          changedBy: this.createdBy,
+          changedAt: this.createdAt || new Date(),
+          reason: "Task created",
+        },
+      ];
+    }
+    // Initialize initial assignment in assignmentHistory if empty
+    if ((!this.assignmentHistory || this.assignmentHistory.length === 0) && this.assignedTo) {
+      this.assignmentHistory = [
+        {
+          oldAssignee: null,
+          newAssignee: this.assignedTo,
+          changedBy: this.createdBy,
+          changedAt: this.createdAt || new Date(),
+          reason: "Initial assignment",
+        },
+      ];
+    }
+  }
+  next();
+});
 
 // Soft delete method
 TaskSchema.statics.softDeleteTask = async function (taskId, userId) {
