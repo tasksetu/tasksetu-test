@@ -120,10 +120,22 @@ export async function getAggregatedDashboardData(user, query = {}) {
       .map((id) => new mongoose.Types.ObjectId(id));
     const allMemberIds = Array.from(new Set([...memberObjIds, ...teamMemberIds]));
 
-    // Manager sees only self and their direct employee tasks
+    // Manager sees tasks assigned to themselves or their team members (subordinates),
+    // and unassigned tasks created by their team. Tasks assigned to superior managers
+    // or external users outside this manager's team must never appear on their dashboard.
     baseScope.$or = [
       { assignedTo: { $in: allMemberIds } },
-      { createdBy: { $in: allMemberIds } },
+      {
+        $and: [
+          { createdBy: { $in: allMemberIds } },
+          {
+            $or: [
+              { assignedTo: { $exists: false } },
+              { assignedTo: null },
+            ],
+          },
+        ],
+      },
     ];
   } else if (effectiveRole === "employee") {
     if (userOrgId) {

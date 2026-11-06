@@ -195,7 +195,9 @@ export default function OrganizationHierarchySection({
       const json = await res.json();
       return Array.isArray(json) ? json : json.data || [];
     },
-    staleTime: 45_000,
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Fetch hierarchy relationship entries (manager -> reporty)
@@ -211,7 +213,9 @@ export default function OrganizationHierarchySection({
       const json = await res.json();
       return Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
     },
-    staleTime: 45_000,
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Check if current view is manager or org admin view

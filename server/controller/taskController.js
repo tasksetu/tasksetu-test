@@ -214,43 +214,72 @@ const STATUS_COLOR_MAP = {
 export const getManagerSubordinateIds = async (userId, organizationId) => {
   try {
     if (!userId) return [];
-    const managerUser = await User.findById(userId).select("subordinates organization_id").lean();
-    let subordinateIds = (managerUser?.subordinates || []).map((id) => id.toString());
+    const visited = new Set([String(userId)]);
+    const queue = [String(userId)];
+    const subordinateIds = new Set();
 
-    const directReports = await User.find({
-      managerId: userId,
-      status: "active",
-    })
-      .select("_id")
-      .lean();
-
-    const directReportIds = directReports.map((u) => u._id.toString());
-    const combinedSet = new Set([...subordinateIds, ...directReportIds]);
-
-    // Also include active reports from OrganizationHierarchy
+    let OrganizationHierarchyModel = null;
     try {
-      const { OrganizationHierarchy } = await import("../models.js");
-      if (OrganizationHierarchy) {
-        const hierarchyQuery = {
-          manager: userId,
-          status: "active",
-        };
-        const orgId = organizationId || managerUser?.organization_id;
-        if (orgId) {
-          hierarchyQuery.organization_id = orgId;
-        }
-        const hierarchyReports = await OrganizationHierarchy.find(hierarchyQuery)
-          .select("reporty")
-          .lean();
-        hierarchyReports.forEach((h) => {
-          if (h.reporty) combinedSet.add(h.reporty.toString());
-        });
-      }
-    } catch (hErr) {
-      console.warn("⚠️ Failed to query OrganizationHierarchy in getManagerSubordinateIds:", hErr.message);
+      const models = await import("../models.js");
+      OrganizationHierarchyModel = models.OrganizationHierarchy;
+    } catch (e) {
+      // ignore
     }
 
-    return Array.from(combinedSet);
+    while (queue.length > 0) {
+      const currentId = queue.shift();
+
+      // 1. Direct reports from User collection (managerId)
+      const directReports = await User.find({
+        managerId: currentId,
+        status: { $ne: "inactive" },
+      })
+        .select("_id")
+        .lean();
+
+      // 2. Subordinates array on currentId's User document
+      const currentDoc = await User.findById(currentId)
+        .select("subordinates organization_id")
+        .lean();
+      const docSubordinates = (currentDoc?.subordinates || []).map(String);
+
+      // 3. OrganizationHierarchy active reports
+      let hierarchyReportyIds = [];
+      if (OrganizationHierarchyModel) {
+        try {
+          const hierarchyQuery = {
+            manager: currentId,
+            status: "active",
+          };
+          const orgId = organizationId || currentDoc?.organization_id;
+          if (orgId) {
+            hierarchyQuery.organization_id = orgId;
+          }
+          const hierarchyReports = await OrganizationHierarchyModel.find(hierarchyQuery)
+            .select("reporty")
+            .lean();
+          hierarchyReportyIds = hierarchyReports.map((h) => String(h.reporty)).filter(Boolean);
+        } catch (hErr) {
+          // ignore hierarchy error
+        }
+      }
+
+      const currentLevelIds = new Set([
+        ...directReports.map((u) => String(u._id)),
+        ...docSubordinates,
+        ...hierarchyReportyIds,
+      ]);
+
+      for (const reportyId of currentLevelIds) {
+        if (!visited.has(reportyId)) {
+          visited.add(reportyId);
+          subordinateIds.add(reportyId);
+          queue.push(reportyId);
+        }
+      }
+    }
+
+    return Array.from(subordinateIds);
   } catch (error) {
     console.error("Error fetching manager subordinates:", error);
     return [];
@@ -6779,18 +6808,23 @@ export const getTasks = async (req, res) => {
       if (user.organizationId) {
         filter.organization = user.organizationId;
       }
+      const allTeamIds = [user.id, ...(subordinateIds || [])];
       filter.$or = [
-        { createdBy: user.id },
-        { assignedTo: user.id },
-        { approvers: user.id },
-        { collaborators: user.id },
-        ...(subordinateIds.length > 0
-          ? [
-              { assignedTo: { $in: subordinateIds } },
-              { createdBy: { $in: subordinateIds } },
-              { collaborators: { $in: subordinateIds } },
-            ]
-          : []),
+        { assignedTo: { $in: allTeamIds } },
+        { approvers: { $in: allTeamIds } },
+        { collaborators: { $in: allTeamIds } },
+        {
+          $and: [
+            { createdBy: { $in: allTeamIds } },
+            {
+              $or: [
+                { assignedTo: { $exists: false } },
+                { assignedTo: null },
+                { assignedTo: { $in: allTeamIds } },
+              ],
+            },
+          ],
+        },
       ];
     } else {
       filter.$or = [
@@ -10550,20 +10584,25 @@ export const getTasksByType = async (req, res) => {
       }
     } else if (userRoles.includes("manager")) {
       const teamMemberIds = await getManagerSubordinateIds(user.id, user.organizationId);
+      const allTeamIds = [user.id, ...(teamMemberIds || [])];
 
       conditions.push({
         $or: [
-          { assignedTo: user.id },
-          { createdBy: user.id },
-          { approvers: user.id },
-          { collaborators: user.id },
-          ...(teamMemberIds.length > 0
-            ? [
-                { assignedTo: { $in: teamMemberIds } },
-                { createdBy: { $in: teamMemberIds } },
-                { collaborators: { $in: teamMemberIds } },
-              ]
-            : []),
+          { assignedTo: { $in: allTeamIds } },
+          { approvers: { $in: allTeamIds } },
+          { collaborators: { $in: allTeamIds } },
+          {
+            $and: [
+              { createdBy: { $in: allTeamIds } },
+              {
+                $or: [
+                  { assignedTo: { $exists: false } },
+                  { assignedTo: null },
+                  { assignedTo: { $in: allTeamIds } },
+                ],
+              },
+            ],
+          },
         ],
       });
     } else if (userRoles.includes("employee")) {
@@ -11029,19 +11068,23 @@ export const getMyTasks = async (req, res) => {
       }
     } else if (userRoles.includes("manager")) {
       // Manager sees own tasks + direct subordinates' tasks only
+      const allTeamIds = [user.id, ...(teamMemberIds || [])];
       filter.$or = [
-        { assignedTo: user.id },
-        { createdBy: user.id },
-        { approvers: user.id },
-        { collaborators: user.id },
-        ...(teamMemberIds.length > 0
-          ? [
-              { assignedTo: { $in: teamMemberIds } },
-              { createdBy: { $in: teamMemberIds } },
-              { collaborators: { $in: teamMemberIds } },
-              { approvers: { $in: teamMemberIds } },
-            ]
-          : []),
+        { assignedTo: { $in: allTeamIds } },
+        { approvers: { $in: allTeamIds } },
+        { collaborators: { $in: allTeamIds } },
+        {
+          $and: [
+            { createdBy: { $in: allTeamIds } },
+            {
+              $or: [
+                { assignedTo: { $exists: false } },
+                { assignedTo: null },
+                { assignedTo: { $in: allTeamIds } },
+              ],
+            },
+          ],
+        },
       ];
     } else if (userRoles.includes("employee")) {
       filter.$or = [

@@ -5,9 +5,11 @@ const fetchWithAuth = async (url, options = {}) => {
     localStorage.getItem("token") ||
     sessionStorage.getItem("token") ||
     localStorage.getItem("authToken");
+  const activeRole = localStorage.getItem("activeRole");
   const headers = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(activeRole ? { "x-active-role": activeRole } : {}),
     ...options.headers,
   };
   const res = await fetch(url, { ...options, headers });

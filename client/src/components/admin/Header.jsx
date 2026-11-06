@@ -93,8 +93,9 @@ export default function Header({ user, onMenuClick }) {
   const { data: notificationsData, error: notificationsError } = useQuery({
     queryKey: ["/api/notifications"],
     enabled: !!user,
-    staleTime: 5000,
-    refetchInterval: 10000,
+    staleTime: 0,
+    refetchInterval: 3000,
+
     refetchOnWindowFocus: true,
     refetchOnMount: true,
   });
@@ -117,30 +118,19 @@ export default function Header({ user, onMenuClick }) {
   const { data: authUser } = useQuery({
     queryKey: ["/api/auth/me"],
     initialData: user,
+    enabled: !user && !!localStorage.getItem("token"),
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch user data
-  const { data: profileUser } = useQuery({
-    queryKey: ["/api/users", authUser?.id],
-    queryFn: async () => {
-      if (authUser?.id) {
-        const response = await fetch(`/api/users/${authUser.id}`);
-        if (response.ok) {
-          const userData = await response.json();
-          setUser(userData);
-          return userData;
-        }
-      }
-      return null;
-    },
-    enabled: !!authUser?.id,
-    staleTime: 2 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-  });
+  // Use profile data from props (AdminLayout) or fallback to authUser
+  const currentUser = user || authUser;
 
-  // Use profile data primarily, fallback to auth data
-  const currentUser = profileUser || authUser || user;
+  // Sync user into authStore for components that consume useAuthStore
+  useEffect(() => {
+    if (currentUser) {
+      setUser(currentUser);
+    }
+  }, [currentUser, setUser]);
 
   const handleLogout = async () => {
     try {
@@ -391,14 +381,14 @@ export default function Header({ user, onMenuClick }) {
         {/* Right section - shares equal space with left on desktop */}
         <div className="flex items-center flex-shrink-0 lg:flex-1 lg:justify-end space-x-1 sm:space-x-2 md:space-x-3">
           {/* Role Switcher - Hidden on billing/upgrade pages, responsive */}
-          {!profileUser?.role?.includes("individual") && !isBillingPage && (
+          {!currentUser?.role?.includes("individual") && !isBillingPage && (
             <div className="flex items-center">
               <RoleSwitcher />
             </div>
           )}
 
           {/* Billing Page Indicator */}
-          {isBillingPage && !profileUser?.role?.includes("individual") && (
+          {isBillingPage && !currentUser?.role?.includes("individual") && (
             <div className="hidden sm:flex items-center space-x-2 bg-blue-50 text-blue-700 px-2 md:px-3 py-1 rounded-sm text-xs md:text-sm">
               <svg
                 className="w-3 h-3 md:w-4 md:h-4"

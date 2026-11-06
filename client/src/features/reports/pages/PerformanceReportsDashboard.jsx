@@ -104,12 +104,13 @@ export const PerformanceReportsDashboard = () => {
   const [employeeTaskSearch, setEmployeeTaskSearch] = useState("");
 
   // Role checks
+  const storedActiveRole = localStorage.getItem("activeRole");
   const isOrgAdmin =
-    user?.role === "org_admin" ||
-    (Array.isArray(user?.role) && user.role.includes("org_admin"));
+    storedActiveRole === "org_admin" ||
+    (!storedActiveRole && (user?.role === "org_admin" || (Array.isArray(user?.role) && user.role.includes("org_admin"))));
   const isManager =
-    user?.role === "manager" ||
-    (Array.isArray(user?.role) && user.role.includes("manager"));
+    storedActiveRole === "manager" ||
+    (!storedActiveRole && !isOrgAdmin && (user?.role === "manager" || (Array.isArray(user?.role) && user.role.includes("manager"))));
   const canCreateReviews = isOrgAdmin || isManager;
 
   // Fetch Organization Employees for filters and selectors
@@ -122,8 +123,12 @@ export const PerformanceReportsDashboard = () => {
           localStorage.getItem("token") ||
           sessionStorage.getItem("token") ||
           localStorage.getItem("authToken");
+        const activeRole = localStorage.getItem("activeRole");
         const res = await fetch("/api/reports/performance/accessible-employees", {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(activeRole ? { "x-active-role": activeRole } : {}),
+          },
         });
         if (res.ok) {
           const payload = await res.json();
@@ -225,6 +230,7 @@ export const PerformanceReportsDashboard = () => {
     try {
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token");
+      const activeRole = localStorage.getItem("activeRole");
       const params = new URLSearchParams({
         format,
         startDate,
@@ -233,7 +239,10 @@ export const PerformanceReportsDashboard = () => {
       });
 
       const res = await fetch(`/api/reports/performance/export?${params.toString()}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(activeRole ? { "x-active-role": activeRole } : {}),
+        },
       });
 
       if (!res.ok) {
@@ -585,8 +594,8 @@ export const PerformanceReportsDashboard = () => {
       {/* Navigation Tabs */}
       <div className="flex border-b border-slate-200 dark:border-slate-800 space-x-2 overflow-x-auto pb-1">
         {[
-          { id: "overview", label: "Organization Overview", icon: BarChart3 },
-          { id: "team", label: "Team Performance & Ranking", icon: Users },
+          { id: "overview", label: isOrgAdmin ? "Organization Overview" : "Team Overview", icon: BarChart3 },
+          { id: "team", label: isOrgAdmin ? "Team Performance & Ranking" : "Team Performance & Ranking", icon: Users },
           { id: "employee", label: "Employee Deep-Dive", icon: User },
           { id: "overdue", label: "Overdue Task Analysis", icon: AlertTriangle },
           // { id: "reviews", label: "Reviews, Rewards & Notices", icon: Award },
@@ -885,7 +894,7 @@ export const PerformanceReportsDashboard = () => {
                 </h3>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                Current operational states of tasks in selected period
+                Current operational states of {isOrgAdmin ? "organization" : "team"} tasks in selected period
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2.5 pt-1">
                 {/* 1. Open */}
@@ -987,7 +996,7 @@ export const PerformanceReportsDashboard = () => {
           {departmentBreakdown.length > 0 && (
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">
-                Department Performance Summary
+                {isOrgAdmin ? "Department Performance Summary" : "Team Department Breakdown"}
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 {departmentBreakdown.map((dept, i) => (
@@ -1021,7 +1030,7 @@ export const PerformanceReportsDashboard = () => {
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Employee Performance Leaderboard
+                  {isOrgAdmin ? "Employee Performance Leaderboard" : "Team Performance Leaderboard"}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Fair, auditable metrics: score is transparent decision support (50% on-time + 30% due-work - 20% overdue)

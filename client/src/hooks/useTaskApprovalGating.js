@@ -16,8 +16,27 @@ export function useTaskApprovalGating() {
     } catch (e) {}
   }
 
+  const activeRole = localStorage.getItem("activeRole");
+  const userRoles = Array.isArray(currentUser?.role)
+    ? currentUser.role
+    : [currentUser?.role || ""];
+
+  const hasOrg = Boolean(
+    currentUser?.organizationId ||
+      currentUser?.organization_id ||
+      currentUser?.organization ||
+      localStorage.getItem("organizationId")
+  );
+
+  const isIndividual =
+    activeRole === "individual" ||
+    (!hasOrg && userRoles.some((r) => String(r).toLowerCase() === "individual"));
+
+  const shouldFetchOrgSettings = Boolean(hasOrg && !isIndividual && localStorage.getItem("token"));
+
   const { data: settingsResponse, isLoading, refetch } = useQuery({
     queryKey: ["/api/organization/settings"],
+    enabled: shouldFetchOrgSettings,
     queryFn: async () => {
       const token = localStorage.getItem("token");
       if (!token) return null;
@@ -42,7 +61,7 @@ export function useTaskApprovalGating() {
     staleTime: 30 * 1000,
   });
 
-  const orgSettings = settingsResponse || {};
+  const orgSettings = shouldFetchOrgSettings ? (settingsResponse || {}) : {};
 
   const evaluateGating = (settingsToUse, { task, field, user = null }) => {
     if (!task || !field) return false;
@@ -101,6 +120,7 @@ export function useTaskApprovalGating() {
    * Synchronous check against currently loaded settings
    */
   const checkRequiresApproval = ({ task, field, user = null }) => {
+    if (!shouldFetchOrgSettings) return false;
     return evaluateGating(orgSettings, { task, field, user });
   };
 
@@ -108,6 +128,7 @@ export function useTaskApprovalGating() {
    * Async check that fetches fresh settings if not yet loaded
    */
   const checkRequiresApprovalAsync = async ({ task, field, user = null }) => {
+    if (!shouldFetchOrgSettings) return false;
     let settings = orgSettings;
     if (!settings || Object.keys(settings).length === 0) {
       try {

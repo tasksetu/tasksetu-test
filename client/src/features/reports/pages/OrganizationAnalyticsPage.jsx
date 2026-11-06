@@ -144,6 +144,40 @@ const OrganizationAnalyticsPage = () => {
   // Fetch org users for the "User" filter dropdown
   useEffect(() => {
     let cancelled = false;
+
+    // Skip calling /api/organization-employees for individual users or users without an organization
+    const storedUser = (() => {
+      try {
+        const u = localStorage.getItem("user");
+        return u ? JSON.parse(u) : null;
+      } catch {
+        return null;
+      }
+    })();
+    const activeRole = localStorage.getItem("activeRole");
+    const userRoles = Array.isArray(storedUser?.role)
+      ? storedUser.role
+      : [storedUser?.role || ""];
+
+    const isIndividual =
+      activeRole === "individual" ||
+      userRoles.some((r) => String(r).toLowerCase() === "individual") ||
+      !storedUser?.organizationId;
+
+    if (isIndividual) {
+      if (storedUser) {
+        setOrgUsers([
+          {
+            id: storedUser._id || storedUser.id,
+            name: [storedUser.firstName, storedUser.lastName].filter(Boolean).join(" ") || storedUser.email,
+            email: storedUser.email,
+          },
+        ]);
+      }
+      setUsersLoading(false);
+      return;
+    }
+
     const fetchOrgUsers = async () => {
       try {
         setUsersLoading(true);

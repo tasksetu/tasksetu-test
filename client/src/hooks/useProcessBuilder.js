@@ -241,5 +241,7 @@ export function useStartProcess() {
 export function useProcessInstances() {
   return useQuery({
     queryKey: ["/api/process-builder/instances"],
+    staleTime: 60 * 1000, // 1 minute cache
+    refetchOnWindowFocus: false,
   });
 }

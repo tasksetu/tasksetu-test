@@ -15,6 +15,14 @@ export const getSettings = async (req, res) => {
     const organizationId = requestedOrgId || req.user.organizationId;
 
     if (!organizationId) {
+      const userRoles = Array.isArray(req.user?.role) ? req.user.role : [req.user?.role || ""];
+      if (userRoles.some((r) => String(r).toLowerCase() === "individual")) {
+        return res.status(200).json({
+          success: true,
+          data: null,
+          message: "Individual users do not belong to an organization",
+        });
+      }
       return res.status(400).json({
         success: false,
         message: "Organization ID is required",

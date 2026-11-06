@@ -14,7 +14,7 @@ export const useAuth = () => {
   } = useQuery({
     queryKey: ["/api/auth/verify"],
     retry: false,
-    staleTime: 0, // Always refetch when invalidated to ensure instant updates
+    staleTime: 5 * 60 * 1000, // 5 minutes cache (instantly refetched if invalidated)
     gcTime: 10 * 60 * 1000, // 10 minutes cache time
   });
 

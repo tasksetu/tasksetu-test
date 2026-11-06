@@ -52,7 +52,11 @@ export default function GeneralSettings() {
 
   const { data: organization, isLoading } = useQuery({
     queryKey: ["/api/organization/settings"],
-    enabled: true,
+    enabled: Boolean(
+      (JSON.parse(localStorage.getItem("user") || "{}")?.organizationId ||
+        localStorage.getItem("organizationId")) &&
+        localStorage.getItem("token")
+    ),
   });
 
   const [formData, setFormData] = useState({

@@ -52,12 +52,22 @@ export const getTaskCounts = async (req, res) => {
             case "manager": {
                 // Get subordinates to include their tasks in count
                 const subordinates = await getManagerSubordinateIds(user_id);
+                const allTeamIds = [user_id, ...subordinates];
 
                 baseQuery.$or = [
-                    { assignedTo: user_id },
-                    { createdBy: user_id },
-                    { 'collaborators': user_id },
-                    ...(subordinates.length > 0 ? [{ assignedTo: { $in: subordinates } }] : [])
+                    { assignedTo: { $in: allTeamIds } },
+                    { 'collaborators': { $in: allTeamIds } },
+                    {
+                        $and: [
+                            { createdBy: { $in: allTeamIds } },
+                            {
+                                $or: [
+                                    { assignedTo: { $exists: false } },
+                                    { assignedTo: null },
+                                ],
+                            },
+                        ],
+                    },
                 ];
                 break;
             }
@@ -195,12 +205,22 @@ export const getOverdueTasks = async (req, res) => {
             case "manager": {
                 // Get subordinates to include their tasks
                 const overdueSubordinates = await getManagerSubordinateIds(user_id);
+                const allTeamIds = [user_id, ...overdueSubordinates];
 
                 baseQuery.$or = [
-                    { assignedTo: user_id },
-                    { createdBy: user_id },
-                    { collaborators: user_id },
-                    ...(overdueSubordinates.length > 0 ? [{ assignedTo: { $in: overdueSubordinates } }] : [])
+                    { assignedTo: { $in: allTeamIds } },
+                    { collaborators: { $in: allTeamIds } },
+                    {
+                        $and: [
+                            { createdBy: { $in: allTeamIds } },
+                            {
+                                $or: [
+                                    { assignedTo: { $exists: false } },
+                                    { assignedTo: null },
+                                ],
+                            },
+                        ],
+                    },
                 ];
                 break;
             }

@@ -8,6 +8,9 @@ export function useTaskPriorities() {
   return useQuery({
     queryKey: ["/api/task-priorities"],
     enabled: !!localStorage.getItem("token"),
+    staleTime: 15 * 60 * 1000, // 15 minutes cache
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 }
 

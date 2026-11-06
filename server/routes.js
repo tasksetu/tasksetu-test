@@ -262,6 +262,14 @@ export async function registerRoutes(app) {
   app.get("/api/organization/details", authenticateToken, async (req, res) => {
     try {
       if (!req.user.organizationId) {
+        const userRoles = Array.isArray(req.user?.role) ? req.user.role : [req.user?.role || ""];
+        if (userRoles.some((r) => String(r).toLowerCase() === "individual")) {
+          return res.status(200).json({
+            success: true,
+            data: null,
+            message: "Individual users do not belong to an organization",
+          });
+        }
         return res
           .status(400)
           .json({ message: "User not associated with any organization" });

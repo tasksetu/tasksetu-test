@@ -18,16 +18,127 @@ const toObjectId = (id) => {
 
 // Scope & Permissions Helper ────────────────────────────────────
 
+/**
+ * 👥 Recursively resolves all direct and indirect reportees under a manager.
+ * Supports:
+ * 1. User.managerId reference
+ * 2. User.subordinates array on manager document
+ * 3. OrganizationHierarchy active manager -> reporty mappings
+ * Traversing recursively ensures multi-level hierarchy (Manager -> Sub-Manager -> Employee)
+ * without circular loops.
+ */
+export async function getManagerSubordinateIdsRecursive(managerUserId, orgId) {
+  if (!managerUserId) return [];
+  const visited = new Set([String(managerUserId)]);
+  const queue = [String(managerUserId)];
+  const subordinateIds = new Set();
+
+  const orgCondition = orgId
+    ? {
+        $or: [
+          { organizationId: toObjectId(orgId) },
+          { organization_id: toObjectId(orgId) },
+          { organization: toObjectId(orgId) },
+          { orgId: toObjectId(orgId) },
+        ],
+      }
+    : null;
+
+  const notDeletedCondition = {
+    $or: [
+      { isDeleted: { $exists: false } },
+      { isDeleted: false },
+      { is_deleted: { $exists: false } },
+      { is_deleted: false },
+    ],
+  };
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+
+    // 1. Direct reports whose managerId is currentId
+    const directReports = await User.find({
+      $and: [
+        ...(orgCondition ? [orgCondition] : []),
+        notDeletedCondition,
+        { managerId: toObjectId(currentId) },
+      ],
+    })
+      .select("_id")
+      .lean();
+
+    // 2. Subordinates explicitly stored on currentId's User document
+    const currentManagerDoc = await User.findById(currentId)
+      .select("subordinates")
+      .lean();
+    const docSubordinates = (currentManagerDoc?.subordinates || []).map(String);
+
+    // 3. OrganizationHierarchy active reporties for currentId
+    const hierarchyFilter = {
+      manager: toObjectId(currentId),
+      status: "active",
+      ...(orgId
+        ? {
+            $or: [
+              { organization_id: toObjectId(orgId) },
+              { organizationId: toObjectId(orgId) },
+            ],
+          }
+        : {}),
+    };
+
+    let hierarchyReportyIds = [];
+    try {
+      const hierarchies = await OrganizationHierarchy.find(hierarchyFilter)
+        .select("reporty")
+        .lean();
+      hierarchyReportyIds = hierarchies.map((h) => String(h.reporty)).filter(Boolean);
+    } catch (hErr) {
+      console.warn("⚠️ [Hierarchy] Query error:", hErr.message);
+    }
+
+    const currentLevelDirectIds = new Set([
+      ...directReports.map((u) => String(u._id)),
+      ...docSubordinates,
+      ...hierarchyReportyIds,
+    ]);
+
+    for (const reportyId of currentLevelDirectIds) {
+      if (!visited.has(reportyId)) {
+        visited.add(reportyId);
+        subordinateIds.add(reportyId);
+        queue.push(reportyId); // Enqueue to traverse deeper reportees
+      }
+    }
+  }
+
+  return Array.from(subordinateIds).map((id) => toObjectId(id));
+}
+
 export async function getCallerScope(req) {
   const userId = req.user.id || req.user._id;
   const orgId = req.user.organizationId || req.user.organization_id || req.user.organization || req.user.orgId;
   const userRole = req.user.role;
+  const activeRoleHeader = req.headers?.["x-active-role"] || req.query?.activeRole;
 
   const roles = Array.isArray(userRole) ? userRole : [userRole];
-  const isAdmin = roles.some((r) =>
-    ["org_admin", "admin", "super_admin", "superadmin", "organization"].includes(r)
-  );
-  const isManager = !isAdmin && roles.includes("manager");
+
+  // If activeRole is explicitly specified and valid for this user, prioritize it
+  let effectiveRole = null;
+  if (activeRoleHeader && roles.includes(activeRoleHeader)) {
+    effectiveRole = activeRoleHeader;
+  }
+
+  const isAdmin = effectiveRole
+    ? ["org_admin", "admin", "super_admin", "superadmin", "organization"].includes(effectiveRole)
+    : roles.some((r) =>
+        ["org_admin", "admin", "super_admin", "superadmin", "organization"].includes(r)
+      );
+
+  const isManager = effectiveRole
+    ? effectiveRole === "manager"
+    : (!isAdmin && roles.includes("manager"));
+
   const isIndividualOrEmployee = !isAdmin && !isManager;
 
   let accessibleUserIds = [];
@@ -56,50 +167,11 @@ export async function getCallerScope(req) {
     }).select("_id").lean();
     accessibleUserIds = orgUsers.map((u) => u._id);
   } else if (isManager) {
-    // Manager: Direct reports (managerId/subordinates) + mapped reporties from OrganizationHierarchy + self
-    const directReports = await User.find({
-      $and: [
-        {
-          $or: [
-            { organizationId: orgId },
-            { organization_id: orgId },
-            { organization: orgId },
-            { orgId: orgId },
-          ],
-        },
-        {
-          $or: [
-            { managerId: toObjectId(userId) },
-            { subordinates: toObjectId(userId) },
-          ],
-        },
-        {
-          $or: [
-            { isDeleted: { $exists: false } },
-            { isDeleted: false },
-            { is_deleted: { $exists: false } },
-            { is_deleted: false },
-          ],
-        },
-      ],
-    }).select("_id").lean();
-
-    // Check OrganizationHierarchy model for any mapped reporties
-    const hierarchies = await OrganizationHierarchy.find({
-      manager: toObjectId(userId),
-      status: "active",
-    }).select("reporty").lean();
-
-    const hierarchyReportyIds = hierarchies.map((h) => h.reporty).filter(Boolean);
-
-    const subordinateIds = [
-      ...directReports.map((u) => u._id),
-      ...hierarchyReportyIds,
-    ];
-
-    const uniqueIds = Array.from(new Set([String(userId), ...subordinateIds.map(String)])).map(
-      (id) => toObjectId(id)
-    );
+    // Manager: Manager themselves + full recursive subordinate team
+    const teamSubordinateIds = await getManagerSubordinateIdsRecursive(userId, orgId);
+    const uniqueIds = Array.from(
+      new Set([String(userId), ...teamSubordinateIds.map(String)])
+    ).map((id) => toObjectId(id));
     accessibleUserIds = uniqueIds;
   } else {
     // Employee / Individual: Only self
@@ -1169,6 +1241,23 @@ export const getTaskAuditTimeline = async (req, res) => {
 
     if (!task) {
       return res.status(404).json({ success: false, message: "Task not found." });
+    }
+
+    // Verify caller permissions: Org admins see all org tasks; Managers see own + team tasks
+    const scope = await getCallerScope(req);
+    if (!scope.isAdmin) {
+      const assignedToId = task.assignedTo?._id || task.assignedTo;
+      const createdById = task.createdBy?._id || task.createdBy;
+      const isAccessible =
+        scope.accessibleUserIds.some((id) => String(id) === String(assignedToId)) ||
+        String(scope.userId) === String(createdById);
+
+      if (!isAccessible) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied to this task's audit timeline.",
+        });
+      }
     }
 
     const timeline = [];

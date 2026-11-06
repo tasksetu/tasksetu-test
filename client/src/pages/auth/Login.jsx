@@ -467,6 +467,7 @@ export default function Login() {
 
         // Set user data in both caches immediately to prevent loading state
         queryClient.setQueryData(["/api/auth/verify"], userDataForCache);
+        queryClient.setQueryData(["/api/auth/me"], userDataForCache);
         queryClient.setQueryData(["/api/profile"], userDataForCache);
 
         toast({
@@ -924,7 +925,7 @@ export default function Login() {
                     TS
                   </div>
                   <span className="text-2xl font-semibold text-gray-800">
-                    TaskSetu
+                    TaskSetu-UAT
                   </span>
                 </div>
 

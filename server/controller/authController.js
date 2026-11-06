@@ -334,6 +334,7 @@ export const authController = {
           valid: true,
           token: true,  // For backward compatibility with frontend
           email: user.email,
+          profileImageUrl: user.profileImageUrl || null,
           name: user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null
         });
       }
@@ -689,6 +690,7 @@ export const authController = {
         user: {
           id: user._id,
           email: user.email,
+          profileImageUrl: user.profileImageUrl || null,
           firstName: user.firstName,
           lastName: user.lastName,
         },
@@ -838,6 +840,7 @@ export const authController = {
         user: {
           id: user._id,
           email: user.email,
+          profileImageUrl: user.profileImageUrl || null,
           firstName: user.firstName,
           lastName: user.lastName,
           organization: organization._id,
@@ -941,6 +944,7 @@ export const authController = {
           lastName: user.lastName,
           name: `${user.firstName} ${user.lastName}`,
           email: user.email,
+          profileImageUrl: user.profileImageUrl || null,
           phone: user.phone || "",
           phoneVerified: user.phoneVerified || false,
           role: user.role,
@@ -1100,6 +1104,7 @@ export const authController = {
           id: user.id,
           name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'You',
           email: user.email,
+          profileImageUrl: user.profileImageUrl || null,
           role: user.role,
           department: '',
           designation: '',
@@ -1285,6 +1290,7 @@ export const authController = {
         success: true,
         user: {
           email: user.email,
+          profileImageUrl: user.profileImageUrl || null,
           firstName: user.firstName,
           lastName: user.lastName,
           role: user.role,

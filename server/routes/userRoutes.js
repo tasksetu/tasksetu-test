@@ -29,7 +29,23 @@ const router = express.Router();
  *       500:
  *         description: Server error
  */
-router.get("/organization-employees",authenticateToken,  roleAuth(["org_admin"]), userController.getEmployeesByOrganization);
+router.get(
+  "/organization-employees",
+  authenticateToken,
+  (req, res, next) => {
+    const userRoles = Array.isArray(req.user?.role) ? req.user.role : [req.user?.role || ""];
+    if (userRoles.some((r) => String(r).toLowerCase() === "individual") || !req.user?.organizationId) {
+      return res.status(200).json({
+        success: true,
+        employees: [],
+        message: "Individual users do not have organization employees",
+      });
+    }
+    next();
+  },
+  roleAuth(["org_admin", "admin"]),
+  userController.getEmployeesByOrganization
+);
 // Get basic organization stats
 router.get("/organization/:orgId/stats", authenticateToken,  roleAuth(["org_admin"]), userController.getOrgStats);
 

@@ -875,102 +875,12 @@ export const searchAssignableUsers = async (req, res) => {
     if (isOrgAdminRole) {
       // Org Admins can assign to any user in the organization
     } else if (isManagerRole) {
-      // Managers can assign to:
-      // 1. Org Admins and Admins of the organization
-      // 2. Employees they manage (subordinates via Hierarchy, managerId, subordinates array)
-      // 3. Superiors (managers they report to)
-      const allowedUserIds = new Set();
+      // Managers can assign tasks only to themselves and their team members (subordinates)
+      // They cannot assign tasks upward to superior managers or Org Admins
+      const { getManagerSubordinateIds } = await import("./taskController.js");
+      const subordinateIds = await getManagerSubordinateIds(currentUser.id, currentUser.organizationId);
 
-      // 1. Subordinates from OrganizationHierarchy
-      try {
-        const hierarchyQuery = {
-          manager: currentUser.id,
-          status: "active",
-        };
-        if (currentUser.organizationId) {
-          hierarchyQuery.organization_id = currentUser.organizationId;
-        }
-        const subordinateHierarchies = await OrganizationHierarchy.find(hierarchyQuery)
-          .select("reporty")
-          .lean();
-        subordinateHierarchies.forEach((h) => {
-          if (h.reporty) allowedUserIds.add(String(h.reporty));
-        });
-      } catch (hErr) {
-        console.warn("⚠️ Failed to query OrganizationHierarchy subordinates:", hErr.message);
-      }
-
-      // 2. Direct reports from User collection (managerId or reportingManager)
-      try {
-        const userQuery = {
-          $or: [
-            { managerId: currentUser.id },
-            { reportingManager: currentUser.id },
-          ],
-          status: { $ne: "inactive" },
-        };
-        if (currentUser.organizationId) {
-          userQuery.organization_id = currentUser.organizationId;
-        }
-        const directReports = await User.find(userQuery).select("_id").lean();
-        directReports.forEach((u) => allowedUserIds.add(String(u._id)));
-      } catch (uErr) {
-        console.warn("⚠️ Failed to query User direct reports:", uErr.message);
-      }
-
-      // 3. Manager's subordinates array from manager's User document
-      try {
-        const managerDoc = await User.findById(currentUser.id)
-          .select("subordinates managerId")
-          .lean();
-        (managerDoc?.subordinates || []).forEach((id) => allowedUserIds.add(String(id)));
-
-        // 4. Superiors (manager this manager reports to)
-        if (managerDoc?.managerId) {
-          allowedUserIds.add(String(managerDoc.managerId));
-        }
-      } catch (mErr) {
-        console.warn("⚠️ Failed to query manager doc:", mErr.message);
-      }
-
-      // Superior managers from OrganizationHierarchy
-      try {
-        const superiorHierarchyQuery = {
-          reporty: currentUser.id,
-          status: "active",
-        };
-        if (currentUser.organizationId) {
-          superiorHierarchyQuery.organization_id = currentUser.organizationId;
-        }
-        const superiorHierarchies = await OrganizationHierarchy.find(superiorHierarchyQuery)
-          .select("manager")
-          .lean();
-        superiorHierarchies.forEach((h) => {
-          if (h.manager) allowedUserIds.add(String(h.manager));
-        });
-      } catch (sErr) {
-        console.warn("⚠️ Failed to query superior hierarchies:", sErr.message);
-      }
-
-      // 5. Org Admins and Admins in this organization
-      try {
-        const adminQuery = {
-          $or: [
-            { role: { $in: ["org_admin", "admin", "super_admin", "company-admin"] } },
-            { isPrimaryAdmin: true },
-          ],
-          status: { $ne: "inactive" },
-        };
-        if (currentUser.organizationId) {
-          adminQuery.organization_id = currentUser.organizationId;
-        }
-        const orgAdmins = await User.find(adminQuery).select("_id").lean();
-        orgAdmins.forEach((u) => allowedUserIds.add(String(u._id)));
-      } catch (aErr) {
-        console.warn("⚠️ Failed to query org admins:", aErr.message);
-      }
-
-      // Remove current user from allowed list (added as "Self")
+      const allowedUserIds = new Set((subordinateIds || []).map(String));
       allowedUserIds.delete(currentUserId);
 
       // Restrict query to allowed user IDs

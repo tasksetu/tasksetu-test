@@ -246,10 +246,6 @@ const ManagerDashboard = () => {
     totalEmployees: (aggregatedMembers || []).length,
   };
 
-  const teamTasksData = useMemo(() => {
-    return aggregatedTasks || [];
-  }, [aggregatedTasks]);
-
   // CRITICAL FIX: Only filter out org_admin, keep all other employees
   const teamMembers = useMemo(() => {
     let members = [];
@@ -275,12 +271,22 @@ const ManagerDashboard = () => {
         }));
     }
 
-    console.log(
-      "Team members (org_admin filtered out, employees kept):",
-      members.length,
-    );
     return Array.isArray(members) ? members : [];
   }, [teamData]);
+
+  const teamTasksData = useMemo(() => {
+    if (!aggregatedTasks || !Array.isArray(aggregatedTasks)) return [];
+    const allowedAssigneeIds = new Set([
+      String(user?._id || user?.id || ""),
+      ...teamMembers.map((m) => String(m.id || m._id || "")),
+    ]);
+    return aggregatedTasks.filter((t) => {
+      const aId = String(
+        t.assignedTo?._id || t.assignedTo?.id || t.assignedTo || t.assigneeId || ""
+      );
+      return !aId || allowedAssigneeIds.has(aId);
+    });
+  }, [aggregatedTasks, user, teamMembers]);
 
   const extractVal = (val, fallback = 0) => {
     if (val === null || val === undefined) return fallback;

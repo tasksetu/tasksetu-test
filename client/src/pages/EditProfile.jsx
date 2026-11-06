@@ -236,10 +236,35 @@ export default function EditProfile() {
   });
 
   const isLoading = isAuthLoading || (!!authUser?.id && isProfileLoading);
+
+  const storedUserForOrg = (() => {
+    try {
+      const u = localStorage.getItem("user");
+      return u ? JSON.parse(u) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const effectiveUserForOrg = user || authUser || storedUserForOrg;
+  const activeRoleForOrg = localStorage.getItem("activeRole");
+  const effRolesForOrg = Array.isArray(effectiveUserForOrg?.role)
+    ? effectiveUserForOrg.role
+    : [effectiveUserForOrg?.role || ""];
+  const isIndividualUserForOrg =
+    activeRoleForOrg === "individual" ||
+    effRolesForOrg.some((r) => String(r).toLowerCase() === "individual") ||
+    !(effectiveUserForOrg?.organizationId || effectiveUserForOrg?.organization_id || localStorage.getItem("organizationId"));
+
+  const shouldFetchOrgDetails = Boolean(
+    !isIndividualUserForOrg &&
+      (effectiveUserForOrg?.organizationId || effectiveUserForOrg?.organization_id || localStorage.getItem("organizationId")) &&
+      localStorage.getItem("token")
+  );
+
   // Fetch organization details once
   const { data: organization } = useQuery({
     queryKey: ["/api/organization/details"],
-    enabled: !!localStorage.getItem("token"), // Only call if token exists
+    enabled: shouldFetchOrgDetails,
     queryFn: async () => {
       const token = localStorage.getItem("token");
       if (!token) return null;
@@ -343,7 +368,7 @@ export default function EditProfile() {
 
   const { data: orgSettingsData } = useQuery({
     queryKey: ["/api/organization/settings"],
-    enabled: !!localStorage.getItem("token") && isAdminUser,
+    enabled: !!localStorage.getItem("token") && isAdminUser && Boolean(currentUser?.organizationId || currentUser?.organization_id),
     queryFn: async () => {
       const token = localStorage.getItem("token");
       if (!token) return null;

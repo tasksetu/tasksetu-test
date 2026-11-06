@@ -91,8 +91,8 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: true,
-      refetchOnMount: "always",
-      staleTime: 0, // Always refetch — data is immediately stale
+      refetchOnMount: true,
+      staleTime: 30 * 1000, // 30s fresh window to prevent duplicate simultaneous calls
       gcTime: 5 * 60 * 1000, // Keep in cache 5 min for back-navigation & instant rendering
       placeholderData: (previousData) => previousData, // Show previous data while fetching latest changes
       retry: false,

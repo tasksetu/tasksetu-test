@@ -37,6 +37,7 @@ export const authenticateToken = async (req, res, next) => {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
+      profileImageUrl: user.profileImageUrl || null,
       name:
         `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email,
       role: user.role,

@@ -209,7 +209,9 @@ function ProtectedRoute({ component: Component, allowedRoles = [], ...props }) {
   useEffect(() => {
     const cachedUser = localStorage.getItem("user");
     if (cachedUser) {
-      queryClient.setQueryData(["/api/auth/verify"], JSON.parse(cachedUser));
+      const parsedUser = JSON.parse(cachedUser);
+      queryClient.setQueryData(["/api/auth/verify"], parsedUser);
+      queryClient.setQueryData(["/api/auth/me"], parsedUser);
     }
   }, []);
   // Show loading while we have a token and are fetching user data

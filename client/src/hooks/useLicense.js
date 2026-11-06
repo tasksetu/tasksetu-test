@@ -53,10 +53,10 @@ export const useLicense = () => {
                 features: featuresData,
             };
         },
-        staleTime: 0,
+        staleTime: 10 * 60 * 1000, // 10 minutes cache
         gcTime: 5 * 60 * 1000,
-        refetchOnMount: "always",
-        refetchOnWindowFocus: true,
+        refetchOnMount: false,
+        refetchOnWindowFocus: false,
         placeholderData: (previousData) => previousData,
         retry: 1,
     });

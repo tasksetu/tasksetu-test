@@ -29,9 +29,9 @@ function AdminLayoutInner({ children, user, sidebarCollapsed, sidebarOpen,
       const data = await res.json();
       return data.success ? data.data : data;
     },
-    enabled: !!token,
-    staleTime: 0,
-    refetchOnMount: "always",
+    enabled: !!token && showCalendar,
+    staleTime: 60 * 1000,
+    refetchOnMount: true,
   });
 
   const currentTasks = tasksResponse?.tasks || tasksResponse?.data || tasksResponse || [];
@@ -101,6 +101,7 @@ export function AdminLayout({ children }) {
     queryKey: ["/api/auth/me"],
     enabled: !!localStorage.getItem("token"),
     retry: false,
+    staleTime: 5 * 60 * 1000,
   });
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
