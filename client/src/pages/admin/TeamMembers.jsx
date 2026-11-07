@@ -61,7 +61,7 @@ import {
   Loader,
 } from "lucide-react";
 import { get } from "mongoose";
-import { getInitials } from "../../lib/utils";
+import { getInitials, getUserDisplayName } from "../../lib/utils";
 
 export default function TeamMembers() {
   const { toast } = useToast();
@@ -323,10 +323,7 @@ export default function TeamMembers() {
 
   // Helper functions
   const getDisplayName = (user) => {
-    if (user.firstName && user.lastName) {
-      return `${user.firstName} ${user.lastName}`;
-    }
-    return user.email?.split("@")[0] || "Unknown User";
+    return getUserDisplayName(user);
   };
 
   const getRoleIcon = (roles) => {

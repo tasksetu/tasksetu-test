@@ -314,6 +314,13 @@ export default function FormBuilder() {
     hasMore: false,
   };
 
+  // Ensure the page always starts at the top when mounted
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, []);
+
   // Check for edit query parameter and load form
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);

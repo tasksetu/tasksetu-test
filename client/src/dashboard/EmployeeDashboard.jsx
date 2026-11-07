@@ -20,6 +20,8 @@ import {
   Sliders,
   RefreshCw,
   FileText,
+  FileSpreadsheet,
+  Layers,
   Sun,
   CheckCircle2,
   XCircle,
@@ -1524,7 +1526,10 @@ export default function EmployeeDashboard({ activeRole: propActiveRole, forcedRo
 
             {/* Tile 2: Quick Task */}
             <div
-              onClick={() => navigate("/quick-tasks")}
+              onClick={() => {
+                window.scrollTo(0, 0);
+                navigate("/quick-tasks");
+              }}
               className="p-3.5 rounded-sm border border-gray-100 bg-slate-50/60 hover:bg-purple-50/40 hover:border-purple-200 transition-all cursor-pointer flex flex-col items-center justify-center text-center group"
             >
               <div className="w-9 h-9 rounded-sm bg-purple-100 text-purple-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
@@ -1533,26 +1538,32 @@ export default function EmployeeDashboard({ activeRole: propActiveRole, forcedRo
               <span className="text-xs font-bold text-gray-800">Quick Task</span>
             </div>
 
-            {/* Tile 3: Recurring Task */}
+            {/* Tile 3: Form Builder */}
             <div
-              onClick={() => navigate("/recurring")}
+              onClick={() => {
+                window.scrollTo(0, 0);
+                navigate("/form-builder");
+              }}
               className="p-3.5 rounded-sm border border-gray-100 bg-slate-50/60 hover:bg-emerald-50/40 hover:border-emerald-200 transition-all cursor-pointer flex flex-col items-center justify-center text-center group"
             >
               <div className="w-9 h-9 rounded-sm bg-emerald-100 text-emerald-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                <RefreshCw size={18} />
+                <FileSpreadsheet size={18} />
               </div>
-              <span className="text-xs font-bold text-gray-800">Recurring Task</span>
+              <span className="text-xs font-bold text-gray-800">Form Builder</span>
             </div>
 
-            {/* Tile 4: From Template */}
+            {/* Tile 4: Process Builder */}
             <div
-              onClick={() => navigate("/form-library")}
+              onClick={() => {
+                window.scrollTo(0, 0);
+                navigate("/process-builder");
+              }}
               className="p-3.5 rounded-sm border border-gray-100 bg-slate-50/60 hover:bg-indigo-50/40 hover:border-indigo-200 transition-all cursor-pointer flex flex-col items-center justify-center text-center group"
             >
               <div className="w-9 h-9 rounded-sm bg-indigo-100 text-indigo-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                <FileText size={18} />
+                <Layers size={18} />
               </div>
-              <span className="text-xs font-bold text-gray-800">From Template</span>
+              <span className="text-xs font-bold text-gray-800">Process Builder</span>
             </div>
           </div>
         </div>

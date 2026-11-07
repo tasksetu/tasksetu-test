@@ -93,15 +93,6 @@ export class NotificationService {
         const isEnabled = settings.isEventEnabled(eventSettingKey);
         console.log(`[NotificationService] Event '${eventSettingKey}' enabled: ${isEnabled}`);
 
-        // 🔍 DEBUG: Show detailed settings
-        console.log(`[NotificationService] 🔍 DEBUG - Event Setting Details:`, {
-          eventType: eventSettingKey,
-          isEnabled: isEnabled,
-          notificationsGloballyEnabled: settings.notifications_enabled,
-          eventPreferences: settings.event_preferences,
-          eventValue: settings.event_preferences?.[eventSettingKey]
-        });
-
         if (!isEnabled) {
           console.log(`[NotificationService] ❌ Event ${trigger_event} disabled for user ${user_id}, creating suppressed record`);
           // G2 FIX: Still create a suppressed notification record for audit/activity purposes

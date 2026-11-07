@@ -17,11 +17,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Upload, Camera, Trash2, User, Loader2 } from "lucide-react";
-import { getInitials } from "../../lib/utils";
+import { getInitials, getUserDisplayName } from "../../lib/utils";
 
 const profileUpdateSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
-  lastName: z.string().min(2, "Last name must be at least 2 characters"),
+  lastName: z.string().optional(),
   email: z.string().email("Invalid email address"),
   phone: z.string().optional(),
   bio: z.string().max(500, "Bio must be less than 500 characters").optional(),
@@ -189,10 +189,7 @@ export default function ProfileUpdateModal({ isOpen, onClose }) {
   };
 
   const getDisplayName = (profile) => {
-    if (profile?.firstName && profile?.lastName) {
-      return `${profile.firstName} ${profile.lastName}`;
-    }
-    return profile?.email?.split('@')[0] || 'User';
+    return getUserDisplayName(profile);
   };
 
 

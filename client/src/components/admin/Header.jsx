@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import ProfileUpdateModal from "@/components/profile/ProfileUpdateModal";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { getUserDisplayName } from "@/lib/utils";
 import TaskChangeApprovalModal from "@/components/modals/TaskChangeApprovalModal";
 import RoleSwitcher, { getRoleDisplayName } from "../RoleSwitcher";
 import { useAuthStore } from "../../stores/useAuthStore";
@@ -180,10 +181,7 @@ export default function Header({ user, onMenuClick }) {
   };
 
   const getDisplayName = () => {
-    if (currentUser?.firstName && currentUser?.lastName) {
-      return `${currentUser.firstName} ${currentUser.lastName}`;
-    }
-    return currentUser?.email?.split("@")[0] || "User";
+    return getUserDisplayName(currentUser);
   };
 
   const formatTimestamp = (timestamp) => {
@@ -594,13 +592,6 @@ export default function Header({ user, onMenuClick }) {
                 <Edit3 className="mr-2 sm:mr-3 h-3 w-3 sm:h-4 sm:w-4 text-gray-500" />
                 <span>Edit Profile</span>
               </DropdownMenuItem>
-              {/* <DropdownMenuItem
-                onClick={() => setLocation("/notifications?settings=true")}
-                className="cursor-pointer hover:bg-gray-50 text-xs sm:text-sm"
-              >
-                <Settings className="mr-2 sm:mr-3 h-3 w-3 sm:h-4 sm:w-4 text-gray-500" />
-                <span>Settings</span>
-              </DropdownMenuItem> */}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={handleLogout}

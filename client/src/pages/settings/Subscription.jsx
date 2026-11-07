@@ -39,7 +39,7 @@ import {
   Check,
   X,
 } from "lucide-react";
-import { getInitials, cn } from "@/lib/utils";
+import { getInitials, getUserDisplayName, cn } from "@/lib/utils";
 import { PLAN_ORDER } from "@/utils/licenseConstants";
 
 /**
@@ -561,10 +561,7 @@ export default function Subscription() {
   };
 
   const getDisplayName = (user) => {
-    if (user.firstName && user.lastName) {
-      return `${user.firstName} ${user.lastName}`;
-    }
-    return user.email.split("@")[0];
+    return getUserDisplayName(user);
   };
 
   if (isLoading) {

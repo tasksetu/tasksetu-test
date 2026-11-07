@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { User, Edit3, Mail, Phone, MapPin, Calendar } from "lucide-react";
 import ProfileUpdateModal from "./ProfileUpdateModal";
-import { getInitials } from "../../lib/utils";
+import { getInitials, getUserDisplayName } from "../../lib/utils";
 
 export default function ProfileWidget({ variant = "card" }) {
   const [showEditModal, setShowEditModal] = useState(false);
@@ -18,10 +18,7 @@ export default function ProfileWidget({ variant = "card" }) {
   });
 
   const getDisplayName = (profile) => {
-    if (profile?.firstName && profile?.lastName) {
-      return `${profile.firstName} ${profile.lastName}`;
-    }
-    return profile?.email?.split('@')[0] || 'User';
+    return getUserDisplayName(profile);
   };
 
 

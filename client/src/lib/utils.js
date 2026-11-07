@@ -98,8 +98,39 @@ export function getInitials(firstName, lastName, email) {
     return `${firstName.charAt(0)}`.toUpperCase();
   }
 
+  // Priority 3: Fallback to email initial
+  if (email && typeof email === 'string') {
+    const cleanEmail = email.trim();
+    if (cleanEmail.length > 0) {
+      return cleanEmail.charAt(0).toUpperCase();
+    }
+  }
+
   // Default fallback
   return 'U';
+}
+
+export function getUserDisplayName(user) {
+  if (!user) return 'User';
+  if (typeof user === 'string') return user;
+  const first = (user.firstName || '').trim();
+  const last = (user.lastName || '').trim();
+  if (first && last) {
+    return `${first} ${last}`;
+  }
+  if (first) {
+    return first;
+  }
+  if (last) {
+    return last;
+  }
+  if (user.name && typeof user.name === 'string' && !user.name.includes('undefined')) {
+    return user.name.trim();
+  }
+  if (user.fullName && typeof user.fullName === 'string' && !user.fullName.includes('undefined')) {
+    return user.fullName.trim();
+  }
+  return user.email?.split('@')[0] || 'User';
 }
 
 

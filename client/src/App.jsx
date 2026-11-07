@@ -393,6 +393,18 @@ function PublicOnlyRoute({ component: Component, ...props }) {
   return props.children || null;
 }
 
+function ScrollToTop() {
+  const [location] = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [location]);
+
+  return null;
+}
+
 function App() {
   const [location] = useLocation();
   const isSuperAdminRoute = location.startsWith("/super-admin");
@@ -418,6 +430,7 @@ function App() {
       <RoleProvider>
         <SubtaskProvider>
           <ViewProvider>
+            <ScrollToTop />
             {/* Inactivity Warning Modal - Auto-logout, No dismiss option */}
             <InactivityWarningModal
               show={showWarning}

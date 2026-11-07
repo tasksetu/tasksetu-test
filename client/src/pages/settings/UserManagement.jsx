@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getUserDisplayName } from "@/lib/utils";
 import {
   Users,
   CreditCard,
@@ -303,11 +304,9 @@ export default function UserManagement() {
                         </div>
                         <div>
                           <div className="font-medium">
-                            {user.firstName && user.lastName
-                              ? `${user.firstName} ${user.lastName}`
-                              : user.status === 'invited'
-                                ? 'Invitation Pending'
-                                : 'User'
+                            {user.status === 'invited'
+                              ? 'Invitation Pending'
+                              : getUserDisplayName(user)
                             }
                           </div>
                           {user.status === 'invited' && user.invitedAt && (

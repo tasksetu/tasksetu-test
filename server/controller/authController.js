@@ -942,7 +942,7 @@ export const authController = {
           id: user._id,
           firstName: user.firstName,
           lastName: user.lastName,
-          name: `${user.firstName} ${user.lastName}`,
+          name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.firstName || null,
           email: user.email,
           profileImageUrl: user.profileImageUrl || null,
           phone: user.phone || "",

@@ -54,7 +54,7 @@ import {
   Calendar,
   RefreshCcw,
 } from "lucide-react";
-import { getInitials } from "@/lib/utils";
+import { getInitials, getUserDisplayName } from "@/lib/utils";
 export default function UserManagement() {
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteUsers, setInviteUsers] = useState([
@@ -371,10 +371,7 @@ export default function UserManagement() {
   };
 
   const getDisplayName = (user) => {
-    if (user.firstName && user.lastName) {
-      return `${user.firstName} ${user.lastName}`;
-    }
-    return user.email.split("@")[0];
+    return getUserDisplayName(user);
   };
 
   if (isLoading) {

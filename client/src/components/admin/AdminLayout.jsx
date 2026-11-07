@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "../../layout/sidebar";
 import Header from "./Header";
@@ -13,9 +13,15 @@ function AdminLayoutInner({ children, user, sidebarCollapsed, sidebarOpen,
   setSidebarOpen, toggleSidebar, handleLogout, userRole, setSidebarCollapsed }) {
   
   const { showCalendar, toggleCalendar } = useCalendar();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const [selectedDateForTask, setSelectedDateForTask] = useState(null);
   const [showCreateTaskDrawer, setShowCreateTaskDrawer] = useState(false);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [location]);
 
   // Tasks fetch karo — dashboard jaisi query
   const token = localStorage.getItem("token");

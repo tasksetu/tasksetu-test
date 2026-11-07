@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/tooltip";
 
 import { CloudflareImage } from "@/components/ui/cloudflare-image";
+import { getUserDisplayName, getInitials } from "@/lib/utils";
 
 const Sidebar = ({
   role = "individual",
@@ -201,20 +202,21 @@ const Sidebar = ({
   ]);
 
   const userInfo = useMemo(() => {
-    const displayName =
-      currentUser?.name ||
-      currentUser?.fullName ||
-      (currentUser?.firstName && currentUser?.lastName
-        ? `${currentUser.firstName} ${currentUser.lastName}`
-        : null) ||
-      currentUser?.email?.split("@")[0] ||
-      "User";
-    const initials = displayName
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+    const displayName = getUserDisplayName(currentUser);
+    const initials =
+      getInitials(
+        currentUser?.firstName,
+        currentUser?.lastName,
+        currentUser?.email,
+      ) ||
+      displayName
+        .split(" ")
+        .filter(Boolean)
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2) ||
+      "U";
     const avatarUrl =
       currentUser?.profileImageUrl ||
       currentUser?.avatar ||

@@ -1,6 +1,6 @@
 import React from "react";
 import { Avatar, AvatarImage, AvatarFallback } from "./avatar";
-import { getInitials } from "../../lib/utils";
+import { getInitials, getUserDisplayName } from "../../lib/utils";
 
 /**
  * UserAvatar Component
@@ -44,10 +44,7 @@ export function UserAvatar({ user, className = "", size = "md", ...props }) {
   };
 
   const getDisplayName = () => {
-    if (user?.firstName && user?.lastName) {
-      return `${user.firstName} ${user.lastName}`;
-    }
-    return user?.email?.split("@")[0] || "User";
+    return getUserDisplayName(user);
   };
 
   // Generate cache-busting URL for profile images - prioritize image over initials

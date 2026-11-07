@@ -3,6 +3,7 @@ import { usePermissions } from "@/features/shared/hooks/usePermissions";
 import RBACService from "@/features/shared/services/rbacService";
 import { AlertTriangle, Home, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getUserDisplayName } from "@/lib/utils";
 
 /**
  * Clean Unauthorized Access Page
@@ -61,9 +62,7 @@ export const UnauthorizedPage = ({
                 </div>
                 <div className="ml-3">
                   <p className="text-sm font-medium text-blue-900">
-                    {user.firstName && user.lastName
-                      ? `${user.firstName} ${user.lastName}`
-                      : user.email}
+                    {getUserDisplayName(user)}
                   </p>
                   <p className="text-sm text-blue-700 capitalize">
                     Role: {role || "Unknown"}

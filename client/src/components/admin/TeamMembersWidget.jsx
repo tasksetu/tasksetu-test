@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Users, UserPlus, Eye, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getUserDisplayName } from "@/lib/utils";
 
 export default function TeamMembersWidget({
   showActions = true,
@@ -95,14 +96,7 @@ export default function TeamMembersWidget({
   };
 
   const formatUserName = (user) => {
-    if (user.firstName && user.lastName) {
-      return `${user.firstName} ${user.lastName}`;
-    } else if (user.name) {
-      return user.name;
-    } else if (user.email) {
-      return user.email.split("@")[0];
-    }
-    return "Unknown User";
+    return getUserDisplayName(user);
   };
 
   const formatUserRole = (user) => {
