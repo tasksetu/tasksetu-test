@@ -95,7 +95,7 @@ export const getRoleDisplayName = (role) => {
       return "Individual User";
     default:
       return "";
-    // return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    // return normalized;
   }
 };
 
@@ -105,7 +105,7 @@ const RoleSwitcher = () => {
     queryKey: ["/api/auth/verify"],
     enabled: !!localStorage.getItem("token"),
   });
-  const [location, navigate] = useLocation(); // navigate function from wouter
+  const [location, navigate] = useLocation();
   const { activeRole, setActiveRole } = useActiveRole();
   const queryClient = useQueryClient();
 
@@ -128,7 +128,6 @@ const RoleSwitcher = () => {
     const storedRole = localStorage.getItem("activeRole");
 
     if (!didInitRef.current) {
-      // Priority: stored role if valid, otherwise use highest privilege role
       let initialRole;
 
       if (storedRole && userRoles.includes(storedRole)) {
@@ -136,8 +135,6 @@ const RoleSwitcher = () => {
         initialRole = storedRole;
         console.log("🔄 Restored role from localStorage:", storedRole);
       } else {
-        // Fallback to highest privilege role (last in array is usually highest)
-        // Order typically: employee, manager, org_admin, super_admin
         const roleOrder = [
           "employee",
           "individual",
@@ -148,10 +145,10 @@ const RoleSwitcher = () => {
         initialRole = userRoles.sort((a, b) => {
           const indexA = roleOrder.indexOf(a.toLowerCase());
           const indexB = roleOrder.indexOf(b.toLowerCase());
-          return indexB - indexA; // Descending order - highest first
+          return indexB - indexA;
         })[0];
         console.log(
-          "🔄 No valid stored role, using highest privilege:",
+          "No valid stored role, using highest privilege:",
           initialRole
         );
       }
@@ -176,7 +173,7 @@ const RoleSwitcher = () => {
         const indexB = roleOrder.indexOf(b.toLowerCase());
         return indexB - indexA;
       })[0];
-      console.log("⚠️ Current role invalid, falling back to:", fallbackRole);
+      console.log("Current role invalid, falling back to:", fallbackRole);
       setActiveRole(fallbackRole);
       localStorage.setItem("activeRole", fallbackRole);
     }

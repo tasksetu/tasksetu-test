@@ -1163,7 +1163,12 @@ export default function FormBuilder() {
       <div className="mb-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-normal m-0" style={{ color: "#676a6c" }}>Form Builder</h1>
+            <h1
+              className="text-2xl font-normal m-0"
+              style={{ color: "#676a6c" }}
+            >
+              Form Builder
+            </h1>
             <p className="mt-0 text-sm text-blue-600">
               Create and customize dynamic forms with drag-and-drop simplicity
             </p>
@@ -1640,7 +1645,9 @@ export default function FormBuilder() {
               <FieldProperties
                 field={tempFieldData}
                 form={form}
-                onUpdate={(updates) => setTempFieldData((prev) => ({ ...prev, ...updates }))}
+                onUpdate={(updates) =>
+                  setTempFieldData((prev) => ({ ...prev, ...updates }))
+                }
               />
             )}
           </div>
