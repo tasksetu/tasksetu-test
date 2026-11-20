@@ -934,6 +934,21 @@ export const authController = {
         });
       }
 
+      // Fetch organization details if user belongs to an organization
+      const orgId = user.organizationId || user.organization_id || user.organization;
+      let organizationInfo = null;
+      if (orgId) {
+        try {
+          organizationInfo = await storage.getOrganization(orgId);
+        } catch (_) { }
+        if (!organizationInfo) {
+          try {
+            const { Organization } = await import("../modals/organizationModal.js");
+            organizationInfo = await Organization.findById(orgId).lean();
+          } catch (_) { }
+        }
+      }
+
       // Return user data
       res.json({
         success: true,
@@ -948,7 +963,17 @@ export const authController = {
           phone: user.phone || "",
           phoneVerified: user.phoneVerified || false,
           role: user.role,
-          organizationId: user.organizationId,
+          organizationId: user.organizationId || orgId || null,
+          organizationName: organizationInfo?.name || null,
+          organization: organizationInfo
+            ? {
+                id: organizationInfo._id || organizationInfo.id,
+                _id: organizationInfo._id || organizationInfo.id,
+                name: organizationInfo.name,
+                slug: organizationInfo.slug,
+              }
+            : null,
+          permissions: user.permissions || [],
           isPrimaryAdmin: user.isPrimaryAdmin || false,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt

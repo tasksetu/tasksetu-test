@@ -1,3 +1,4 @@
+import { useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useActiveRole } from "../../../components/RoleSwitcher";
 
@@ -7,7 +8,7 @@ import { useActiveRole } from "../../../components/RoleSwitcher";
  */
 export const useAuth = () => {
   const {
-    data: user,
+    data: rawUser,
     isLoading,
     error,
     refetch,
@@ -17,6 +18,37 @@ export const useAuth = () => {
     staleTime: 5 * 60 * 1000, // 5 minutes cache (instantly refetched if invalidated)
     gcTime: 10 * 60 * 1000, // 10 minutes cache time
   });
+
+  const user = useMemo(() => {
+    let cachedUser = null;
+    try {
+      const stored = localStorage.getItem("user");
+      if (stored) cachedUser = JSON.parse(stored);
+    } catch (_) {}
+
+    if (!rawUser && !cachedUser) return null;
+
+    const merged = { ...(cachedUser || {}), ...(rawUser || {}) };
+    if (!merged.organization && cachedUser?.organization) {
+      merged.organization = cachedUser.organization;
+    }
+    if (!merged.organizationName && (cachedUser?.organizationName || cachedUser?.organization?.name)) {
+      merged.organizationName = cachedUser?.organizationName || cachedUser?.organization?.name;
+    }
+    return merged;
+  }, [rawUser]);
+
+  // Keep localStorage in sync when fresh user with organization arrives
+  useEffect(() => {
+    if (rawUser && (rawUser.organization || rawUser.organizationName)) {
+      try {
+        const stored = JSON.parse(localStorage.getItem("user") || "{}");
+        if (stored) {
+          localStorage.setItem("user", JSON.stringify({ ...stored, ...rawUser }));
+        }
+      } catch (_) {}
+    }
+  }, [rawUser]);
 
   const { activeRole } = useActiveRole();
 
@@ -44,7 +76,7 @@ export const useAuth = () => {
     refetch, // Allow manual refetch of user data
     // User role information
     role: getCurrentRole(),
-    hasOrganization: !!user?.organizationId,
+    hasOrganization: !!(user?.organizationId || user?.organization),
     permissions: user?.permissions || [],
   };
 };

@@ -842,6 +842,7 @@ export class AuthService {
         permissions: user.permissions || [],
         profileImageUrl: user.profileImageUrl || null,
         isPrimaryAdmin: user.isPrimaryAdmin || false,
+        organizationName: organizationInfo?.name || null,
         organization: organizationInfo
           ? {
               id: organizationInfo._id,

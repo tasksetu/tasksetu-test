@@ -1088,11 +1088,23 @@ const OrganizationDashboard = () => {
                     : h < 17
                       ? "☀️ Good afternoon"
                       : "🌙 Good evening";
+                const orgName =
+                  user?.organization?.name ||
+                  user?.organizationName ||
+                  licenseInfo?.organizationName ||
+                  (() => {
+                    try {
+                      const stored = JSON.parse(localStorage.getItem("user") || "{}");
+                      return stored?.organization?.name || stored?.organizationName;
+                    } catch (_) {}
+                    return null;
+                  })() ||
+                  "Organization";
                 return (
                   <>
                     {greeting},{" "}
                     <span className="font-semibold text-blue-600">
-                      {user?.organization?.name || "Organization"}
+                      {orgName}
                     </span>
                   </>
                 );
