@@ -20,21 +20,24 @@ async function sendExactGoodMorningWithApprovals() {
   const overdueTasks = [
     {
       _id: 'task_ovd_1',
-      title: 'Complete client documentation',
-      dueDate: new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000), // 4 days overdue
-      priority: 'urgent'
+      title: 'Update project report & security audit',
+      dueDate: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000), // 3 days overdue
+      priority: 'high',
+      assignedBy: { firstName: 'Nitesh' }
     },
     {
       _id: 'task_ovd_2',
-      title: 'Update project report',
-      dueDate: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000), // 3 days overdue
-      priority: 'high'
+      title: 'Submit project architecture details',
+      dueDate: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000), // 2 days overdue
+      priority: 'medium',
+      assignedBy: { firstName: 'Team' }
     },
     {
       _id: 'task_ovd_3',
-      title: 'Submit project details',
-      dueDate: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000), // 2 days overdue
-      priority: 'medium'
+      title: 'Complete client documentation',
+      dueDate: new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000), // 4 days overdue
+      priority: 'urgent',
+      assignedBy: { firstName: 'Alex' }
     }
   ];
 
@@ -42,15 +45,17 @@ async function sendExactGoodMorningWithApprovals() {
   const dueToday = [
     {
       _id: 'task_today_1',
-      title: 'Complete API integration',
+      title: 'Complete API integration & end-to-end testing',
       dueDate: now,
-      priority: 'high'
+      priority: 'high',
+      assignedBy: { firstName: 'Nitesh' }
     },
     {
       _id: 'task_today_2',
-      title: 'Review team progress',
+      title: 'Review team sprint progress & daily standup',
       dueDate: now,
-      priority: 'medium'
+      priority: 'medium',
+      assignedBy: { firstName: 'Engineering' }
     }
   ];
 
@@ -63,13 +68,13 @@ async function sendExactGoodMorningWithApprovals() {
   const dueSoon = [
     {
       _id: 'task_upc_1',
-      title: 'Database optimization',
+      title: 'Database indexing & query optimization',
       dueDate: upcomingDate1,
       priority: 'high'
     },
     {
       _id: 'task_upc_2',
-      title: 'UI review',
+      title: 'UI design system review & accessibility check',
       dueDate: upcomingDate2,
       priority: 'low'
     }
@@ -87,8 +92,8 @@ async function sendExactGoodMorningWithApprovals() {
     },
     {
       _id: 'task_appr_2',
-      title: 'Budget Allocation for Infrastructure Scaling',
-      createdBy: { firstName: 'Finance', lastName: 'Dept' },
+      title: 'Budget Allocation for Cloud Infrastructure Scaling',
+      createdBy: { firstName: 'Finance', lastName: 'Department' },
       autoApproveAfter: new Date(now.getTime() + 48 * 60 * 60 * 1000),
       priority: 'medium',
       taskType: 'approval'

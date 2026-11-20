@@ -18,7 +18,7 @@ import {
 
 /**
  * 1. ☀️ Daily Digest / Good Morning Email
- * Exact match to TaskSetu Good Morning visual specification (Purple #6559C9 header card, 4 metrics, clean bullet lists)
+ * Unified TaskSetu Email Design System (Branded header, metrics cards, category sections, daily focus, and primary CTA)
  */
 export function renderDailyDigestEmail({ user, taskSummary = {}, baseUrl = 'https://tasksetu.app', userTimezone = 'Asia/Kolkata' }) {
   const {
@@ -46,7 +46,7 @@ export function renderDailyDigestEmail({ user, taskSummary = {}, baseUrl = 'http
       else if (hour >= 17 || hour < 4) greetingTime = 'Good Evening';
     }
   } catch (e) {
-    // fallback
+    // fallback to Good Morning
   }
 
   // Today formatted date
@@ -61,120 +61,134 @@ export function renderDailyDigestEmail({ user, taskSummary = {}, baseUrl = 'http
   const overdueCount = overdueTasks.length;
   const dueTodayCount = dueToday.length;
   const upcomingCount = dueSoon.length;
-  const pendingCount = totalPending || (overdueCount + dueTodayCount + upcomingCount + pendingApprovals.length);
+  const approvalsCount = pendingApprovals.length;
+  const pendingCount = totalPending || (overdueCount + dueTodayCount + upcomingCount + approvalsCount);
 
-  // Daily focus advice matching specification
+  // Metrics array matching the 4 top cards
+  const metrics = [
+    { label: 'Overdue', count: overdueCount, color: '#EF4444' },
+    { label: 'Due Today', count: dueTodayCount, color: '#F59E0B' },
+    { label: 'Upcoming', count: upcomingCount, color: '#2563EB' },
+    { label: 'Pending', count: pendingCount, color: '#64748B' }
+  ];
+
+  // Daily Focus advice
   let focusMessage = '';
   if (overdueCount > 0 && dueTodayCount > 0) {
-    focusMessage = `You have ${dueTodayCount} task${dueTodayCount !== 1 ? 's' : ''} to complete today. Prioritize your overdue tasks first.`;
+    focusMessage = `You have <strong>${overdueCount} overdue task${overdueCount !== 1 ? 's' : ''}</strong> and <strong>${dueTodayCount} task${dueTodayCount !== 1 ? 's' : ''} due today</strong>. We recommend prioritizing your overdue tasks first to keep deadlines on track.`;
   } else if (overdueCount > 0) {
-    focusMessage = `You have ${overdueCount} overdue task${overdueCount !== 1 ? 's' : ''}. Prioritize resolving them to stay on schedule.`;
+    focusMessage = `You have <strong>${overdueCount} overdue task${overdueCount !== 1 ? 's' : ''}</strong> requiring immediate attention. Clearing these will bring your projects up to date.`;
   } else if (dueTodayCount > 0) {
-    focusMessage = `You have ${dueTodayCount} task${dueTodayCount !== 1 ? 's' : ''} due today. Focus on getting them completed today.`;
+    focusMessage = `You have <strong>${dueTodayCount} task${dueTodayCount !== 1 ? 's' : ''} due today</strong>. Focus on completing them during your peak hours today.`;
   } else if (upcomingCount > 0) {
-    focusMessage = `No urgent tasks today! You have ${upcomingCount} upcoming task${upcomingCount !== 1 ? 's' : ''} later this week.`;
+    focusMessage = `Great news &mdash; no overdue tasks today! You have <strong>${upcomingCount} task${upcomingCount !== 1 ? 's' : ''} coming up soon</strong>. A great time to get a head start.`;
   } else {
     focusMessage = `You're all caught up! No urgent or overdue tasks on your plate today. Great work staying ahead of schedule.`;
   }
 
-  // Overdue section
-  const renderOverdueSection = () => {
-    if (overdueTasks.length === 0) return '';
+  // Section builders (limit 3-5 with View All)
+  const renderTaskSection = (title, icon, accentColor, tasks, isOverdue = false) => {
+    if (!tasks || tasks.length === 0) return '';
+    const displayTasks = tasks.slice(0, 4);
+    const hasMore = tasks.length > 4;
+
     return `
-      <div style="margin-bottom:18px;">
-        <div style="font-size:13px;font-weight:700;color:#1F2937;margin-bottom:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-          ⚠️ Overdue Tasks
-        </div>
-        <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.8;color:#374151;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-          ${overdueTasks.slice(0, 5).map(t => {
-            const taskUrl = `${safeBaseUrl}/tasks/${t._id || t.id}`;
-            let diffDays = 1;
-            if (t.dueDate) {
-              diffDays = Math.max(1, Math.ceil((new Date() - new Date(t.dueDate)) / (1000 * 60 * 60 * 24)));
-            }
-            return `<li style="margin-bottom:2px;"><a href="${taskUrl}" style="color:#1F2937;text-decoration:none;font-weight:500;">${escapeHtml(t.title)}</a> <span style="color:#4B5563;">&mdash; ${diffDays} day${diffDays !== 1 ? 's' : ''} overdue</span></li>`;
-          }).join('')}
-        </ul>
-        <div style="border-top:1px solid #F3F4F6;margin-top:18px;"></div>
+      <div style="margin:24px 0 16px;">
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">
+          <tr>
+            <td align="left" style="vertical-align:middle;">
+              <span style="display:inline-block;width:3px;height:14px;background-color:${accentColor};border-radius:2px;margin-right:8px;vertical-align:middle;"></span>
+              <strong style="font-size:14px;color:#0F172A;vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                ${icon} ${escapeHtml(title)} (${tasks.length})
+              </strong>
+            </td>
+            ${hasMore ? `
+            <td align="right" style="vertical-align:middle;">
+              <a href="${safeBaseUrl}/tasks" style="color:#2563EB;text-decoration:none;font-size:12px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                View All ${tasks.length} &rarr;
+              </a>
+            </td>` : ''}
+          </tr>
+        </table>
+
+        ${displayTasks.map(t => {
+          const taskUrl = `${safeBaseUrl}/tasks/${t._id || t.id}`;
+          const badgeHtml = renderPriorityBadge(t.priority);
+          let metaText = '';
+
+          if (isOverdue && t.dueDate) {
+            const diffDays = Math.max(1, Math.ceil((new Date() - new Date(t.dueDate)) / (1000 * 60 * 60 * 24)));
+            metaText = `<span style="color:#DC2626;font-weight:600;">${diffDays} day${diffDays !== 1 ? 's' : ''} overdue</span>`;
+          } else if (t.dueDate) {
+            const formatted = formatDate(t.dueDate, userTimezone);
+            metaText = `Due: ${formatted}`;
+          }
+
+          const assigner = t.assignedBy?.firstName || (t.assignedBy && typeof t.assignedBy === 'string' ? t.assignedBy : '');
+          if (assigner) {
+            metaText += (metaText ? ' &bull; ' : '') + `From ${escapeHtml(assigner)}`;
+          }
+
+          return renderDigestItem({
+            title: t.title,
+            badgeHtml,
+            metaText,
+            url: taskUrl,
+            isOverdue
+          });
+        }).join('')}
       </div>
     `;
   };
 
-  // Today's tasks section
-  const renderTodaySection = () => {
-    if (dueToday.length === 0) return '';
-    return `
-      <div style="margin-bottom:18px;">
-        <div style="font-size:13px;font-weight:700;color:#1F2937;margin-bottom:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-          🗓️ Today's Tasks
-        </div>
-        <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.8;color:#374151;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-          ${dueToday.slice(0, 5).map(t => {
-            const taskUrl = `${safeBaseUrl}/tasks/${t._id || t.id}`;
-            return `<li style="margin-bottom:2px;"><a href="${taskUrl}" style="color:#1F2937;text-decoration:none;font-weight:500;">${escapeHtml(t.title)}</a></li>`;
-          }).join('')}
-        </ul>
-        <div style="border-top:1px solid #F3F4F6;margin-top:18px;"></div>
-      </div>
-    `;
-  };
-
-  // Upcoming tasks section
-  const renderUpcomingSection = () => {
-    if (dueSoon.length === 0) return '';
-    return `
-      <div style="margin-bottom:18px;">
-        <div style="font-size:13px;font-weight:700;color:#1F2937;margin-bottom:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-          🔜 Upcoming Tasks
-        </div>
-        <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.8;color:#374151;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-          ${dueSoon.slice(0, 5).map(t => {
-            const taskUrl = `${safeBaseUrl}/tasks/${t._id || t.id}`;
-            let dateStr = '';
-            if (t.dueDate) {
-              dateStr = new Intl.DateTimeFormat('en-US', { timeZone: userTimezone, month: 'short', day: 'numeric' }).format(new Date(t.dueDate));
-            }
-            return `<li style="margin-bottom:2px;"><a href="${taskUrl}" style="color:#1F2937;text-decoration:none;font-weight:500;">${escapeHtml(t.title)}</a>${dateStr ? ` <span style="color:#4B5563;">&mdash; ${dateStr}</span>` : ''}</li>`;
-          }).join('')}
-        </ul>
-        <div style="border-top:1px solid #F3F4F6;margin-top:18px;"></div>
-      </div>
-    `;
-  };
-
-  // Pending Approvals section
+  // Section D: Pending Approvals
   const renderApprovalsSection = () => {
     if (!pendingApprovals || pendingApprovals.length === 0) return '';
+    const displayApprovals = pendingApprovals.slice(0, 4);
+    const hasMore = pendingApprovals.length > 4;
+
     return `
-      <div style="margin-bottom:18px;">
-        <div style="font-size:13px;font-weight:700;color:#1F2937;margin-bottom:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-          ⚡ Pending Approvals
-        </div>
-        <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.8;color:#374151;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-          ${pendingApprovals.slice(0, 5).map(a => {
-            const appUrl = `${safeBaseUrl}/tasks/${a._id || a.id}`;
-            const reqBy = a.createdBy?.firstName
-              ? `Requested by ${a.createdBy.firstName} ${a.createdBy.lastName || ''}`.trim()
-              : a.assignedBy?.firstName
-              ? `Requested by ${a.assignedBy.firstName}`
-              : '';
-            let deadlineStr = '';
-            if (a.autoApproveAfter || a.dueDate) {
-              const d = new Date(a.autoApproveAfter || a.dueDate);
-              if (!isNaN(d.getTime())) {
-                deadlineStr = `Deadline: ${new Intl.DateTimeFormat('en-US', { timeZone: userTimezone, month: 'short', day: 'numeric' }).format(d)}`;
-              }
-            }
-            const metaInfo = [reqBy, deadlineStr].filter(Boolean).join(' • ');
-            return `<li style="margin-bottom:2px;"><a href="${appUrl}" style="color:#1F2937;text-decoration:none;font-weight:500;">${escapeHtml(a.title)}</a>${metaInfo ? ` <span style="color:#4B5563;">&mdash; ${escapeHtml(metaInfo)}</span>` : ''}</li>`;
-          }).join('')}
-        </ul>
-        <div style="border-top:1px solid #F3F4F6;margin-top:18px;"></div>
+      <div style="margin:24px 0 16px;">
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">
+          <tr>
+            <td align="left" style="vertical-align:middle;">
+              <span style="display:inline-block;width:3px;height:14px;background-color:#F59E0B;border-radius:2px;margin-right:8px;vertical-align:middle;"></span>
+              <strong style="font-size:14px;color:#0F172A;vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                ⚡ Pending Approvals (${pendingApprovals.length})
+              </strong>
+            </td>
+            ${hasMore ? `
+            <td align="right" style="vertical-align:middle;">
+              <a href="${safeBaseUrl}/tasks" style="color:#2563EB;text-decoration:none;font-size:12px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                View All ${pendingApprovals.length} &rarr;
+              </a>
+            </td>` : ''}
+          </tr>
+        </table>
+        ${displayApprovals.map(a => {
+          const appUrl = `${safeBaseUrl}/tasks/${a._id || a.id}`;
+          const reqBy = a.createdBy?.firstName
+            ? `Requested by ${a.createdBy.firstName} ${a.createdBy.lastName || ''}`.trim()
+            : a.assignedBy?.firstName
+            ? `Requested by ${a.assignedBy.firstName}`
+            : '';
+          const deadline = (a.autoApproveAfter || a.dueDate)
+            ? `Deadline: ${formatDate(a.autoApproveAfter || a.dueDate, userTimezone)}`
+            : '';
+          const meta = [reqBy, deadline].filter(Boolean).join(' &bull; ');
+
+          return renderDigestItem({
+            title: a.title,
+            badgeHtml: renderBadge({ text: 'APPROVAL', variant: 'warning' }),
+            metaText: meta,
+            url: appUrl
+          });
+        }).join('')}
       </div>
     `;
   };
 
-  // Other Pending Tasks section (for general pending tasks not in overdue/today/upcoming/approvals)
+  // Section E: Other Pending Tasks (if any)
   const renderOtherPendingSection = () => {
     const existingIds = new Set([
       ...overdueTasks.map(t => String(t._id || t.id)),
@@ -188,159 +202,117 @@ export function renderDailyDigestEmail({ user, taskSummary = {}, baseUrl = 'http
     );
 
     if (remainingTasks.length === 0) return '';
+    const displayOthers = remainingTasks.slice(0, 4);
+    const hasMore = remainingTasks.length > 4;
 
     return `
-      <div style="margin-bottom:18px;">
-        <div style="font-size:13px;font-weight:700;color:#1F2937;margin-bottom:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-          📋 Other Pending Tasks
-        </div>
-        <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.8;color:#374151;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-          ${remainingTasks.slice(0, 5).map(t => {
-            const taskUrl = `${safeBaseUrl}/tasks/${t._id || t.id}`;
-            let metaStr = '';
-            if (t.dueDate) {
-              metaStr = new Intl.DateTimeFormat('en-US', { timeZone: userTimezone, month: 'short', day: 'numeric' }).format(new Date(t.dueDate));
-            } else if (t.status) {
-              metaStr = String(t.status).replace('_', ' ');
-            }
-            return `<li style="margin-bottom:2px;"><a href="${taskUrl}" style="color:#1F2937;text-decoration:none;font-weight:500;">${escapeHtml(t.title)}</a>${metaStr ? ` <span style="color:#4B5563;">&mdash; ${escapeHtml(metaStr)}</span>` : ''}</li>`;
-          }).join('')}
-        </ul>
-        <div style="border-top:1px solid #F3F4F6;margin-top:18px;"></div>
+      <div style="margin:24px 0 16px;">
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">
+          <tr>
+            <td align="left" style="vertical-align:middle;">
+              <span style="display:inline-block;width:3px;height:14px;background-color:#64748B;border-radius:2px;margin-right:8px;vertical-align:middle;"></span>
+              <strong style="font-size:14px;color:#0F172A;vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                📋 Other Pending Tasks (${remainingTasks.length})
+              </strong>
+            </td>
+            ${hasMore ? `
+            <td align="right" style="vertical-align:middle;">
+              <a href="${safeBaseUrl}/tasks" style="color:#2563EB;text-decoration:none;font-size:12px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                View All ${remainingTasks.length} &rarr;
+              </a>
+            </td>` : ''}
+          </tr>
+        </table>
+        ${displayOthers.map(t => {
+          const taskUrl = `${safeBaseUrl}/tasks/${t._id || t.id}`;
+          const badgeHtml = renderPriorityBadge(t.priority);
+          let metaText = '';
+          if (t.dueDate) {
+            metaText = `Due: ${formatDate(t.dueDate, userTimezone)}`;
+          } else if (t.status) {
+            metaText = `Status: ${String(t.status).replace(/_/g, ' ')}`;
+          }
+          return renderDigestItem({
+            title: t.title,
+            badgeHtml,
+            metaText,
+            url: taskUrl
+          });
+        }).join('')}
       </div>
     `;
   };
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>Good Morning! — TaskSetu</title>
-</head>
-<body style="margin:0;padding:24px 10px;background-color:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
-  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
-    <tr>
-      <td align="center">
-        <!-- Main Card Container -->
-        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:600px;background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+  // Section F: Completed Yesterday (if any)
+  const renderCompletedSection = () => {
+    if (!completedYesterday || completedYesterday.length === 0) return '';
+    return `
+      <div style="margin:20px 0 16px;">
+        <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
           <tr>
-            <td style="padding:20px 26px 26px 26px;">
-
-              <!-- Top Purple Banner (#6559C9) -->
-              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color:#6559C9;border-radius:8px;margin-bottom:24px;">
-                <tr>
-                  <td align="center" style="padding:24px 20px 20px 20px;text-align:center;">
-                    <div style="font-size:24px;line-height:1;margin-bottom:6px;">☀️</div>
-                    <div style="color:#FFFFFF;font-size:21px;font-weight:700;line-height:1.2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                      ${greetingTime}!
-                    </div>
-                    <div style="color:#FFFFFF;font-size:16px;font-weight:600;margin-top:5px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                      ${firstName}
-                    </div>
-                    <div style="color:rgba(255,255,255,0.85);font-size:11px;margin-top:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                      Your daily work summary
-                    </div>
-                    <div style="color:rgba(255,255,255,0.75);font-size:11px;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                      ${todayFormatted}
-                    </div>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Metrics Row (4 columns) -->
-              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom:24px;text-align:center;">
-                <tr>
-                  <td width="25%" align="center" style="text-align:center;padding:0 4px;">
-                    <div style="font-size:24px;font-weight:700;color:#EF4444;line-height:1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                      ${overdueCount}
-                    </div>
-                    <div style="font-size:12px;color:#6B7280;margin-top:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                      Overdue
-                    </div>
-                  </td>
-                  <td width="25%" align="center" style="text-align:center;padding:0 4px;">
-                    <div style="font-size:24px;font-weight:700;color:#F59E0B;line-height:1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                      ${dueTodayCount}
-                    </div>
-                    <div style="font-size:12px;color:#6B7280;margin-top:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                      Due Today
-                    </div>
-                  </td>
-                  <td width="25%" align="center" style="text-align:center;padding:0 4px;">
-                    <div style="font-size:24px;font-weight:700;color:#3B82F6;line-height:1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                      ${upcomingCount}
-                    </div>
-                    <div style="font-size:12px;color:#6B7280;margin-top:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                      Upcoming
-                    </div>
-                  </td>
-                  <td width="25%" align="center" style="text-align:center;padding:0 4px;">
-                    <div style="font-size:24px;font-weight:700;color:#1F2937;line-height:1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                      ${pendingCount}
-                    </div>
-                    <div style="font-size:12px;color:#6B7280;margin-top:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                      Pending
-                    </div>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Sections -->
-              ${renderOverdueSection()}
-              ${renderTodaySection()}
-              ${renderUpcomingSection()}
-              ${renderApprovalsSection()}
-              ${renderOtherPendingSection()}
-
-              <!-- Your Daily Focus -->
-              <div style="margin-bottom:24px;">
-                <div style="font-size:13px;font-weight:700;color:#1F2937;margin-bottom:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                  🎯 Your Daily Focus
-                </div>
-                <div style="font-size:13px;color:#374151;line-height:1.5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                  ${focusMessage}
-                </div>
-              </div>
-
-              <!-- Full Width CTA Button in #6559C9 -->
-              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="margin:20px 0 14px 0;">
-                <tr>
-                  <td align="center">
-                    <!--[if mso]>
-                    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${safeBaseUrl}/tasks" style="height:44px;v-text-anchor:middle;width:540px;" arcsize="18%" stroke="f" fillcolor="#6559C9">
-                      <w:anchorlock/>
-                      <center style="color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;font-weight:600;">Open My Dashboard &rarr;</center>
-                    </v:roundrect>
-                    <![endif]-->
-                    <!--[if !mso]><!-->
-                    <a href="${safeBaseUrl}/tasks" target="_blank" style="display:block;width:100%;background-color:#6559C9;color:#FFFFFF !important;text-decoration:none !important;padding:12px 0;border-radius:8px;font-weight:600;font-size:14px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;box-sizing:border-box;">
-                      Open My Dashboard &rarr;
-                    </a>
-                    <!--<![endif]-->
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Footer -->
-              <div style="font-size:11px;color:#9CA3AF;text-align:center;margin-top:14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                Your personalized daily work summary from TaskSetu.
-              </div>
-
-              <!-- Unsubscribe / Preferences link -->
-              <div style="font-size:10px;color:#CBD5E1;text-align:center;margin-top:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-                <a href="${safeBaseUrl}/notification-settings" target="_blank" style="color:#94A3B8;text-decoration:underline;">Manage notification preferences</a>
-              </div>
-
+            <td align="left">
+              <span style="display:inline-block;width:3px;height:14px;background-color:#10B981;border-radius:2px;margin-right:8px;vertical-align:middle;"></span>
+              <strong style="font-size:14px;color:#0F172A;vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                ✅ Completed Recently (${completedYesterday.length})
+              </strong>
             </td>
           </tr>
         </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+        ${completedYesterday.slice(0, 3).map(c => `
+          <div style="padding:6px 0;font-size:13px;color:#475569;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+            &bull; <span style="color:#0F172A;font-weight:500;">${escapeHtml(c.title)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  };
+
+  const contentHtml = `
+    <!-- Personalized Greeting -->
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#334155;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+      Hi <strong>${firstName}</strong>, here is your daily work summary for <strong>${todayFormatted}</strong>.
+    </p>
+
+    <!-- Metrics Summary Cards -->
+    ${renderMetricsGrid(metrics)}
+
+    <!-- Daily Focus Box -->
+    ${renderCalloutBox({
+      title: '🎯 Your Daily Focus',
+      message: focusMessage,
+      variant: overdueCount > 0 ? 'warning' : 'info'
+    })}
+
+    <!-- Task Sections -->
+    ${renderTaskSection('Overdue Tasks', '⚠️', '#EF4444', overdueTasks, true)}
+    ${renderTaskSection("Today's Tasks", '📅', '#F59E0B', dueToday, false)}
+    ${renderTaskSection('Upcoming Tasks', '🔜', '#2563EB', dueSoon, false)}
+    ${renderApprovalsSection()}
+    ${renderOtherPendingSection()}
+    ${renderCompletedSection()}
+
+    <!-- Dashboard CTA -->
+    <div style="text-align:center;margin-top:28px;">
+      ${renderButton({
+        text: 'Open My Dashboard →',
+        url: `${safeBaseUrl}/tasks`,
+        color: BRAND_COLORS.primary
+      })}
+    </div>
+  `;
+
+  return wrapInBaseLayout({
+    title: `Your TaskSetu Daily Work Summary — ${todayFormatted}`,
+    previewText: `Check your overdue (${overdueCount}), today's (${dueTodayCount}), and upcoming tasks.`,
+    accentColor: BRAND_COLORS.primary,
+    categoryBadgeText: 'DAILY DIGEST',
+    categoryBadgeVariant: 'info',
+    heroIcon: '☀️',
+    heroTitle: `${greetingTime}, ${firstName}!`,
+    heroSubtitle: `Your daily work summary • ${todayFormatted}`,
+    contentHtml,
+    baseUrl: safeBaseUrl
+  });
 }
 
 /**

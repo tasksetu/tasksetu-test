@@ -1098,7 +1098,7 @@ const OrganizationDashboard = () => {
                     } catch (_) {}
                     return null;
                   })() ||
-                  "Admin";
+                  "Org_Admin";
                 return (
                   <>
                     {greeting},{" "}
@@ -1130,7 +1130,7 @@ const OrganizationDashboard = () => {
             </p>
           </div>
 
-          {/* Team Progress Bar - Modern style */}
+          {/* Team Progress - Modern style */}
           {(() => {
             const progressPercentage = completionRate;
             const progressText =
