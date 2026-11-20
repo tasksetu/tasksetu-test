@@ -1088,23 +1088,22 @@ const OrganizationDashboard = () => {
                     : h < 17
                       ? "☀️ Good afternoon"
                       : "🌙 Good evening";
-                const orgName =
-                  user?.organization?.name ||
-                  user?.organizationName ||
-                  licenseInfo?.organizationName ||
+                const adminName =
+                  user?.firstName ||
+                  user?.name ||
                   (() => {
                     try {
                       const stored = JSON.parse(localStorage.getItem("user") || "{}");
-                      return stored?.organization?.name || stored?.organizationName;
+                      return stored?.firstName || stored?.name;
                     } catch (_) {}
                     return null;
                   })() ||
-                  "Organization";
+                  "Admin";
                 return (
                   <>
                     {greeting},{" "}
                     <span className="font-semibold text-blue-600">
-                      {orgName}
+                      {adminName}
                     </span>
                   </>
                 );
@@ -1112,7 +1111,22 @@ const OrganizationDashboard = () => {
             </h2>
             <p className="text-sm mt-2 m-0" style={{ color: "#9a9a9a" }}>
               Dashboard{" "}
-              <span className="text-blue-600">Organization Workspace</span>
+              <span className="text-blue-600">
+                {(() => {
+                  const orgName =
+                    user?.organization?.name ||
+                    user?.organizationName ||
+                    licenseInfo?.organizationName ||
+                    (() => {
+                      try {
+                        const stored = JSON.parse(localStorage.getItem("user") || "{}");
+                        return stored?.organization?.name || stored?.organizationName;
+                      } catch (_) {}
+                      return null;
+                    })();
+                  return orgName ? `${orgName} Workspace` : "Organization Workspace";
+                })()}
+              </span>
             </p>
           </div>
 
