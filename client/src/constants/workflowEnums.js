@@ -1,11 +1,4 @@
-/**
- * Workflow Engine — Frontend Enum Constants
- *
- * Mirror of server/constants/workflowEnums.js for use in React components.
- * Single source of truth for all workflow-related constants on the client.
- */
-
-// ─── Task Type ────────────────────────────────────────────────────────────────
+// ─── Task Type
 export const TaskType = Object.freeze({
   REGULAR: "regular",
   EMAIL: "email",
@@ -25,6 +18,7 @@ export const TaskTypeLabel = Object.freeze({
 });
 
 // Icon names (for use with lucide-react)
+
 export const TaskTypeIcon = Object.freeze({
   regular: "CheckSquare",
   email: "Mail",
@@ -34,7 +28,8 @@ export const TaskTypeIcon = Object.freeze({
   subtask: "ListTodo",
 });
 
-// ─── Workflow Type ────────────────────────────────────────────────────────────
+// ─── Workflow Type 
+
 export const WorkflowType = Object.freeze({
   VENDOR_ONBOARDING: "vendor_onboarding",
   EMPLOYEE_ONBOARDING: "employee_onboarding",
@@ -62,11 +57,13 @@ export const WorkflowTypeLabel = Object.freeze({
 });
 
 // For react-select options
+
 export const workflowTypeOptions = Object.entries(WorkflowTypeLabel).map(
   ([value, label]) => ({ value, label }),
 );
 
-// ─── Approval Mode ────────────────────────────────────────────────────────────
+// ─── Approval Mode 
+
 export const ApprovalMode = Object.freeze({
   ANY: "any",
   ALL: "all",
@@ -79,7 +76,8 @@ export const ApprovalModeLabel = Object.freeze({
   sequential: "Sequential",
 });
 
-// ─── Parent Cancellation Mode ─────────────────────────────────────────────────
+// ─── Parent Cancellation Mode 
+
 export const ParentCancellationMode = Object.freeze({
   CANCEL_ON_REJECTION: "cancel_on_rejection",
   IGNORE_REJECTION: "ignore_rejection",
@@ -90,23 +88,26 @@ export const ParentCancellationModeLabel = Object.freeze({
   ignore_rejection: "Ignore Subtask Rejection (Default)",
 });
 
-// ─── Rejection Action ─────────────────────────────────────────────────────────
+// ─── Rejection Action 
+
 export const RejectionAction = Object.freeze({
   TERMINATE: "terminate",
   REINITIATE: "reinitiate",
 });
 
-// ─── Email Recipient Source ───────────────────────────────────────────────────
+// ─── Email Recipient Source 
+
 export const RecipientSource = Object.freeze({
   MANUAL: "manual",
   FORM: "form",
   PREVIOUS_FORM: "previous_form",
 });
 
-// ─── Recipient Status ─────────────────────────────────────────────────────────
+// ─── Recipient Status 
+
 export const RecipientStatus = Object.freeze({
   PENDING: "pending",
-  SENT: "sent",
+  SENT: "sent", 
   DELIVERED: "delivered",
   OPENED: "opened",
   SUBMITTED: "submitted",
@@ -131,7 +132,8 @@ export const RecipientStatusColor = Object.freeze({
   failed: "red",
 });
 
-// ─── Variable Mapping Source ──────────────────────────────────────────────────
+// ─── Variable Mapping Source 
+
 export const VariableMappedFrom = Object.freeze({
   CURRENT_FORM: "current_form",
   FORM_LIBRARY: "form_library",
@@ -139,16 +141,26 @@ export const VariableMappedFrom = Object.freeze({
   STATIC: "static",
 });
 
-// ─── Terminal Statuses ────────────────────────────────────────────────────────
+// ─── Terminal Statuses 
+
 export const TERMINAL_STATUSES = ["COMPLETED", "CANCELLED", "REJECTED", "DONE"];
 
 export const isTerminalStatus = (status) =>
   TERMINAL_STATUSES.includes(status?.toUpperCase?.());
 
-// ─── Task Type option lists for selects ───────────────────────────────────────
+// ─── Task Type option lists for selects 
+
 export const subtaskTypeOptions = [
-  { value: TaskType.REGULAR, label: TaskTypeLabel.regular, icon: "CheckSquare" },
+  {
+    value: TaskType.REGULAR,
+    label: TaskTypeLabel.regular,
+    icon: "CheckSquare",
+  },
   { value: TaskType.EMAIL, label: TaskTypeLabel.email, icon: "Mail" },
-  { value: TaskType.APPROVAL, label: TaskTypeLabel.approval, icon: "ShieldCheck" },
+  {
+    value: TaskType.APPROVAL,
+    label: TaskTypeLabel.approval,
+    icon: "ShieldCheck",
+  },
   { value: TaskType.MILESTONE, label: TaskTypeLabel.milestone, icon: "Flag" },
 ];

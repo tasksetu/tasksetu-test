@@ -10,6 +10,7 @@ import { NotificationSettings, NotificationFrequency } from '../modals/notificat
 import { User } from '../modals/userModal.js';
 import Task from '../modals/taskModal.js';
 import { emailService } from './emailService.js';
+import { renderGenericNotificationEmail } from './emailTemplates/index.js';
 import * as licenseService from './licenseService.js';
 import * as whatsappService from './whatsappService.js';
 
@@ -19,20 +20,6 @@ import * as whatsappService from './whatsappService.js';
  */
 export class NotificationService {
 
-  /**
-   * Create a new notification
-   * @param {Object} notificationData - The notification data
-   * @param {ObjectId} notificationData.user_id - Target user ID
-   * @param {string} notificationData.trigger_event - Event that triggered the notification
-   * @param {Object} notificationData.related_entity - Related entity information
-   * @param {string} notificationData.title - Notification title
-   * @param {string} notificationData.message - Notification message
-   * @param {string} notificationData.priority - Notification priority (urgent/normal)
-   * @param {Array} notificationData.channels - Array of channel types to send to
-   * @param {Object} notificationData.metadata - Additional metadata
-   * @param {Date} notificationData.expires_at - Expiration date (optional)
-   * @returns {Promise<Notification>} Created notification
-   */
   static async createNotification(notificationData) {
     try {
       const {
@@ -936,190 +923,12 @@ export class NotificationService {
    * @returns {string} HTML content
    */
   static generateEmailHTML(notification, user, role = 'user') {
-    const priorityColor = notification.priority === NotificationPriority.URGENT ? '#dc3545' : '#007bff';
-    const roleLabel = role ? ` (${role.charAt(0).toUpperCase() + role.slice(1)})` : '';
-
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${notification.title}</title>
-        <style>
-          body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6; 
-            color: #333;
-            background-color: #f5f5f5;
-            margin: 0;
-            padding: 20px;
-          }
-          .container { 
-            max-width: 600px; 
-            margin: 0 auto; 
-            padding: 0;
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            overflow: hidden;
-          }
-          .header { 
-            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-            color: white; 
-            padding: 30px 20px;
-            text-align: center;
-            border-bottom: 4px solid ${priorityColor};
-          }
-          .header h1 {
-            margin: 0;
-            font-size: 24px;
-            font-weight: 600;
-          }
-          .priority-badge {
-            display: inline-block;
-            background: ${priorityColor};
-            color: white;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: bold;
-            margin-top: 10px;
-            text-transform: uppercase;
-          }
-          .content { 
-            padding: 30px 20px;
-            background: #f9f9f9;
-          }
-          .content h2 {
-            color: #007bff;
-            margin-top: 0;
-            border-left: 4px solid ${priorityColor};
-            padding-left: 15px;
-          }
-          .greeting {
-            color: #555;
-            margin-bottom: 20px;
-          }
-          .message-body {
-            background: white;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
-            border-left: 4px solid ${priorityColor};
-          }
-          .metadata {
-            margin-top: 20px; 
-            padding: 15px; 
-            background: white; 
-            border-radius: 5px;
-            border: 1px solid #ddd;
-          }
-          .metadata h4 {
-            margin-top: 0;
-            color: #007bff;
-          }
-          .metadata-item {
-            margin: 10px 0;
-            display: grid;
-            grid-template-columns: 150px 1fr;
-            gap: 15px;
-          }
-          .metadata-label {
-            font-weight: 600;
-            color: #555;
-          }
-          .cta-button {
-            display: inline-block;
-            background: #007bff;
-            color: white;
-            padding: 12px 30px;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: 600;
-            margin-top: 20px;
-            text-align: center;
-            transition: background 0.3s;
-          }
-          .cta-button:hover {
-            background: #0056b3;
-          }
-          .footer { 
-            text-align: center; 
-            padding: 20px; 
-            font-size: 12px; 
-            color: #999;
-            background: #f5f5f5;
-            border-top: 1px solid #ddd;
-          }
-          .footer a {
-            color: #007bff;
-            text-decoration: none;
-          }
-          .role-info {
-            background: #e7f3ff;
-            padding: 10px 15px;
-            border-radius: 4px;
-            font-size: 13px;
-            color: #0056b3;
-            margin-bottom: 15px;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>📬 TaskSetu Notification</h1>
-            <div class="priority-badge">${notification.priority === NotificationPriority.URGENT ? '🔴 URGENT' : '⚠️ ' + notification.priority.toUpperCase()}</div>
-          </div>
-          
-          <div class="content">
-            <div class="greeting">
-              Hi ${user.firstName || 'User'},${roleLabel}
-            </div>
-
-            ${role ? `
-            <div class="role-info">
-              📋 You're receiving this as: <strong>${role.replace('_', ' ').toUpperCase()}</strong>
-            </div>
-            ` : ''}
-            
-            <h2>${notification.title}</h2>
-            
-            <div class="message-body">
-              ${notification.message.replace(/\n/g, '<br>')}
-            </div>
-            
-            ${notification.metadata && Object.keys(notification.metadata).length > 0 ? `
-            <div class="metadata">
-              <h4>📌 Additional Details</h4>
-              ${Object.entries(notification.metadata).map(([key, value]) => `
-                <div class="metadata-item">
-                  <span class="metadata-label">${key.replace(/_/g, ' ')}:</span>
-                  <span>${value}</span>
-                </div>
-              `).join('')}
-            </div>
-            ` : ''}
-            
-            <div style="text-align: center;">
-              <a href="${process.env.CLIENT_URL || 'http://localhost:3000'}" class="cta-button">
-                👉 View in TaskSetu
-              </a>
-            </div>
-          </div>
-          
-          <div class="footer">
-            <p>This is an automated notification from <strong>TaskSetu</strong>.</p>
-            <p>You're receiving this because you're involved in this task/project or have this notification enabled.</p>
-            <p>
-              <a href="${process.env.CLIENT_URL || 'http://localhost:3000'}/settings/notifications">Manage your notification preferences</a>
-            </p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+    return renderGenericNotificationEmail({
+      notification,
+      user,
+      role,
+      baseUrl: emailService.baseUrl
+    });
   }
 
   /**

@@ -1,6 +1,19 @@
 import dotenv from "dotenv";
 dotenv.config();
 import { TimezoneHelper } from "../utils/timezoneHelper.js";
+import {
+  renderDailyDigestEmail,
+  renderCriticalOverdueEmail,
+  renderTaskAssignmentEmail,
+  renderApprovalRequiredEmail,
+  renderTaskChangeRequestEmail,
+  renderTaskChangeDecisionEmail,
+  renderTasksDueTodayEmail,
+  renderGenericNotificationEmail,
+  renderNotificationDigestEmail,
+  renderMissedTaskEmail,
+  renderLicenseExpiryEmail
+} from "./emailTemplates/index.js";
 
 class EmailService {
   constructor() {
@@ -1383,704 +1396,281 @@ Tip: Log in to your TaskSetu account to access this form and start using it.
 
   // ─────────────────────────────────────────────────────────────────────────────
   // ✅ NEW: Morning Briefing Email
+    // ─────────────────────────────────────────────────────────────────────────────
+  // 🎨 REDESIGNED TASKSETU EMAIL NOTIFICATION SUITE
   // ─────────────────────────────────────────────────────────────────────────────
 
   /**
-   * Send morning briefing email with today's task summary
+   * 1. Send Daily Digest / Morning Briefing Email
    * @param {Object} user - User object { firstName, lastName, email }
-   * @param {Object} taskSummary - { overdueTasks, dueToday, dueSoon, totalPending }
+   * @param {Object} taskSummary - { overdueTasks, dueToday, dueSoon, pendingApprovals, completedYesterday, totalPending }
+   * @param {string} userTimezone - Recipient's local timezone (e.g. 'Asia/Kolkata')
    */
-  async sendMorningBriefingEmail(user, taskSummary) {
+  async sendMorningBriefingEmail(user, taskSummary = {}, userTimezone = 'Asia/Kolkata') {
     if (!this.isConfigured) await this.checkConfiguration();
     if (!this.isConfigured) return false;
 
     try {
-      const {
-        overdueTasks = [],
-        dueToday = [],
-        dueSoon = [],
-        totalPending = 0,
-      } = taskSummary;
-      const firstName = user.firstName || "there";
-      const today = new Date().toLocaleDateString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
+      const firstName = user.firstName || 'there';
+      const todayFormatted = new Intl.DateTimeFormat('en-US', {
+        timeZone: userTimezone,
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      }).format(new Date());
+
+      const html = renderDailyDigestEmail({
+        user,
+        taskSummary,
+        baseUrl: this.baseUrl,
+        userTimezone
       });
 
-      const priorityBadge = (priority = "medium") => {
-        const colors = {
-          critical: "#DC2626",
-          high: "#EF4444",
-          medium: "#F59E0B",
-          low: "#10B981",
-          urgent: "#DC2626",
-        };
-        const color = colors[priority.toLowerCase()] || "#6B7280";
-        return `<span style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;">${priority}</span>`;
-      };
+      const { overdueTasks = [], dueToday = [], dueSoon = [], totalPending = 0 } = taskSummary;
+      const text = `Good Morning ${firstName}! Here is your TaskSetu daily work summary for ${todayFormatted}:\n` +
+        `• Overdue: ${overdueTasks.length} task(s)\n` +
+        `• Due Today: ${dueToday.length} task(s)\n` +
+        `• Upcoming: ${dueSoon.length} task(s)\n` +
+        `• Total Pending: ${totalPending} task(s)\n\n` +
+        `Open your dashboard: ${this.baseUrl}/tasks`;
 
-      const taskTypeIcon = (type = "regular") => {
-        const icons = {
-          milestone: "🎯",
-          approval: "✅",
-          recurring: "🔄",
-          subtask: "📎",
-          regular: "📋",
-        };
-        return icons[type] || "📋";
-      };
-
-      const buildTaskRows = (tasks, emptyMsg) => {
-        if (!tasks.length)
-          return `<p style="color:#9CA3AF;font-style:italic;margin:8px 0;">${emptyMsg}</p>`;
-        return (
-          tasks
-            .slice(0, 5)
-            .map(
-              (t) => `
-          <div style="background:#fff;border:1px solid #E5E7EB;border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">
-            <span style="font-size:18px;">${taskTypeIcon(t.taskType)}</span>
-            <div style="flex:1;min-width:0;">
-              <div style="font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.title}</div>
-              <div style="font-size:12px;color:#6B7280;margin-top:2px;">
-                ${t.dueDate ? `Due: ${new Date(t.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "No due date"}
-                &nbsp;·&nbsp;${priorityBadge(t.priority)}
-              </div>
-            </div>
-          </div>`,
-            )
-            .join("") +
-          (tasks.length > 5
-            ? `<p style="color:#6B7280;font-size:13px;margin-top:4px;">+${tasks.length - 5} more tasks…</p>`
-            : "")
-        );
-      };
-
-      const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Good Morning — TaskSetu Daily Briefing</title>
-</head>
-<body style="margin:0;padding:0;background:#F3F4F6;font-family:'Segoe UI',Arial,sans-serif;">
-  <div style="max-width:620px;margin:24px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-    <!-- Header -->
-    <div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:36px 32px;text-align:center;">
-      <div style="font-size:40px;margin-bottom:8px;">☀️</div>
-      <h1 style="margin:0;color:#fff;font-size:26px;font-weight:700;">Good Morning, ${firstName}!</h1>
-      <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">${today}</p>
-    </div>
-
-    <!-- Stats Bar -->
-    <div style="display:flex;background:#F9FAFB;border-bottom:1px solid #E5E7EB;">
-      <div style="flex:1;text-align:center;padding:16px 8px;border-right:1px solid #E5E7EB;">
-        <div style="font-size:28px;font-weight:700;color:#DC2626;">${overdueTasks.length}</div>
-        <div style="font-size:12px;color:#6B7280;margin-top:2px;">Overdue</div>
-      </div>
-      <div style="flex:1;text-align:center;padding:16px 8px;border-right:1px solid #E5E7EB;">
-        <div style="font-size:28px;font-weight:700;color:#F59E0B;">${dueToday.length}</div>
-        <div style="font-size:12px;color:#6B7280;margin-top:2px;">Due Today</div>
-      </div>
-      <div style="flex:1;text-align:center;padding:16px 8px;border-right:1px solid #E5E7EB;">
-        <div style="font-size:28px;font-weight:700;color:#3B82F6;">${dueSoon.length}</div>
-        <div style="font-size:12px;color:#6B7280;margin-top:2px;">Due Soon</div>
-      </div>
-      <div style="flex:1;text-align:center;padding:16px 8px;">
-        <div style="font-size:28px;font-weight:700;color:#6B7280;">${totalPending}</div>
-        <div style="font-size:12px;color:#6B7280;margin-top:2px;">Total Pending</div>
-      </div>
-    </div>
-
-    <div style="padding:28px 32px;">
-      ${
-        overdueTasks.length > 0
-          ? `
-      <!-- Overdue Section -->
-      <div style="margin-bottom:24px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-          <div style="width:4px;height:20px;background:#DC2626;border-radius:2px;"></div>
-          <h2 style="margin:0;font-size:16px;color:#DC2626;font-weight:700;">⚠️ Overdue Tasks (${overdueTasks.length})</h2>
-        </div>
-        ${buildTaskRows(overdueTasks, "No overdue tasks")}
-      </div>`
-          : ""
-      }
-
-      ${
-        dueToday.length > 0
-          ? `
-      <!-- Due Today Section -->
-      <div style="margin-bottom:24px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-          <div style="width:4px;height:20px;background:#F59E0B;border-radius:2px;"></div>
-          <h2 style="margin:0;font-size:16px;color:#D97706;font-weight:700;">📅 Due Today (${dueToday.length})</h2>
-        </div>
-        ${buildTaskRows(dueToday, "Nothing due today")}
-      </div>`
-          : ""
-      }
-
-      ${
-        dueSoon.length > 0
-          ? `
-      <!-- Due Soon Section -->
-      <div style="margin-bottom:24px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-          <div style="width:4px;height:20px;background:#3B82F6;border-radius:2px;"></div>
-          <h2 style="margin:0;font-size:16px;color:#2563EB;font-weight:700;">🔜 Coming Up (${dueSoon.length})</h2>
-        </div>
-        ${buildTaskRows(dueSoon, "Nothing coming up")}
-      </div>`
-          : ""
-      }
-
-      ${
-        overdueTasks.length === 0 &&
-        dueToday.length === 0 &&
-        dueSoon.length === 0
-          ? `
-      <div style="text-align:center;padding:32px;color:#10B981;">
-        <div style="font-size:48px;margin-bottom:12px;">🎉</div>
-        <h2 style="margin:0;color:#059669;font-size:18px;">You're all caught up!</h2>
-        <p style="color:#6B7280;margin:8px 0 0;">No urgent tasks for today. Great work!</p>
-      </div>`
-          : ""
-      }
-
-      <!-- CTA Button -->
-      <div style="text-align:center;margin-top:24px;">
-        <a href="${this.baseUrl}/tasks" style="display:inline-block;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px;">Open My Tasks →</a>
-      </div>
-    </div>
-
-    <!-- Footer -->
-    <div style="background:#F9FAFB;border-top:1px solid #E5E7EB;padding:18px 32px;text-align:center;">
-      <p style="margin:0;color:#9CA3AF;font-size:12px;">You're receiving this because you have an active TaskSetu account.<br>© ${new Date().getFullYear()} TaskSetu. All rights reserved.</p>
-    </div>
-  </div>
-</body>
-</html>`;
+      const subject = `☀️ Your TaskSetu Daily Work Summary — ${todayFormatted}`;
 
       return await this.sendEmail({
         to: user.email,
-        subject: `☀️ Good Morning ${firstName} — Your Daily Task Briefing`,
+        subject,
         html,
-        text: `Good Morning ${firstName}! Today: ${overdueTasks.length} overdue, ${dueToday.length} due today, ${dueSoon.length} coming soon. Total pending: ${totalPending}. Open TaskSetu: ${this.baseUrl}/tasks`,
+        text
       });
     } catch (error) {
-      console.error(
-        "[Email] ❌ Error sending morning briefing email:",
-        error.message,
-      );
+      console.error('[Email] ❌ Error sending morning briefing email:', error.message);
       return false;
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // ✅ NEW: Tasks Due Today Grouped Email
-  // ─────────────────────────────────────────────────────────────────────────────
-
   /**
-   * Send grouped email with tasks due today
-   * @param {Object} user - User object { firstName, lastName, email }
-   * @param {Array} tasks - Array of task objects due today
+   * 2. Send Critical / Overdue Task Email
    */
-  async sendTasksDueTodayEmail(user, tasks) {
+  async sendCriticalOverdueEmail({
+    user,
+    task,
+    daysOverdue = 1,
+    hoursOverdue,
+    isEscalation = false,
+    escalationLevel = 'assignee',
+    responsibleEmployeeName,
+    assignedByName,
+    userTimezone = 'Asia/Kolkata'
+  }) {
     if (!this.isConfigured) await this.checkConfiguration();
     if (!this.isConfigured) return false;
 
+    try {
+      const html = renderCriticalOverdueEmail({
+        user,
+        task,
+        daysOverdue,
+        hoursOverdue,
+        isEscalation,
+        escalationLevel,
+        responsibleEmployeeName,
+        assignedByName,
+        baseUrl: this.baseUrl,
+        userTimezone
+      });
+
+      const dayWord = daysOverdue === 1 ? 'day' : 'days';
+      const subject = `🚨 Action Required: Task Overdue — "${task.title || 'Task'}"`;
+      const text = `Action Required: Task "${task.title}" is ${daysOverdue} ${dayWord} overdue. Review it at: ${this.baseUrl}/tasks/${task._id || task.id}`;
+
+      return await this.sendEmail({
+        to: user.email,
+        subject,
+        html,
+        text
+      });
+    } catch (error) {
+      console.error('[Email] ❌ Error sending critical overdue email:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * 3. Send Task Assignment Email (routes to approval template if task is approval type)
+   */
+  async sendTaskAssignmentEmail(user, task, assignedBy, userTimezone = 'Asia/Kolkata') {
+    if (!this.isConfigured) await this.checkConfiguration();
+    if (!this.isConfigured) return false;
+
+    try {
+      const isApproval = task.taskType === 'approval' || task.isApprovalTask;
+      if (isApproval) {
+        return await this.sendApprovalRequiredEmail({
+          user,
+          task,
+          requestedBy: assignedBy,
+          userTimezone
+        });
+      }
+
+      const html = renderTaskAssignmentEmail({
+        user,
+        task,
+        assignedBy,
+        baseUrl: this.baseUrl,
+        userTimezone
+      });
+
+      const assignerName = assignedBy
+        ? `${assignedBy.firstName || ''} ${assignedBy.lastName || ''}`.trim()
+        : 'TaskSetu';
+
+      const subject = `📋 New Task Assigned: "${task.title || 'Task'}"`;
+      const text = `Hi ${user.firstName || 'there'}, you've been assigned a new task "${task.title}" by ${assignerName}. View it here: ${this.baseUrl}/tasks/${task._id || task.id}`;
+
+      return await this.sendEmail({
+        to: user.email,
+        subject,
+        html,
+        text
+      });
+    } catch (error) {
+      console.error('[Email] ❌ Error sending task assignment email:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * 4. Send Approval Required Email
+   */
+  async sendApprovalRequiredEmail({ user, task, requestedBy, userTimezone = 'Asia/Kolkata' }) {
+    if (!this.isConfigured) await this.checkConfiguration();
+    if (!this.isConfigured) return false;
+
+    try {
+      const html = renderApprovalRequiredEmail({
+        user,
+        task,
+        requestedBy,
+        baseUrl: this.baseUrl,
+        userTimezone
+      });
+
+      const requesterName = requestedBy
+        ? `${requestedBy.firstName || ''} ${requestedBy.lastName || ''}`.trim()
+        : 'Team Member';
+
+      const subject = `⚡ Approval Required: "${task.title || 'Approval Request'}"`;
+      const text = `Hi ${user.firstName || 'there'}, you have a new approval request "${task.title}" from ${requesterName} that requires your attention. Review and take action: ${this.baseUrl}/tasks/${task._id || task.id}`;
+
+      return await this.sendEmail({
+        to: user.email,
+        subject,
+        html,
+        text
+      });
+    } catch (error) {
+      console.error('[Email] ❌ Error sending approval required email:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * 5. Send Tasks Due Today Grouped Email
+   */
+  async sendTasksDueTodayEmail(user, tasks = [], todayDate) {
+    if (!this.isConfigured) await this.checkConfiguration();
+    if (!this.isConfigured) return false;
     if (!tasks || tasks.length === 0) return true;
 
     try {
-      const firstName = user.firstName || "there";
-      const today = new Date().toLocaleDateString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
+      const html = renderTasksDueTodayEmail({
+        user,
+        tasks,
+        todayDate,
+        baseUrl: this.baseUrl
       });
 
-      const priorityBadge = (priority = "medium") => {
-        const colors = {
-          critical: "#DC2626",
-          high: "#EF4444",
-          medium: "#F59E0B",
-          low: "#10B981",
-          urgent: "#DC2626",
-        };
-        const color = colors[priority.toLowerCase()] || "#6B7280";
-        return `<span style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;">${priority}</span>`;
-      };
-
-      const taskTypeIcon = (type = "regular") => {
-        const icons = {
-          milestone: "🎯",
-          approval: "✅",
-          recurring: "🔄",
-          subtask: "📎",
-          regular: "📋",
-        };
-        return icons[type] || "📋";
-      };
-
-      const taskRows = tasks.map((t) => `
-        <div style="background:#fff;border:1px solid #E5E7EB;border-left:4px solid #F59E0B;border-radius:8px;padding:14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-          <span style="font-size:22px;">${taskTypeIcon(t.taskType)}</span>
-          <div style="flex:1;min-width:0;">
-            <div style="font-weight:600;color:#111827;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.title}</div>
-            <div style="font-size:13px;color:#6B7280;margin-top:4px;">
-              ${priorityBadge(t.priority)}
-            </div>
-          </div>
-        </div>`).join("");
-
-      const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tasks Due Today</title>
-</head>
-<body style="margin:0;padding:0;background:#F9FAFB;font-family:'Segoe UI',Arial,sans-serif;">
-  <div style="max-width:600px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 10px 25px rgba(0,0,0,0.05);">
-    <div style="background:linear-gradient(135deg, #F59E0B 0%, #D97706 100%);padding:32px;text-align:center;">
-      <div style="font-size:42px;margin-bottom:12px;">📅</div>
-      <h1 style="margin:0;color:#fff;font-size:24px;font-weight:700;">Tasks Due Today</h1>
-      <p style="margin:8px 0 0;color:rgba(255,255,255,0.9);font-size:15px;">${today}</p>
-    </div>
-    
-    <div style="padding:32px;">
-      <p style="margin:0 0 24px;font-size:16px;color:#374151;">Hi <strong>${firstName}</strong>, you have <strong>${tasks.length}</strong> task${tasks.length !== 1 ? 's' : ''} due today. Let's get things done!</p>
-      
-      <div style="margin-bottom:32px;">
-        ${taskRows}
-      </div>
-      
-      <div style="text-align:center;">
-        <a href="${this.baseUrl}/tasks" style="display:inline-block;background:#F59E0B;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:16px;box-shadow:0 4px 6px -1px rgba(245, 158, 11, 0.3), 0 2px 4px -1px rgba(245, 158, 11, 0.06);">View Your Tasks →</a>
-      </div>
-    </div>
-    
-    <div style="background:#F3F4F6;padding:24px;text-align:center;border-top:1px solid #E5E7EB;">
-      <p style="margin:0;color:#9CA3AF;font-size:13px;">© ${new Date().getFullYear()} TaskSetu. All rights reserved.</p>
-    </div>
-  </div>
-</body>
-</html>`;
+      const count = tasks.length;
+      const countWord = count === 1 ? 'task' : 'tasks';
+      const subject = `📅 ${count} ${countWord} Due Today — TaskSetu`;
+      const text = `Hi ${user.firstName || 'there'}, you have ${count} ${countWord} due today. View your tasks: ${this.baseUrl}/tasks`;
 
       return await this.sendEmail({
         to: user.email,
-        subject: `📅 ${tasks.length} Task${tasks.length !== 1 ? 's' : ''} Due Today — ${today}`,
+        subject,
         html,
-        text: `Hi ${firstName}, you have ${tasks.length} task(s) due today. Open TaskSetu to view them: ${this.baseUrl}/tasks`,
+        text
       });
     } catch (error) {
-      console.error(
-        "[Email] ❌ Error sending tasks due today email:",
-        error.message,
-      );
+      console.error('[Email] ❌ Error sending tasks due today email:', error.message);
       return false;
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // ✅ NEW: Task Assignment Email (all task types)
-  // ─────────────────────────────────────────────────────────────────────────────
-
   /**
-   * Send email when any task type is assigned to a user
-   * @param {Object} user - Assignee { firstName, lastName, email }
-   * @param {Object} task - Task object { title, description, taskType, priority, dueDate, _id }
-   * @param {Object} assignedBy - Assigner { firstName, lastName, email }
+   * 6. Send License Expiry Reminder Email
    */
-  async sendTaskAssignmentEmail(user, task, assignedBy) {
+  async sendLicenseExpiryReminderEmail(user, licenseInfo = {}, daysRemaining = 7, userTimezone = 'Asia/Kolkata') {
     if (!this.isConfigured) await this.checkConfiguration();
     if (!this.isConfigured) return false;
 
     try {
-      const firstName = user.firstName || "there";
-      const assigner = assignedBy
-        ? `${assignedBy.firstName} ${assignedBy.lastName}`
-        : "TaskSetu";
+      const html = renderLicenseExpiryEmail({
+        user,
+        licenseInfo,
+        daysRemaining,
+        baseUrl: this.baseUrl,
+        userTimezone
+      });
 
-      const taskTypeConfig = {
-        milestone: { label: "Milestone", color: "#8B5CF6", icon: "🎯" },
-        approval: { label: "Approval Task", color: "#F59E0B", icon: "✅" },
-        recurring: { label: "Recurring Task", color: "#3B82F6", icon: "🔄" },
-        subtask: { label: "Subtask", color: "#6B7280", icon: "📎" },
-        regular: { label: "Task", color: "#10B981", icon: "📋" },
-      };
-      const typeConfig =
-        taskTypeConfig[task.taskType] || taskTypeConfig.regular;
-
-      const priorityConfig = {
-        critical: { color: "#DC2626", label: "Critical" },
-        high: { color: "#EF4444", label: "High" },
-        medium: { color: "#F59E0B", label: "Medium" },
-        low: { color: "#10B981", label: "Low" },
-      };
-      const pConfig =
-        priorityConfig[task.priority?.toLowerCase()] || priorityConfig.medium;
-      const dueText = task.dueDate
-        ? new Date(task.dueDate).toLocaleDateString("en-US", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })
-        : "No due date set";
-      const taskUrl = `${this.baseUrl}/tasks/${task._id}`;
-
-      const html = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>New Task Assigned</title></head>
-<body style="margin:0;padding:0;background:#F3F4F6;font-family:'Segoe UI',Arial,sans-serif;">
-  <div style="max-width:600px;margin:24px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-    <!-- Header -->
-    <div style="background:linear-gradient(135deg,${typeConfig.color} 0%,${typeConfig.color}cc 100%);padding:32px;text-align:center;">
-      <div style="font-size:40px;margin-bottom:8px;">${typeConfig.icon}</div>
-      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">New ${typeConfig.label} Assigned</h1>
-      <p style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">From ${assigner}</p>
-    </div>
-
-    <div style="padding:28px 32px;">
-      <p style="margin:0 0 20px;color:#374151;font-size:15px;">Hi <strong>${firstName}</strong>, you've been assigned a new ${typeConfig.label.toLowerCase()}:</p>
-
-      <!-- Task Card -->
-      <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-left:4px solid ${typeConfig.color};border-radius:10px;padding:20px;margin-bottom:24px;">
-        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">
-          <span style="background:${typeConfig.color};color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;white-space:nowrap;">${typeConfig.label.toUpperCase()}</span>
-          <span style="background:${pConfig.color};color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;white-space:nowrap;">${pConfig.label.toUpperCase()}</span>
-        </div>
-        <h2 style="margin:0 0 12px;font-size:18px;color:#111827;font-weight:700;">${task.title}</h2>
-        ${task.description ? `<p style="margin:0 0 14px;color:#6B7280;font-size:14px;line-height:1.6;">${task.description.slice(0, 200)}${task.description.length > 200 ? "…" : ""}</p>` : ""}
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <div style="background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:8px 12px;font-size:13px;color:#374151;">
-            📅 <strong>Due:</strong> ${dueText}
-          </div>
-          <div style="background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:8px 12px;font-size:13px;color:#374151;">
-            👤 <strong>Assigned by:</strong> ${assigner}
-          </div>
-        </div>
-      </div>
-
-      <!-- CTA -->
-      <div style="text-align:center;">
-        <a href="${taskUrl}" style="display:inline-block;background:${typeConfig.color};color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px;">View ${typeConfig.label} →</a>
-      </div>
-    </div>
-
-    <div style="background:#F9FAFB;border-top:1px solid #E5E7EB;padding:16px 32px;text-align:center;">
-      <p style="margin:0;color:#9CA3AF;font-size:12px;">© ${new Date().getFullYear()} TaskSetu. All rights reserved.</p>
-    </div>
-  </div>
-</body>
-</html>`;
+      const licenseCode = (licenseInfo.licenseCode || 'TaskSetu').toUpperCase();
+      const isUrgent = daysRemaining <= 3;
+      const subject = `${isUrgent ? '🚨 URGENT: ' : '⏰ '}License Expires in ${daysRemaining} Days — TaskSetu`;
+      const text = `Hi ${user.firstName || 'there'}, your ${licenseCode} license expires in ${daysRemaining} days. Renew your license at: ${this.baseUrl}/billing`;
 
       return await this.sendEmail({
         to: user.email,
-        subject: `${typeConfig.icon} New ${typeConfig.label} Assigned: "${task.title}"`,
+        subject,
         html,
-        text: `Hi ${firstName}, you've been assigned: "${task.title}" (${typeConfig.label}, ${pConfig.label} priority). Due: ${dueText}. View it here: ${taskUrl}`,
+        text
       });
     } catch (error) {
-      console.error(
-        "[Email] ❌ Error sending task assignment email:",
-        error.message,
-      );
+      console.error('[Email] ❌ Error sending license expiry email:', error.message);
       return false;
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // ✅ NEW: License Expiry Reminder Email
-  // ─────────────────────────────────────────────────────────────────────────────
-
   /**
-   * Send license expiry reminder email
-   * @param {Object} user - User { firstName, lastName, email }
-   * @param {Object} licenseInfo - { licenseCode, expiryDate, organizationName }
-   * @param {number} daysRemaining - Days until license expires
+   * 7. Send Final MISSED Task Email
    */
-  async sendLicenseExpiryReminderEmail(user, licenseInfo, daysRemaining) {
+  async sendMissedTaskEmail(user, task, daysOverdue, hoursOverdue, userTimezone = 'Asia/Kolkata') {
     if (!this.isConfigured) await this.checkConfiguration();
     if (!this.isConfigured) return false;
 
     try {
-      const firstName = user.firstName || "there";
-      const expiryDate = licenseInfo.expiryDate
-        ? new Date(licenseInfo.expiryDate).toLocaleDateString("en-US", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })
-        : "Soon";
-      const licenseCode = licenseInfo.licenseCode || "Your Plan";
-      const renewUrl = `${this.baseUrl}/billing`;
+      const html = renderMissedTaskEmail({
+        user,
+        task,
+        daysOverdue,
+        hoursOverdue,
+        baseUrl: this.baseUrl,
+        userTimezone
+      });
 
-      const urgencyConfig =
-        daysRemaining <= 1
-          ? {
-              gradient: "linear-gradient(135deg,#7F1D1D 0%,#DC2626 100%)",
-              accent: "#DC2626",
-              badge: "#FEE2E2",
-              badgeText: "#991B1B",
-              emoji: "🚨",
-              title: "URGENT: License Expires Tomorrow!",
-              alertMsg:
-                "Your license expires TOMORROW. Renew immediately to avoid losing access to all features.",
-            }
-          : daysRemaining <= 3
-            ? {
-                gradient: "linear-gradient(135deg,#DC2626 0%,#EF4444 100%)",
-                accent: "#EF4444",
-                badge: "#FEE2E2",
-                badgeText: "#DC2626",
-                emoji: "⚠️",
-                title: `License Expires in ${daysRemaining} Days!`,
-                alertMsg: "Act now to avoid service interruption.",
-              }
-            : daysRemaining <= 7
-              ? {
-                  gradient: "linear-gradient(135deg,#D97706 0%,#F59E0B 100%)",
-                  accent: "#F59E0B",
-                  badge: "#FEF3C7",
-                  badgeText: "#92400E",
-                  emoji: "⏰",
-                  title: `License Expires in ${daysRemaining} Days`,
-                  alertMsg:
-                    "Renew soon to continue enjoying uninterrupted access.",
-                }
-              : {
-                  gradient: "linear-gradient(135deg,#1D4ED8 0%,#3B82F6 100%)",
-                  accent: "#3B82F6",
-                  badge: "#DBEAFE",
-                  badgeText: "#1E40AF",
-                  emoji: "📅",
-                  title: `License Renewal Reminder — ${daysRemaining} Days Remaining`,
-                  alertMsg:
-                    "Your license will expire soon. Plan your renewal in advance.",
-                };
-
-      const uc = urgencyConfig;
-
-      const html = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>License Expiry Reminder</title></head>
-<body style="margin:0;padding:0;background:#F3F4F6;font-family:'Segoe UI',Arial,sans-serif;">
-  <div style="max-width:600px;margin:24px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-    <!-- Header -->
-    <div style="background:${uc.gradient};padding:32px;text-align:center;">
-      <div style="font-size:40px;margin-bottom:8px;">${uc.emoji}</div>
-      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">${uc.title}</h1>
-      <p style="margin:8px 0 0;color:rgba(255,255,255,0.9);font-size:14px;">Expires on: ${expiryDate}</p>
-    </div>
-
-    <div style="padding:28px 32px;">
-      <p style="margin:0 0 20px;color:#374151;font-size:15px;">Hi <strong>${firstName}</strong>, ${uc.alertMsg}</p>
-
-      <!-- License Card -->
-      <div style="background:${uc.badge};border:1px solid ${uc.accent}40;border-left:4px solid ${uc.accent};border-radius:10px;padding:20px;margin-bottom:24px;">
-        <div style="margin-bottom:12px;">
-          <span style="background:${uc.accent};color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;">${licenseCode.toUpperCase()} PLAN</span>
-        </div>
-        <div style="display:grid;gap:8px;font-size:14px;color:#374151;">
-          <div>🗓 <strong>Expiry Date:</strong> ${expiryDate}</div>
-          <div>⏳ <strong>Days Remaining:</strong> <span style="color:${uc.accent};font-weight:700;">${daysRemaining} day${daysRemaining !== 1 ? "s" : ""}</span></div>
-          ${licenseInfo.organizationName ? `<div>🏢 <strong>Organization:</strong> ${licenseInfo.organizationName}</div>` : ""}
-        </div>
-      </div>
-
-      <!-- What happens if expired -->
-      <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:16px;margin-bottom:24px;">
-        <h3 style="margin:0 0 10px;font-size:14px;color:#374151;font-weight:700;">⚠️ If your license expires:</h3>
-        <ul style="margin:0;padding-left:18px;color:#6B7280;font-size:13px;line-height:1.8;">
-          <li>You'll be automatically downgraded to the EXPLORE plan</li>
-          <li>Advanced features and task limits will be restricted</li>
-          <li>Your data will be safely preserved</li>
-          <li>You can renew at any time to restore full access</li>
-        </ul>
-      </div>
-
-      <!-- CTA -->
-      <div style="text-align:center;">
-        <a href="${renewUrl}" style="display:inline-block;background:${uc.accent};color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px;">Renew My License →</a>
-        <p style="margin:12px 0 0;color:#9CA3AF;font-size:12px;">Or visit <a href="${this.baseUrl}/billing" style="color:${uc.accent};">${this.baseUrl}/billing</a></p>
-      </div>
-    </div>
-
-    <div style="background:#F9FAFB;border-top:1px solid #E5E7EB;padding:16px 32px;text-align:center;">
-      <p style="margin:0;color:#9CA3AF;font-size:12px;">This is an automated license reminder from TaskSetu.<br>© ${new Date().getFullYear()} TaskSetu. All rights reserved.</p>
-    </div>
-  </div>
-</body>
-</html>`;
+      const dayWord = daysOverdue === 1 ? 'day' : 'days';
+      const subject = `⛔ MISSED: "${task.title || 'Task'}" — ${daysOverdue} ${dayWord} overdue`;
+      const text = `Hi ${user.firstName || 'there'}, FINAL NOTICE: You missed your task "${task.title}". It is now ${daysOverdue} ${dayWord} (${hoursOverdue} hours) overdue. Complete it at: ${this.baseUrl}/tasks/${task._id || task.id}`;
 
       return await this.sendEmail({
         to: user.email,
-        subject: `${uc.emoji} ${uc.title} — TaskSetu`,
+        subject,
         html,
-        text: `Hi ${firstName}, your ${licenseCode} license expires on ${expiryDate} (${daysRemaining} days remaining). ${uc.alertMsg} Renew here: ${renewUrl}`,
+        text
       });
     } catch (error) {
-      console.error(
-        "[Email] ❌ Error sending license expiry email:",
-        error.message,
-      );
-      return false;
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // ✅ NEW: Final MISSED Task Email (fires once after 24h overdue)
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  /**
-   * Send the final "You MISSED your task" email — fires once after 24h of being overdue.
-   * Distinct from regular overdue reminders: darker styling, stronger language, sent only once.
-   * @param {Object} user - Assignee { firstName, lastName, email }
-   * @param {Object} task - Task object { title, priority, dueDate, _id, taskType }
-   * @param {number} daysOverdue - Full days overdue
-   * @param {number} hoursOverdue - Total hours overdue
-   */
-  async sendMissedTaskEmail(user, task, daysOverdue, hoursOverdue) {
-    if (!this.isConfigured) await this.checkConfiguration();
-    if (!this.isConfigured) return false;
-
-    try {
-      const firstName = user.firstName || "there";
-      const priority = task.priority?.toLowerCase() || "medium";
-      const isCriticalHigh = ["critical", "high"].includes(priority);
-
-      const priorityColor =
-        {
-          critical: "#7F1D1D",
-          high: "#991B1B",
-          medium: "#92400E",
-          low: "#1E3A5F",
-        }[priority] || "#991B1B";
-      const priorityAccent =
-        {
-          critical: "#DC2626",
-          high: "#EF4444",
-          medium: "#F59E0B",
-          low: "#3B82F6",
-        }[priority] || "#DC2626";
-      const dueText = task.dueDate
-        ? new Date(task.dueDate).toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-            year: "numeric",
-          })
-        : "Unknown";
-      const taskUrl = `${this.baseUrl}/tasks/${task._id}`;
-      const dayWord = daysOverdue === 1 ? "day" : "days";
-
-      const html = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>MISSED Task Alert</title></head>
-<body style="margin:0;padding:0;background:#1A1A1A;font-family:'Segoe UI',Arial,sans-serif;">
-  <div style="max-width:600px;margin:24px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.4);">
-
-    <!-- Header: Dark red gradient with MISSED badge -->
-    <div style="background:linear-gradient(135deg,#1A0000 0%,${priorityColor} 50%,#DC2626 100%);padding:36px 32px;text-align:center;">
-      <div style="display:inline-block;background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.3);border-radius:50px;padding:6px 20px;margin-bottom:16px;">
-        <span style="color:#fff;font-size:12px;font-weight:800;letter-spacing:3px;text-transform:uppercase;">⛔ TASK MISSED</span>
-      </div>
-      <h1 style="margin:0 0 8px;color:#fff;font-size:26px;font-weight:800;line-height:1.2;">You Missed Your Task</h1>
-      <p style="margin:0;color:rgba(255,255,255,0.8);font-size:14px;">${hoursOverdue} hours overdue · ${daysOverdue} ${dayWord} past due date</p>
-    </div>
-
-    <!-- Time bar -->
-    <div style="background:#FEE2E2;padding:12px 32px;display:flex;align-items:center;justify-content:center;gap:24px;border-bottom:3px solid #DC2626;">
-      <div style="text-align:center;">
-        <div style="font-size:28px;font-weight:800;color:#DC2626;">${hoursOverdue}h</div>
-        <div style="font-size:11px;color:#991B1B;font-weight:600;text-transform:uppercase;">Hours Overdue</div>
-      </div>
-      <div style="width:1px;height:40px;background:#FCA5A5;"></div>
-      <div style="text-align:center;">
-        <div style="font-size:28px;font-weight:800;color:#DC2626;">${daysOverdue}</div>
-        <div style="font-size:11px;color:#991B1B;font-weight:600;text-transform:uppercase;">Days Overdue</div>
-      </div>
-      <div style="width:1px;height:40px;background:#FCA5A5;"></div>
-      <div style="text-align:center;">
-        <div style="font-size:28px;font-weight:800;color:#DC2626;">${priority.toUpperCase()}</div>
-        <div style="font-size:11px;color:#991B1B;font-weight:600;text-transform:uppercase;">Priority</div>
-      </div>
-    </div>
-
-    <div style="padding:28px 32px;">
-      <p style="margin:0 0 20px;color:#374151;font-size:15px;line-height:1.6;">
-        Hi <strong>${firstName}</strong>, this is your final reminder — your task has been <strong>MISSED</strong>.
-        You have not completed it within the expected time frame.
-      </p>
-
-      <!-- Missed Task Card -->
-      <div style="background:#FEF2F2;border:2px solid #DC2626;border-radius:12px;padding:20px;margin-bottom:20px;position:relative;">
-        <div style="position:absolute;top:-1px;right:16px;background:#DC2626;color:#fff;font-size:11px;font-weight:800;padding:4px 12px;border-radius:0 0 8px 8px;letter-spacing:1px;">MISSED</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-          <span style="background:#DC2626;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;">${priority.toUpperCase()} PRIORITY</span>
-          ${task.taskType && task.taskType !== "regular" ? `<span style="background:#6B7280;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;">${task.taskType.toUpperCase()}</span>` : ""}
-        </div>
-        <h2 style="margin:0 0 12px;font-size:18px;color:#111827;font-weight:700;text-decoration:line-through;text-decoration-color:#DC2626;text-decoration-thickness:2px;">${task.title}</h2>
-        <div style="font-size:13px;color:#6B7280;line-height:1.8;">
-          <div>📅 <strong>Was due:</strong> ${dueText}</div>
-          <div>⏱ <strong>Missed by:</strong> ${hoursOverdue} hours (${daysOverdue} ${dayWord})</div>
-        </div>
-      </div>
-
-      ${
-        isCriticalHigh
-          ? `
-      <!-- Escalation Alert -->
-      <div style="background:#1A0000;border-radius:10px;padding:18px 20px;margin-bottom:20px;">
-        <p style="margin:0;color:#FCA5A5;font-size:14px;font-weight:600;line-height:1.6;">
-          🔴 <strong style="color:#FEE2E2;">Manager Escalation:</strong> Because this is a <strong>${priority}</strong> priority task, your direct manager has been automatically notified about this missed deadline.
-        </p>
-      </div>`
-          : `
-      <!-- Reschedule Prompt -->
-      <div style="background:#FFF7ED;border:1px solid #F59E0B;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
-        <p style="margin:0;color:#92400E;font-size:14px;line-height:1.6;">
-          📋 Please either <strong>complete this task immediately</strong> or <strong>update the due date</strong> with a valid reason so your team stays informed.
-        </p>
-      </div>`
-      }
-
-      <!-- CTA -->
-      <div style="text-align:center;margin-top:8px;">
-        <a href="${taskUrl}" style="display:inline-block;background:linear-gradient(135deg,#991B1B,#DC2626);color:#fff;text-decoration:none;padding:14px 36px;border-radius:10px;font-weight:800;font-size:15px;letter-spacing:0.5px;">Complete Task Now →</a>
-        <p style="margin:12px 0 0;color:#9CA3AF;font-size:12px;">This is your final automated reminder for this task.</p>
-      </div>
-    </div>
-
-    <!-- Footer -->
-    <div style="background:#1F2937;padding:18px 32px;text-align:center;">
-      <p style="margin:0;color:#6B7280;font-size:12px;">© ${new Date().getFullYear()} TaskSetu — Automated MISSED task alert. Do not reply.</p>
-    </div>
-  </div>
-</body>
-</html>`;
-
-      return await this.sendEmail({
-        to: user.email,
-        subject: `⛔ MISSED: "${task.title}" — ${daysOverdue} ${dayWord} overdue`,
-        html,
-        text: `Hi ${firstName}, FINAL NOTICE: You missed your ${priority} priority task "${task.title}". It was due ${dueText} and is now ${daysOverdue} ${dayWord} (${hoursOverdue} hours) overdue. ${isCriticalHigh ? "Your manager has been notified." : "Please complete or reschedule it."} View task: ${taskUrl}`,
-      });
-    } catch (error) {
-      console.error(
-        "[Email] ❌ Error sending missed task email:",
-        error.message,
-      );
+      console.error('[Email] ❌ Error sending missed task email:', error.message);
       return false;
     }
   }

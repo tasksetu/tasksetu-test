@@ -144,38 +144,131 @@ router.post('/test-morning-email', adminOnly, async (req, res) => {
       assignedTo: user._id,
       status: { $nin: ['completed', 'DONE', 'CANCELLED'] },
       isDeleted: { $ne: true }
-    }).sort({ dueDate: 1 }).select('_id title dueDate priority taskType status');
+    }).sort({ dueDate: 1 }).select('_id title dueDate priority taskType status isApprovalTask approvalStatus');
 
-    const overdueTasks = pendingTasks.filter(t => t.dueDate && new Date(t.dueDate) < now);
-    const dueToday = pendingTasks.filter(t => {
+    let overdueTasks = pendingTasks.filter(t => t.dueDate && new Date(t.dueDate) < now);
+    let dueToday = pendingTasks.filter(t => {
       if (!t.dueDate) return false;
       const d = new Date(t.dueDate);
       return d.toDateString() === now.toDateString();
     });
-    const dueSoon = pendingTasks.filter(t => {
+    let dueSoon = pendingTasks.filter(t => {
       if (!t.dueDate) return false;
       const d = new Date(t.dueDate);
       const threeDays = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
       return d > now && d <= threeDays && d.toDateString() !== now.toDateString();
     });
 
+    let pendingApprovals = pendingTasks.filter(
+      t => t.taskType === 'approval' || t.isApprovalTask || t.approvalStatus === 'pending'
+    );
+
+    // If user has no active tasks or explicitly requests sample data for previewing the template
+    const useSample = req.body.useSampleData || (pendingTasks.length === 0 && req.body.fallbackToSample !== false);
+    if (useSample) {
+      overdueTasks = [
+        {
+          _id: 'task_ovd_1',
+          title: 'Complete client documentation',
+          dueDate: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000),
+          priority: 'urgent',
+          taskType: 'regular',
+          assignedBy: { firstName: 'Nitesh' }
+        },
+        {
+          _id: 'task_ovd_2',
+          title: 'Update project security audit report',
+          dueDate: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000),
+          priority: 'high',
+          taskType: 'regular',
+          assignedBy: { firstName: 'Nitesh' }
+        },
+        {
+          _id: 'task_ovd_3',
+          title: 'Submit project architecture details',
+          dueDate: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000),
+          priority: 'medium',
+          taskType: 'regular'
+        }
+      ];
+
+      dueToday = [
+        {
+          _id: 'task_today_1',
+          title: 'Complete API integration & end-to-end testing',
+          dueDate: now,
+          priority: 'high',
+          taskType: 'regular',
+          assignedBy: { firstName: 'Nitesh' }
+        },
+        {
+          _id: 'task_today_2',
+          title: 'Review team sprint progress & daily standup',
+          dueDate: now,
+          priority: 'medium',
+          taskType: 'regular'
+        }
+      ];
+
+      dueSoon = [
+        {
+          _id: 'task_upc_1',
+          title: 'Database indexing & query optimization',
+          dueDate: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000),
+          priority: 'high',
+          taskType: 'regular'
+        },
+        {
+          _id: 'task_upc_2',
+          title: 'UI design system review & accessibility check',
+          dueDate: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
+          priority: 'low',
+          taskType: 'regular'
+        }
+      ];
+
+      pendingApprovals = [
+        {
+          _id: 'task_appr_1',
+          title: 'Approval for Admin Role Elevation',
+          createdBy: { firstName: 'Nitesh', lastName: 'Admin' },
+          autoApproveAfter: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+          priority: 'urgent',
+          taskType: 'approval'
+        },
+        {
+          _id: 'task_appr_2',
+          title: 'Budget Allocation for Cloud Infrastructure Scaling',
+          createdBy: { firstName: 'Finance', lastName: 'Dept' },
+          autoApproveAfter: new Date(now.getTime() + 48 * 60 * 60 * 1000),
+          priority: 'medium',
+          taskType: 'approval'
+        }
+      ];
+    }
+
+    const totalCount = overdueTasks.length + dueToday.length + dueSoon.length + pendingApprovals.length;
+
     // Force send email (no 8AM check)
     const emailResult = await emailService.sendMorningBriefingEmail(user, {
       overdueTasks,
       dueToday,
       dueSoon,
-      totalPending: pendingTasks.length
+      pendingApprovals,
+      totalPending: totalCount
     });
 
     res.json({
       success: true,
       message: `Morning briefing email sent to ${user.email}`,
       user: { id: user._id, name: `${user.firstName} ${user.lastName}`, email: user.email },
+      isSampleData: Boolean(useSample),
       taskSummary: {
-        total: pendingTasks.length,
+        total: totalCount,
         overdue: overdueTasks.length,
         dueToday: dueToday.length,
-        dueSoon: dueSoon.length
+        dueSoon: dueSoon.length,
+        pendingApprovals: pendingApprovals.length
       },
       emailResult,
       sentAt: new Date().toISOString()
@@ -230,6 +323,59 @@ router.post('/send-test-email', adminOnly, async (req, res) => {
       sentAt: new Date().toISOString()
     });
   } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/cron/test-approval-email
+// Send a test Approval Required email with Approve and Reject action buttons
+// Body: { email: "user@example.com" }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/test-approval-email', adminOnly, async (req, res) => {
+  try {
+    const targetEmail = req.body?.email || req.user?.email;
+    if (!targetEmail) return res.status(400).json({ success: false, message: 'Provide email in body' });
+
+    const user = await User.findOne({ email: targetEmail.toLowerCase() }).select('_id firstName lastName email');
+    const recipientUser = user || {
+      _id: 'sample_id',
+      firstName: req.user?.firstName || 'Aichchhik',
+      lastName: req.user?.lastName || '',
+      email: targetEmail
+    };
+
+    const dummyTask = {
+      _id: 'test_approval_task_123',
+      title: 'Admin Role Elevation & Access Review',
+      description: 'Requesting temporary elevated permissions to deploy infrastructure updates and review database indexing.',
+      priority: 'high',
+      taskType: 'approval',
+      isApprovalTask: true,
+      approvalStatus: 'pending',
+      dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000)
+    };
+
+    const requestedBy = {
+      firstName: 'Nitesh',
+      lastName: 'Manager'
+    };
+
+    const result = await emailService.sendApprovalRequiredEmail({
+      user: recipientUser,
+      task: dummyTask,
+      requestedBy,
+      userTimezone: 'Asia/Kolkata'
+    });
+
+    res.json({
+      success: !!result,
+      message: result ? `Approval test email sent to ${targetEmail}` : 'Failed to send approval email',
+      result,
+      sentAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('❌ [CRON DEBUG] test-approval-email error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 });

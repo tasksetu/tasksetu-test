@@ -1,0 +1,332 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <title>Action Required: Task Overdue — Migrate production database clusters to high-availability mode</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style type="text/css">
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    table, td {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      height: auto;
+      line-height: 100%;
+      outline: none;
+      text-decoration: none;
+    }
+    body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      background-color: #F8FAFC;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #334155;
+    }
+    @media only screen and (max-width: 600px) {
+      .email-container {
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+      .content-padding {
+        padding: 20px 16px !important;
+      }
+      .header-padding {
+        padding: 16px !important;
+      }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#F8FAFC;-webkit-font-smoothing:antialiased;">
+  <!-- Preview text -->
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;font-family:sans-serif;">
+    This task is 9 days overdue. Review and take immediate action.
+  </div>
+
+  <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color:#F8FAFC;padding:24px 8px;">
+    <tr>
+      <td align="center">
+        <!-- Main Card -->
+        <table role="presentation" class="email-container" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:600px;background-color:#FFFFFF;border-radius:12px;border:1px solid #E2E8F0;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.04), 0 2px 4px -2px rgba(0,0,0,0.04);">
+          
+          <!-- Colored Accent Bar -->
+          <tr>
+            <td style="height:4px;background-color:#EF4444;line-height:4px;font-size:4px;">&nbsp;</td>
+          </tr>
+
+          <!-- TaskSetu Brand Header -->
+          <tr>
+            <td class="header-padding" style="padding:20px 28px;border-bottom:1px solid #F1F5F9;background-color:#FFFFFF;">
+              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="left" style="vertical-align:middle;">
+                    <a href="https://tasksetu.app" style="text-decoration:none;display:inline-block;">
+                      <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="background-color:#2563EB;border-radius:7px;width:30px;height:30px;text-align:center;vertical-align:middle;color:#FFFFFF;font-weight:800;font-size:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                            T
+                          </td>
+                          <td style="padding-left:10px;vertical-align:middle;">
+                            <span style="font-size:17px;font-weight:700;color:#0F172A;letter-spacing:-0.3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">TaskSetu</span>
+                          </td>
+                        </tr>
+                      </table>
+                    </a>
+                  </td>
+                  <td align="right" style="vertical-align:middle;">
+                    <span style="display:inline-block;padding:4px 10px;border-radius:16px;background-color:#FEE2E2;color:#DC2626;border:1px solid #FECACA;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                      ESCALATION
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Hero Section -->
+          
+          <tr>
+            <td class="header-padding" style="padding:22px 28px 18px;background-color:#F8FAFC;border-bottom:1px solid #E2E8F0;">
+              <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;width:42px;padding-right:14px;">
+                    <div style="width:38px;height:38px;border-radius:10px;background-color:#FFFFFF;border:1px solid #E2E8F0;text-align:center;line-height:38px;font-size:20px;">
+                      🚨
+                    </div>
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <h1 style="margin:0;font-size:19px;font-weight:700;color:#0F172A;line-height:1.3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                      Critical Task Overdue
+                    </h1>
+                    <div style="margin-top:3px;font-size:13px;color:#64748B;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">9 days past due date &amp;bull; CRITICAL priority</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+
+          <!-- Content Body -->
+          <tr>
+            <td class="content-padding" style="padding:26px 28px;">
+              
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#334155;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+      Hi <strong>Aichchhik</strong>,
+    </p>
+
+    
+    <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color:#FEF2F2;border:1px solid #FECACA;border-left:4px solid #991B1B;border-radius:8px;margin:18px 0;">
+      <tr>
+        <td style="padding:14px 18px;">
+          <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="vertical-align:top;width:24px;padding-right:10px;font-size:15px;line-height:1.4;">🚨</td>
+              <td style="vertical-align:top;">
+                <div style="font-size:13px;font-weight:700;color:#991B1B;margin-bottom:3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">⚠️ Action Required: Task Overdue</div>
+                <div style="font-size:13px;line-height:1.5;color:#991B1B;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                  This task was due on <strong>Nov 11, 2026</strong> and has been overdue for <strong>9 days</strong>. Please review its progress and take the necessary action immediately.
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  
+
+    
+    <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color:#FEF2F2;border:1px solid #FECACA;border-left:4px solid #991B1B;border-radius:8px;margin:18px 0;">
+      <tr>
+        <td style="padding:14px 18px;">
+          <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="vertical-align:top;width:24px;padding-right:10px;font-size:15px;line-height:1.4;">🔴</td>
+              <td style="vertical-align:top;">
+                <div style="font-size:13px;font-weight:700;color:#991B1B;margin-bottom:3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">🚨 Escalation Notice</div>
+                <div style="font-size:13px;line-height:1.5;color:#991B1B;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                  Because this task has been overdue for 9 days with <strong>CRITICAL</strong> priority, this alert has been escalated to the <strong>Manager</strong>.
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  
+
+    
+    <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;border-left: 4px solid #EF4444;margin:20px 0;overflow:hidden;">
+      <tr>
+        <td style="padding:20px 22px;">
+          
+          <div style="margin-bottom:12px;">
+            <span style="display:inline-block;padding:3px 9px;border-radius:12px;background-color:#FEE2E2;color:#DC2626;font-size:11px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;border: 1px solid #FECACA;white-space:nowrap;">CRITICAL</span>&nbsp;&nbsp;<span style="display:inline-block;padding:3px 9px;border-radius:12px;background-color:#FEE2E2;color:#DC2626;font-size:11px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;border: 1px solid #FECACA;white-space:nowrap;">9 DAYS OVERDUE</span>&nbsp;&nbsp;<span style="display:inline-block;padding:3px 9px;border-radius:12px;background-color:#DBEAFE;color:#1D4ED8;font-size:11px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;border: 1px solid #BFDBFE;white-space:nowrap;">Task</span>
+          </div>
+          
+
+          <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
+            <tr>
+              <td align="left">
+                <h2 style="margin:0 0 8px;font-size:17px;font-weight:700;color:#0F172A;line-height:1.35;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                  Migrate production database clusters to high-availability mode
+                </h2>
+              </td>
+              
+            </tr>
+          </table>
+
+          
+          <p style="margin:4px 0 16px;font-size:13px;line-height:1.55;color:#475569;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+            Cluster failover testing and primary replica synchronization.
+          </p>
+          
+
+          
+          <div style="border-top:1px solid #E2E8F0;padding-top:12px;margin-top:12px;">
+            <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0">
+              
+    <tr>
+      <td style="padding:7px 0;width:38%;vertical-align:top;color:#64748B;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+        <span style="margin-right:6px;">👤</span>Assigned To
+      </td>
+      <td style="padding:7px 0;width:62%;vertical-align:top;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#334155;font-weight:500;">
+        Aichchhik Das
+      </td>
+    </tr>
+  
+    <tr>
+      <td style="padding:7px 0;width:38%;vertical-align:top;color:#64748B;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+        <span style="margin-right:6px;">👤</span>Assigned By
+      </td>
+      <td style="padding:7px 0;width:62%;vertical-align:top;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#334155;font-weight:500;">
+        Nitesh Sharma
+      </td>
+    </tr>
+  
+    <tr>
+      <td style="padding:7px 0;width:38%;vertical-align:top;color:#64748B;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+        <span style="margin-right:6px;">📅</span>Due Date
+      </td>
+      <td style="padding:7px 0;width:62%;vertical-align:top;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#334155;font-weight:500;">
+        Nov 11, 2026
+      </td>
+    </tr>
+  
+    <tr>
+      <td style="padding:7px 0;width:38%;vertical-align:top;color:#64748B;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+        <span style="margin-right:6px;">⏱️</span>Time Overdue
+      </td>
+      <td style="padding:7px 0;width:62%;vertical-align:top;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0F172A;font-weight:700;">
+        9 days (216 hrs)
+      </td>
+    </tr>
+  
+    <tr>
+      <td style="padding:7px 0;width:38%;vertical-align:top;color:#64748B;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+        <span style="margin-right:6px;">⚡</span>Priority
+      </td>
+      <td style="padding:7px 0;width:62%;vertical-align:top;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#334155;font-weight:500;">
+        CRITICAL
+      </td>
+    </tr>
+  
+    <tr>
+      <td style="padding:7px 0;width:38%;vertical-align:top;color:#64748B;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+        <span style="margin-right:6px;">📌</span>Current Status
+      </td>
+      <td style="padding:7px 0;width:62%;vertical-align:top;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#334155;font-weight:500;">
+        IN_PROGRESS
+      </td>
+    </tr>
+  
+    <tr>
+      <td style="padding:7px 0;width:38%;vertical-align:top;color:#64748B;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+        <span style="margin-right:6px;">📁</span>Project
+      </td>
+      <td style="padding:7px 0;width:62%;vertical-align:top;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#334155;font-weight:500;">
+        Core Infrastructure
+      </td>
+    </tr>
+  
+    <tr>
+      <td style="padding:7px 0;width:38%;vertical-align:top;color:#64748B;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+        <span style="margin-right:6px;">👥</span>Team
+      </td>
+      <td style="padding:7px 0;width:62%;vertical-align:top;font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#334155;font-weight:500;">
+        DevOps &amp; Reliability
+      </td>
+    </tr>
+  
+            </table>
+          </div>
+          
+        </td>
+      </tr>
+    </table>
+  
+
+    <div style="text-align:center;margin-top:24px;">
+      
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:24px 0 16px;">
+      <tr>
+        <td align="center">
+          <!--[if mso]>
+          <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="https://tasksetu.app/tasks/task_overdue_101" style="height:44px;v-text-anchor:middle;width:220px;" arcsize="18%" stroke="f" fillcolor="#DC2626">
+            <w:anchorlock/>
+            <center style="color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:700;">Review Overdue Task</center>
+          </v:roundrect>
+          <![endif]-->
+          <!--[if !mso]><!-->
+          <a href="https://tasksetu.app/tasks/task_overdue_101" target="_blank" style="display:inline-block;background-color:#DC2626;color:#FFFFFF !important;text-decoration:none !important;padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px;letter-spacing:0.2px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;box-shadow:0 2px 4px rgba(0,0,0,0.08);">
+            Review Overdue Task &rarr;
+          </a>
+          <!--<![endif]-->
+        </td>
+      </tr>
+    </table>
+  
+    </div>
+  
+            </td>
+          </tr>
+
+          <!-- Standard SaaS Footer -->
+          <tr>
+            <td style="padding:22px 28px;background-color:#F8FAFC;border-top:1px solid #E2E8F0;text-align:center;">
+              <p style="margin:0 0 8px;font-size:12px;color:#64748B;line-height:1.5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                This is an automated notification from <strong>TaskSetu</strong>. You're receiving this email because you're involved in this task or have notification settings enabled.
+              </p>
+              <p style="margin:0 0 10px;font-size:12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                <a href="https://tasksetu.app/settings/notifications" style="color:#2563EB;text-decoration:none;font-weight:600;">Manage notification preferences</a>
+                <span style="color:#CBD5E1;margin:0 8px;">&bull;</span>
+                <a href="https://tasksetu.app" style="color:#64748B;text-decoration:none;">Visit TaskSetu</a>
+              </p>
+              <p style="margin:0;font-size:11px;color:#94A3B8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                &copy; 2026 TaskSetu. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -5,7 +5,8 @@ import { TaskChangeRequest, ChangeRequestStatus, ActionSource } from "../modals/
 import { ApprovalActionToken } from "../modals/approvalActionTokenModal.js";
 import { NotificationService } from "./notificationService.js";
 import { TriggerEvent, EntityType, NotificationPriority, ChannelType } from "../modals/notificationModal.js";
-import { emailService } from "./emailService.js";
+import { emailService } from './emailService.js';
+import { renderTaskChangeRequestEmail, renderTaskChangeDecisionEmail } from './emailTemplates/index.js';
 import { storage } from "../mongodb-storage.js";
 import { ActivityHelper } from "../activity-helper.js";
 import { AuditLog } from "../modals/auditLogModal.js";
@@ -700,72 +701,17 @@ export class TaskChangeRequestService {
       : process.env.PRODUCTION_BASE_URL || "http://localhost:5000";
 
     const actionUrl = `${baseUrl}/task-change-action?token=${rawToken}`;
-    const changesTable = this.renderChangesHtml(requestedChanges);
-
     const subject = `Task Change Request: ${task.title}`;
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Task Change Request</title>
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1f2937; margin: 0; padding: 0; background-color: #f3f4f6; }
-          .container { max-width: 600px; margin: 24px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-          .header { background: #1e3a8a; color: white; padding: 24px; text-align: center; }
-          .content { padding: 24px 30px; }
-          .button { background-color: #2563eb; color: #ffffff !important; padding: 14px 28px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 15px; letter-spacing: 0.5px; }
-          .reason-box { background-color: #f9fafb; border-left: 4px solid #3b82f6; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
-          .footer { text-align: center; color: #6b7280; font-size: 12px; padding: 16px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1 style="margin: 0; font-size: 22px;">TaskSetu</h1>
-            <p style="margin: 4px 0 0 0; opacity: 0.9; font-size: 14px;">Task Change Approval Request</p>
-          </div>
-          <div class="content">
-            <h2 style="margin-top: 0; font-size: 18px; color: #111827;">Hello ${approver.firstName || "Manager"},</h2>
-            <p><strong>${requesterName}</strong> has requested modifications to a protected task:</p>
-            
-            <div style="background-color: #eff6ff; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px;">
-              <span style="font-size: 12px; text-transform: uppercase; color: #1e40af; font-weight: 700;">Task</span>
-              <div style="font-size: 16px; font-weight: 600; color: #1e3a8a;">${task.title}</div>
-            </div>
 
-            <h3 style="font-size: 15px; margin-bottom: 8px; color: #374151;">Requested Changes:</h3>
-            ${changesTable}
-
-            <div class="reason-box">
-              <strong style="color: #1f2937;">Employee's Reason:</strong>
-              <p style="margin: 4px 0 0 0; color: #4b5563; font-style: italic;">
-                "${reason ? reason : "No reason provided."}"
-              </p>
-            </div>
-
-            <p style="margin: 20px 0 10px 0; color: #4b5563;">
-              Review the requested changes and decide whether to approve or reject them:
-            </p>
-
-            <div style="text-align: center; margin: 28px 0;">
-              <a href="${actionUrl}" class="button">
-                TAKE ACTION
-              </a>
-            </div>
-
-            <p style="font-size: 12px; color: #9ca3af; text-align: center; margin-top: 20px;">
-              ⏱️ This link is single-use and will expire in 24 hours. A mandatory reason is required to approve or reject.
-            </p>
-          </div>
-          <div class="footer">
-            <p style="margin: 0;">TaskSetu Task Management &bull; Automated Notification</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+    const html = renderTaskChangeRequestEmail({
+      approver,
+      requesterName,
+      task,
+      requestedChanges,
+      reason,
+      actionUrl,
+      baseUrl
+    });
 
     return emailService.sendEmail({
       to: approver.email,
@@ -1426,52 +1372,15 @@ export class TaskChangeRequestService {
 
     // Email Notification
     try {
-      const changesTable = this.renderChangesHtml(changeRequest.requestedChanges);
-      const emailHtml = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1f2937; background: #f3f4f6; margin: 0; padding: 0; }
-            .container { max-width: 600px; margin: 24px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-            .header { background: ${isApproved ? "#059669" : "#dc2626"}; color: white; padding: 24px; text-align: center; }
-            .content { padding: 24px 30px; }
-            .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-weight: 700; font-size: 13px; text-transform: uppercase; background: ${isApproved ? "#d1fae5" : "#fee2e2"}; color: ${isApproved ? "#065f46" : "#991b1b"}; }
-            .box { background-color: #f9fafb; border-left: 4px solid ${isApproved ? "#10b981" : "#ef4444"}; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
-            .footer { text-align: center; color: #6b7280; font-size: 12px; padding: 16px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1 style="margin: 0; font-size: 20px;">TaskSetu</h1>
-              <p style="margin: 4px 0 0 0; opacity: 0.9; font-size: 14px;">Task Change Request Update</p>
-            </div>
-            <div class="content">
-              <div style="margin-bottom: 16px;">
-                <span class="badge">${decision}</span>
-              </div>
-              <h2 style="margin-top: 0; font-size: 18px; color: #111827;">Hello ${employee.firstName || "Team Member"},</h2>
-              <p>Your requested changes to <strong>"${task.title}"</strong> have been <strong>${decision.toLowerCase()}</strong> by ${approverName}.</p>
-
-              <div class="box">
-                <strong>Approver Reason:</strong>
-                <p style="margin: 4px 0 0 0; color: #4b5563; font-style: italic;">
-                  "${approverReason}"
-                </p>
-              </div>
-
-              <h3 style="font-size: 15px; margin-bottom: 8px; color: #374151;">Requested Changes:</h3>
-              ${changesTable}
-            </div>
-            <div class="footer">
-              <p style="margin: 0;">TaskSetu Task Management &bull; Automated Notification</p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `;
+      const emailHtml = renderTaskChangeDecisionEmail({
+        employee,
+        task,
+        decision,
+        approverName,
+        approverReason,
+        requestedChanges: changeRequest.requestedChanges,
+        baseUrl: emailService.baseUrl
+      });
 
       await emailService.sendEmail({
         to: employee.email,

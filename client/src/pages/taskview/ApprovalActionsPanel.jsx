@@ -363,6 +363,22 @@ const ApprovalActionsPanel = ({ task, currentUser, onApprovalUpdate }) => {
     setShowCommentBox(true);
   };
 
+  // 🎯 Auto-open approval or reject modal when navigated from email action links (?action=approve or ?action=reject)
+  React.useEffect(() => {
+    if (!canApprove) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlAction = params.get("action");
+      if (urlAction && (urlAction.toLowerCase() === "approve" || urlAction.toLowerCase() === "reject")) {
+        const action = urlAction.toLowerCase();
+        setSelectedAction(action);
+        setShowCommentBox(true);
+      }
+    } catch (e) {
+      console.warn("Could not read approval action from URL:", e);
+    }
+  }, [canApprove]);
+
   const submitApproval = async () => {
     if (!selectedAction) return;
 

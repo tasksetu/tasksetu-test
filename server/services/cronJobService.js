@@ -10,7 +10,8 @@ import {
 import { NotificationService } from "./notificationService.js";
 import { AdvancedNotificationTriggers } from "./advancedNotificationTriggers.js";
 import { TimezoneHelper } from "../utils/timezoneHelper.js";
-import { emailService } from "./emailService.js"; // ✅ NEW: for rich HTML emails
+import { emailService } from './emailService.js';
+import { renderNotificationDigestEmail } from './emailTemplates/index.js';
 
 /**
  * Cron Job Service for handling scheduled notification tasks
@@ -718,7 +719,7 @@ export class CronJobService {
             isDeleted: { $ne: true },
           })
             .sort({ dueDate: 1 })
-            .select("_id title dueDate priority taskType status");
+            .select("_id title dueDate priority taskType status isApprovalTask approvalStatus");
 
           console.log(
             `⏰ ${user.email} has ${pendingTasks.length} pending tasks`,
@@ -766,8 +767,10 @@ export class CronJobService {
               overdueTasks,
               dueToday,
               dueSoon,
+              pendingApprovals,
               totalPending: pendingTasks.length,
             },
+            userTimezone
           );
           console.log(`⏰ Email result for ${user.email}:`, emailResult);
 
@@ -2039,100 +2042,14 @@ export class CronJobService {
   /**
    * Build HTML email content for a digest
    */
-  static buildDigestEmailHtml(items, user, frequency, settings) {
-    const userName = user.firstName || "User";
-    const frequencyLabel = frequency === "daily" ? "Daily" : "Weekly";
-    const userTimezone = settings.timezone || "UTC";
-    const dateStr = new Date().toLocaleDateString("en-IN", {
-      timeZone: userTimezone,
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
+  static buildDigestEmailHtml(items, user, frequency, settings = {}) {
+    const userTimezone = settings.timezone || 'Asia/Kolkata';
+    return renderNotificationDigestEmail({
+      user,
+      items,
+      frequency,
+      userTimezone,
+      baseUrl: emailService.baseUrl
     });
-
-    // Group items by trigger_event type
-    const grouped = {};
-    for (const item of items) {
-      const type = item.trigger_event || "other";
-      if (!grouped[type]) grouped[type] = [];
-      grouped[type].push(item);
-    }
-
-    // Build event type label mapping
-    const eventLabels = {
-      task_created: "📝 Task Created",
-      task_updated: "✏️ Task Updated",
-      task_overdue: "🚨 Task Overdue",
-      task_completed: "✅ Task Completed",
-      task_reassigned: "🔄 Task Reassigned",
-      task_reminder: "⏰ Task Reminder",
-      task_due_today: "📅 Due Today",
-      task_due_soon: "⏳ Due Soon",
-      comment_added: "💬 New Comment",
-      user_mentioned: "👋 Mentioned",
-      approval_requested: "📋 Approval Requested",
-      approval_approved: "✅ Approved",
-      approval_denied: "❌ Denied",
-      subtask_added: "➕ Subtask Added",
-      subtask_completed: "✅ Subtask Completed",
-    };
-
-    let groupedHtml = "";
-    for (const [eventType, eventItems] of Object.entries(grouped)) {
-      const label = eventLabels[eventType] || eventType;
-      groupedHtml += `
-        <tr>
-          <td style="padding: 12px 0 4px; font-weight: 600; color: #1a1a1a; font-size: 14px; border-bottom: 1px solid #e5e7eb;">
-            ${label} (${eventItems.length})
-          </td>
-        </tr>`;
-      for (const item of eventItems) {
-        const priorityBadge =
-          item.priority === "urgent"
-            ? '<span style="background:#ef4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; margin-left:6px;">URGENT</span>'
-            : "";
-        groupedHtml += `
-        <tr>
-          <td style="padding: 8px 0 8px 16px; color: #374151; font-size: 13px;">
-            <strong>${item.title}</strong>${priorityBadge}<br/>
-            <span style="color: #6b7280;">${item.message}</span>
-          </td>
-        </tr>`;
-      }
-    }
-
-    return `
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="UTF-8"></head>
-    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f3f4f6; margin: 0; padding: 20px;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-        <tr>
-          <td style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); padding: 24px; border-radius: 8px 8px 0 0;">
-            <h1 style="color: white; margin: 0; font-size: 20px;">📋 ${frequencyLabel} Notification Digest</h1>
-            <p style="color: #dbeafe; margin: 8px 0 0; font-size: 13px;">${dateStr} • ${items.length} notification(s)</p>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding: 20px 24px;">
-            <p style="color: #374151; margin: 0 0 16px;">Hi ${userName},</p>
-            <p style="color: #6b7280; margin: 0 0 16px;">Here's your ${frequency} notification summary:</p>
-            <table width="100%" cellpadding="0" cellspacing="0">
-              ${groupedHtml}
-            </table>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding: 16px 24px; background: #f9fafb; border-radius: 0 0 8px 8px; text-align: center;">
-            <p style="color: #9ca3af; margin: 0; font-size: 12px;">
-              Timezone: ${userTimezone} • 
-              <a href="#" style="color: #3b82f6;">Manage notification preferences</a>
-            </p>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>`;
   }
 }
